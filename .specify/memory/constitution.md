@@ -1,13 +1,16 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.1.0 → 1.2.0
-Modified principles:
-  - VI. Extensibility by Design (expanded: architecture must anticipate future
-    metal machining operations beyond drilling, e.g., turning, milling)
+Version change: 1.2.0 → 1.2.1
+Modified principles: none (wording correction only)
 Added sections: none
-Expanded sections: none (Principle VI expansion tracked above)
+Expanded sections: none
 Removed sections: none
+Fixed: Additional Constraints (Quality Gates) referenced the `master` branch as
+  the repository default; the actual default branch is `main` (per
+  /speckit.analyze finding C1). Corrected to `main` to match reality and the
+  already-consistent references in specs/001-metal-drilling-calc/plan.md,
+  research.md, and tasks.md.
 Templates requiring updates:
   ✅ .specify/templates/plan-template.md (Constitution Check gate references these principles generically; no changes needed)
   ✅ .specify/templates/tasks-template.md (test task guidance already supports test-first ordering; no changes needed)
@@ -178,8 +181,8 @@ and that documentation MUST be published automatically.
 - GitHub Actions MUST automatically publish the generated Sphinx documentation to GitHub
   Pages on every successful build of the default branch, keeping user- and developer-facing
   docs continuously up to date.
-- Every merge to the `master` (default) branch MUST trigger an automated GitHub Actions
-  workflow that builds and publishes a new package release to PyPI, so `master` always
+- Every merge to the `main` (default) branch MUST trigger an automated GitHub Actions
+  workflow that builds and publishes a new package release to PyPI, so `main` always
   reflects an installable, published version.
 
 ## Development Workflow (Review Process)
@@ -211,4 +214,4 @@ recurring pattern, MUST trigger a proposed constitution amendment rather than re
 ad-hoc exceptions. Use `.specify/memory/constitution.md` as the authoritative source for
 runtime development guidance until a dedicated guidance file is introduced.
 
-**Version**: 1.2.0 | **Ratified**: 2026-07-08 | **Last Amended**: 2026-07-09
+**Version**: 1.2.1 | **Ratified**: 2026-07-08 | **Last Amended**: 2026-07-09

@@ -100,3 +100,14 @@ available_power)` tuple, `calculate(...)` MUST return the same
 CLI's underlying calls (User Story 1). The CLI MUST NOT contain any
 calculation logic of its own — it only collects inputs and formats this
 same `CalculationResult` for display.
+
+## Unit labeling contract (FR-013)
+
+`CalculationResult` field names are unit-agnostic by design (e.g., `torque`,
+not `torque_nm`) so the schema does not change shape across unit systems; the
+`unit_system` field on every result indicates which units apply. To satisfy
+FR-013's "clearly labeled" requirement for library consumers (not just the
+CLI display), the public docstring for `calculate()` and the generated Sphinx
+API reference (Constitution Principle VII) MUST enumerate, for each field,
+the exact unit used under `UnitSystem.METRIC` and `UnitSystem.IMPERIAL`
+respectively (per Constitution Principle I's documentation requirement).

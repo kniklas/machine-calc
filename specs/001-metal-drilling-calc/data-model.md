@@ -88,6 +88,18 @@ always returned — never raised as an exception — per FR-015.
 | `feasibility_warning` | str \| None | Set when `available_power` was supplied and is exceeded by `power_required` (FR-012) |
 | `error` | ErrorInfo \| None | Set when validation fails or an unsupported combination is requested (FR-015); when set, the numeric fields above MUST be `None` |
 
+**Unit-labeling resolution (FR-013, /speckit.analyze finding B1)**: Field names
+(`torque`, `power_required`, etc.) intentionally stay unit-agnostic (not
+suffixed like `torque_nm`) so the schema is stable across unit systems —
+callers read the accompanying `unit_system` field to know which units apply.
+"Clearly labeled" for the library API is satisfied by: (1) the `unit_system`
+field always being present, and (2) `machine_calc`'s public docstrings and
+generated Sphinx API reference explicitly documenting the exact unit for
+every `CalculationResult` field under each `UnitSystem` value (Constitution
+Principle I requires inputs/outputs/units to be documented). The CLI (FR-002)
+additionally renders human-readable unit suffixes (e.g., "3.1 N·m") at
+display time — see contracts/cli-repl.md.
+
 ## ErrorInfo
 
 | Field | Type | Notes |
