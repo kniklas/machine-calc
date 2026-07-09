@@ -1,24 +1,25 @@
 <!--
 Sync Impact Report
 ==================
-Version change: (template) → 1.0.0
-Modified principles: N/A (initial ratification)
+Version change: 1.0.0 → 1.1.0
+Modified principles: N/A (existing principles unchanged)
 Added sections:
-  - I. Code Quality
-  - II. Testing Standards
-  - III. Calculation Robustness & Accuracy
-  - IV. Python Packaging & Versioning Standards
-  - Additional Constraints (Quality Gates)
-  - Development Workflow (Review Process)
-  - Governance
-Removed sections: none (placeholders replaced)
+  - V. Resource-Constrained Compatibility
+  - VI. Extensibility by Design
+  - VII. Documentation & Publishing
+Expanded sections:
+  - Additional Constraints (Quality Gates): added CI/CD automation gate
+    (build, test, docs, PyPI publish) via GitHub Actions
+Removed sections: none
 Templates requiring updates:
   ✅ .specify/templates/plan-template.md (Constitution Check gate references these principles generically; no changes needed)
   ✅ .specify/templates/tasks-template.md (test task guidance already supports test-first ordering; no changes needed)
   ✅ .specify/templates/spec-template.md (no principle-specific mandatory sections introduced; no changes needed)
   ✅ .github/prompts/speckit.constitution.prompt.md (no agent-specific references requiring updates)
 Follow-up TODOs:
-  - None. Tech stack is Python per this amendment (see Principle IV).
+  - README.md must document unit test coverage once the package skeleton exists.
+  - GitHub Actions workflows (build/test/docs/PyPI publish) to be created during
+    implementation; none exist yet as of this amendment.
 -->
 
 # machine-calc Constitution
@@ -89,6 +90,63 @@ and versioning conventions, not ad-hoc scripts.
   than a loose collection of scripts) enables reliable installs, reproducible environments,
   and safe upgrades for anyone depending on it.
 
+### V. Resource-Constrained Compatibility
+machine-calc MUST remain usable on old, low-power hardware and MUST NOT assume access to
+modern desktop/server resources.
+- The application MUST run within approximately 64-128 MB of RAM and on a single-threaded
+  CPU (no multi-core/multi-threading requirement) at minimal clock speeds; features MUST
+  degrade gracefully rather than fail outright on such hardware.
+- The codebase MUST remain compatible with older or long-term-stable operating system
+  releases (e.g., Debian stable) and MUST NOT depend on bleeding-edge OS features, kernel
+  versions, or system libraries.
+- Dependencies MUST be chosen or configured to avoid heavy runtime footprints (e.g., avoid
+  large numerical/data-science stacks when a lightweight alternative or the standard library
+  suffices); any dependency with a non-trivial memory footprint MUST be justified in the
+  pull request description.
+- Each individual calculation SHOULD ideally complete within 0.5-1.0 seconds when run on
+  the target legacy/low-power hardware profile described above; calculations that cannot
+  reasonably meet this target MUST document the expected runtime and rationale in the
+  pull request description, and SHOULD be profiled/benchmarked per the Additional
+  Constraints performance gate.
+- Any feature that cannot reasonably meet these constraints MUST be flagged during planning
+  (`/speckit.plan`) with an explicit trade-off note, not silently merged.
+- Rationale: this project targets environments (embedded, legacy, or minimal machines) where
+  modern hardware assumptions do not hold; correctness on paper is worthless if the tool
+  cannot actually run — and respond in reasonable time — where it is needed.
+
+### VI. Extensibility by Design
+Code MUST be structured so new calculations, units, or output formats can be added without
+rewriting existing logic.
+- Calculation logic MUST be organized behind clear, stable interfaces (e.g., functions/classes
+  with well-defined inputs and outputs) so new implementations can be added by extension
+  (new module/class/plugin) rather than by modifying unrelated existing code.
+- Shared behavior (validation, unit conversion, error handling) MUST be factored into
+  reusable components rather than duplicated per calculation.
+- Hard-coded assumptions that would block adding a new calculation type, unit system, or
+  input/output format MUST be called out in code review and avoided where a reasonable
+  abstraction exists.
+- Rationale: the set of machine calculations this project supports is expected to grow;
+  extensibility keeps that growth cheap and low-risk instead of requiring disruptive
+  rewrites for every new feature.
+
+### VII. Documentation & Publishing
+Every build MUST produce up-to-date documentation serving both end users and developers,
+and that documentation MUST be published automatically.
+- Documentation MUST be generated using Sphinx (or a directly compatible successor) from
+  in-repo sources (docstrings, `.rst`/`.md` content) so it stays synchronized with the code.
+- Documentation MUST include distinct, clearly labeled content for: (a) end users (how to
+  install and use the tool/library to get results) and (b) developers (architecture, public
+  API reference, extension points per Principle VI).
+- Generated documentation MUST be published automatically to GitHub Pages as part of the
+  automated build process (see Additional Constraints); manual/local-only doc builds are
+  not sufficient for release documentation.
+- The `README.md` MUST report the current unit test coverage level (target: high or very
+  high, per Principle II's minimum) so users and contributors can see test health at a
+  glance without digging into CI logs.
+- Rationale: undocumented or inconsistently published documentation is effectively
+  unusable documentation; automating generation and publishing removes the risk of docs
+  silently going stale relative to the code.
+
 ## Additional Constraints (Quality Gates)
 
 - CI MUST run linting, the full automated test suite, and a package build check on every
@@ -96,7 +154,17 @@ and versioning conventions, not ad-hoc scripts.
 - Dependencies introducing calculation logic (e.g., math/statistics libraries) MUST be
   vetted for correctness and actively maintained status before adoption.
 - Performance MUST be measured, not assumed: any calculation expected to run on large
-  datasets or in tight loops MUST have a benchmark or profiling note before optimization.
+  datasets or in tight loops MUST have a benchmark or profiling note before optimization,
+  and MUST be evaluated against the legacy-hardware runtime target in Principle V.
+- GitHub Actions MUST automate, for every push/pull request: linting, the full test suite
+  (with coverage reporting), a package build check, and a Sphinx documentation build;
+  all MUST pass before merge.
+- GitHub Actions MUST automatically publish the generated Sphinx documentation to GitHub
+  Pages on every successful build of the default branch, keeping user- and developer-facing
+  docs continuously up to date.
+- Every merge to the `master` (default) branch MUST trigger an automated GitHub Actions
+  workflow that builds and publishes a new package release to PyPI, so `master` always
+  reflects an installable, published version.
 
 ## Development Workflow (Review Process)
 
@@ -127,4 +195,4 @@ recurring pattern, MUST trigger a proposed constitution amendment rather than re
 ad-hoc exceptions. Use `.specify/memory/constitution.md` as the authoritative source for
 runtime development guidance until a dedicated guidance file is introduced.
 
-**Version**: 1.0.0 | **Ratified**: 2026-07-08 | **Last Amended**: 2026-07-08
+**Version**: 1.1.0 | **Ratified**: 2026-07-08 | **Last Amended**: 2026-07-09
