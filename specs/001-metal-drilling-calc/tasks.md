@@ -20,11 +20,11 @@
 
 **Purpose**: Project initialization and tooling, per Constitution Principle IV (packaging) and research.md.
 
-- [ ] T001 Create the project skeleton (`src/machine_calc/`, `src/machine_calc/operations/drilling/`, `tests/unit/shared/`, `tests/unit/operations/drilling/`, `tests/contract/`, `tests/integration/`, `docs/source/`) per plan.md Project Structure
-- [ ] T002 Initialize `pyproject.toml` with PEP 517/518 build backend, `src/` layout package discovery, project metadata, `requires-python = ">=3.9"`, and a conditional `tomli` dependency for Python < 3.11 (Constitution IV; research.md #1, #2, #3)
-- [ ] T003 [P] Configure `ruff` and `black` (or equivalent) in `pyproject.toml` and add a `lint` script/make target (Constitution I)
-- [ ] T004 [P] Configure `pytest` and `pytest-cov` in `pyproject.toml`/`pytest.ini` with a coverage-fail-under threshold of 90% for `src/machine_calc/operations` and `src/machine_calc/calculations`-equivalent modules (Constitution II)
-- [ ] T005 [P] Scaffold the Sphinx project in `docs/source/` (`conf.py` with the `napoleon` extension and `alabaster` theme, `index.rst`) per research.md #7
+- [X] T001 Create the project skeleton (`src/machine_calc/`, `src/machine_calc/operations/drilling/`, `tests/unit/shared/`, `tests/unit/operations/drilling/`, `tests/contract/`, `tests/integration/`, `docs/source/`) per plan.md Project Structure
+- [X] T002 Initialize `pyproject.toml` with PEP 517/518 build backend, `src/` layout package discovery, project metadata, `requires-python = ">=3.9"`, and a conditional `tomli` dependency for Python < 3.11 (Constitution IV; research.md #1, #2, #3)
+- [X] T003 [P] Configure `ruff` and `black` (or equivalent) in `pyproject.toml` and add a `lint` script/make target (Constitution I)
+- [X] T004 [P] Configure `pytest` and `pytest-cov` in `pyproject.toml`/`pytest.ini` with a coverage-fail-under threshold of 90% for `src/machine_calc/operations` and `src/machine_calc/calculations`-equivalent modules (Constitution II)
+- [X] T005 [P] Scaffold the Sphinx project in `docs/source/` (`conf.py` with the `napoleon` extension and `alabaster` theme, `index.rst`) per research.md #7
 
 ---
 
@@ -34,19 +34,19 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T006 [P] Implement `UnitSystem` enum, `CalculationResult`, and `ErrorInfo` dataclasses in `src/machine_calc/models.py` (data-model.md)
-- [ ] T007 [P] Implement `WorkpieceMaterial` dataclass and the initial material registry (mild steel, stainless steel, aluminum, cast iron, brass, titanium) in `src/machine_calc/registry.py` (FR-004)
-- [ ] T008 [P] Implement metric↔imperial conversion helpers in `src/machine_calc/units.py` (FR-017; research.md #4)
-- [ ] T009 [P] Implement `DrillingTool` dataclass and the initial tool registry (HSS, cobalt, carbide) in `src/machine_calc/operations/drilling/tools.py` (FR-005)
-- [ ] T010 Implement `Configuration` loading from an external TOML file with built-in default fallback (`max_diameter_mm=100`, `max_depth_mm=500`) in `src/machine_calc/config.py` (FR-018; research.md #3)
-- [ ] T011 Implement shared input validation (diameter/depth positivity + configurable bounds, required material/tool presence, returning `ErrorInfo` rather than raising) in `src/machine_calc/validation.py` (FR-009, FR-010)
-- [ ] T012 Implement drilling formulas (spindle speed, feed rate, machining time in minutes, torque, power) in `src/machine_calc/operations/drilling/formulas.py`, citing the formula sources in code comments (FR-006, FR-007, FR-008, FR-011; research.md #4; Constitution III)
-- [ ] T013 Implement the drilling `calculate()` orchestration (validate → resolve material/tool combination → compute formulas → apply feasibility check against optional `available_power` → build `CalculationResult`, never raising for expected validation failures) in `src/machine_calc/operations/drilling/__init__.py` (FR-009 through FR-016; depends on T006-T012)
-- [ ] T014 [P] Unit tests for drilling formulas (nominal inputs, boundary values, known reference results within 5% per SC-002) in `tests/unit/operations/drilling/test_formulas.py` (depends on T012)
-- [ ] T015 [P] Unit tests for shared validation (zero/negative/non-numeric/out-of-range diameter and depth, missing material/tool) in `tests/unit/shared/test_validation.py` (depends on T011)
-- [ ] T016 [P] Unit tests for unit conversion helpers (metric↔imperial round-trip, tolerance-based comparisons) in `tests/unit/shared/test_units.py` (depends on T008)
-- [ ] T017 [P] Unit tests for configuration loading and default-bound fallback in `tests/unit/shared/test_config.py` (depends on T010)
-- [ ] T018 [P] Unit tests for the material and drilling-tool registries (uniqueness, positive reference values) in `tests/unit/shared/test_registry.py` (depends on T007, T009)
+- [X] T006 [P] Implement `UnitSystem` enum, `CalculationResult`, and `ErrorInfo` dataclasses in `src/machine_calc/models.py` (data-model.md)
+- [X] T007 [P] Implement `WorkpieceMaterial` dataclass and the initial material registry (mild steel, stainless steel, aluminum, cast iron, brass, titanium) in `src/machine_calc/registry.py` (FR-004)
+- [X] T008 [P] Implement metric↔imperial conversion helpers in `src/machine_calc/units.py` (FR-017; research.md #4)
+- [X] T009 [P] Implement `DrillingTool` dataclass and the initial tool registry (HSS, cobalt, carbide) in `src/machine_calc/operations/drilling/tools.py` (FR-005)
+- [X] T010 Implement `Configuration` loading from an external TOML file with built-in default fallback (`max_diameter_mm=100`, `max_depth_mm=500`) in `src/machine_calc/config.py` (FR-018; research.md #3)
+- [X] T011 Implement shared input validation (diameter/depth positivity + configurable bounds, required material/tool presence, returning `ErrorInfo` rather than raising) in `src/machine_calc/validation.py` (FR-009, FR-010)
+- [X] T012 Implement drilling formulas (spindle speed, feed rate, machining time in minutes, torque, power) in `src/machine_calc/operations/drilling/formulas.py`, citing the formula sources in code comments (FR-006, FR-007, FR-008, FR-011; research.md #4; Constitution III)
+- [X] T013 Implement the drilling `calculate()` orchestration (validate → resolve material/tool combination → compute formulas → apply feasibility check against optional `available_power` → build `CalculationResult`, never raising for expected validation failures) in `src/machine_calc/operations/drilling/__init__.py` (FR-009 through FR-016; depends on T006-T012)
+- [X] T014 [P] Unit tests for drilling formulas (nominal inputs, boundary values, known reference results within 5% per SC-002) in `tests/unit/operations/drilling/test_formulas.py` (depends on T012)
+- [X] T015 [P] Unit tests for shared validation (zero/negative/non-numeric/out-of-range diameter and depth, missing material/tool) in `tests/unit/shared/test_validation.py` (depends on T011)
+- [X] T016 [P] Unit tests for unit conversion helpers (metric↔imperial round-trip, tolerance-based comparisons) in `tests/unit/shared/test_units.py` (depends on T008)
+- [X] T017 [P] Unit tests for configuration loading and default-bound fallback in `tests/unit/shared/test_config.py` (depends on T010)
+- [X] T018 [P] Unit tests for the material and drilling-tool registries (uniqueness, positive reference values) in `tests/unit/shared/test_registry.py` (depends on T007, T009)
 
 **Checkpoint**: The drilling `calculate()` engine is fully implemented and unit-tested. User story phases below only add the CLI layer (US1) and library-facing contract guarantees (US2) on top of this foundation.
 
@@ -60,17 +60,17 @@
 
 ### Tests for User Story 1 ⚠️
 
-- [ ] T019 [P] [US1] Contract test asserting `cli.py` contains no drilling calculation logic and delegates every result to `machine_calc.calculate()` (static/behavioral check) in `tests/contract/test_cli_contract.py`
-- [ ] T020 [P] [US1] Integration test for the full REPL prompt sequence with valid input, asserting displayed values and unit labels match the library result (FR-013, FR-016) in `tests/integration/test_cli_flow.py`
-- [ ] T021 [P] [US1] Integration test for REPL validation error handling (invalid diameter/depth, missing material/tool re-prompt) in `tests/integration/test_cli_validation.py`
-- [ ] T022 [P] [US1] Integration test for the REPL loop: changing one input (e.g., switching drilling tool) and recalculating without restarting (FR-014, spec Acceptance Scenario 4) in `tests/integration/test_cli_loop.py`
+- [X] T019 [P] [US1] Contract test asserting `cli.py` contains no drilling calculation logic and delegates every result to `machine_calc.calculate()` (static/behavioral check) in `tests/contract/test_cli_contract.py`
+- [X] T020 [P] [US1] Integration test for the full REPL prompt sequence with valid input, asserting displayed values and unit labels match the library result (FR-013, FR-016) in `tests/integration/test_cli_flow.py`
+- [X] T021 [P] [US1] Integration test for REPL validation error handling (invalid diameter/depth, missing material/tool re-prompt) in `tests/integration/test_cli_validation.py`
+- [X] T022 [P] [US1] Integration test for the REPL loop: changing one input (e.g., switching drilling tool) and recalculating without restarting (FR-014, spec Acceptance Scenario 4) in `tests/integration/test_cli_loop.py`
 
 ### Implementation for User Story 1
 
-- [ ] T023 [US1] Implement the public package surface (`calculate`, `list_materials`, `list_tools`, `UnitSystem` re-exported from `operations.drilling`) in `src/machine_calc/__init__.py` (depends on T013)
-- [ ] T024 [US1] Implement the interactive REPL prompt flow (unit system → material → tool → diameter → depth → optional power → display result → loop) in `src/machine_calc/cli.py` per contracts/cli-repl.md (depends on T023)
-- [ ] T025 [US1] Add a runnable entry point: `src/machine_calc/__main__.py` (for `python -m machine_calc`) and a `console_scripts` entry in `pyproject.toml` (depends on T024)
-- [ ] T026 [US1] Format CLI output with unit labels matching the selected unit system and render `feasibility_warning`/`error.message` clearly (FR-013; depends on T024)
+- [X] T023 [US1] Implement the public package surface (`calculate`, `list_materials`, `list_tools`, `UnitSystem` re-exported from `operations.drilling`) in `src/machine_calc/__init__.py` (depends on T013)
+- [X] T024 [US1] Implement the interactive REPL prompt flow (unit system → material → tool → diameter → depth → optional power → display result → loop) in `src/machine_calc/cli.py` per contracts/cli-repl.md (depends on T023)
+- [X] T025 [US1] Add a runnable entry point: `src/machine_calc/__main__.py` (for `python -m machine_calc`) and a `console_scripts` entry in `pyproject.toml` (depends on T024)
+- [X] T026 [US1] Format CLI output with unit labels matching the selected unit system and render `feasibility_warning`/`error.message` clearly (FR-013; depends on T024)
 
 **Checkpoint**: User Story 1 is fully functional and independently testable via the CLI alone.
 
