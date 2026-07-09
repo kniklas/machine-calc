@@ -18,6 +18,9 @@
 - Q: How should the module handle a material/drilling tool combination with no defined reference parameters? → A: Reject with a clear structured error stating the combination has no defined reference parameters; no calculation is performed.
 - Q: How should the library API report validation/error conditions to calling programs? → A: Always return a structured result object with a distinct error/warning field (error code + message); never raise exceptions for expected validation failures.
 - Q: What unit should estimated machining time be reported in? → A: Minutes (fractional, e.g., 0.42 min), regardless of the selected unit system.
+- Q: How do a drilling tool's cutting-speed/feed characteristics combine with a workpiece material's reference values to produce the recommended spindle speed and feed rate? → A: Multiplicative — the tool applies a cutting-speed factor and a feed factor that multiply the material's reference cutting speed and feed-per-revolution values, respectively.
+- Q: Does SC-002's "within 5%" tolerance apply independently to each calculated value or as an aggregate across all four? → A: Independently — spindle speed, feed rate, torque, and power MUST each individually be within 5% of the published reference value.
+- Q: Should the module model a machine's maximum RPM/feed-rate as a feasibility check, similar to FR-012's power check? → A: Out of scope for this feature — no machine RPM/feed-rate limit is modeled; only the power feasibility check (FR-012) applies.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -63,7 +66,7 @@ A software developer building their own user interface (graphical, web, or other
 - How does the module handle a workpiece material that is not in the supported material list?
 - How does the module handle a drilling tool that is not in the supported tool list, or a tool/material combination with no defined reference parameters? The module rejects the request with a clear, structured error (see FR-010) and performs no calculation.
 - How does the module handle a hole depth greater than commonly available drill lengths (deep-hole drilling scenarios)?
-- What happens when calculated feed rate or spindle speed would exceed practical machine limits?
+- What happens when calculated feed rate or spindle speed would exceed practical machine limits? Out of scope for this feature — the module does not model a machine's maximum RPM or feed rate; only the tool/machine power feasibility check (FR-012) applies.
 - How does the module behave when the tool's or machine's power rating is left unspecified (unknown)?
 - How does the library-facing interface (User Story 2) report errors so calling programs can handle them programmatically rather than as human-readable text only?
 
@@ -76,8 +79,8 @@ A software developer building their own user interface (graphical, web, or other
 - **FR-003**: The module MUST allow drill diameter, hole depth, workpiece material, and drilling tool to be supplied as inputs for a drilling operation, whether via the interactive text interface or direct library calls.
 - **FR-004**: The module MUST provide a predefined list of common workpiece materials, each associated with standard reference cutting speed and feed-per-revolution values.
 - **FR-005**: The module MUST provide a predefined list of drilling tools (e.g., differing by material composition such as high-speed steel, cobalt, or carbide), each with its own reference cutting speed and feed adjustments, so that selecting a different tool for the same material and diameter can change the recommended results.
-- **FR-006**: The module MUST calculate the recommended spindle speed (RPM) based on the selected material's and drilling tool's reference cutting speed and the entered drill diameter.
-- **FR-007**: The module MUST calculate the recommended feed rate based on the selected material's and drilling tool's reference feed-per-revolution value and the calculated spindle speed.
+- **FR-006**: The module MUST calculate the recommended spindle speed (RPM) based on the selected material's reference cutting speed multiplied by the selected drilling tool's cutting-speed factor, combined with the entered drill diameter.
+- **FR-007**: The module MUST calculate the recommended feed rate based on the selected material's reference feed-per-revolution value multiplied by the selected drilling tool's feed factor, combined with the calculated spindle speed.
 - **FR-008**: The module MUST calculate the estimated machining time, in minutes (fractional, regardless of the selected unit system), based on hole depth, feed rate, and a standard allowance for drill point engagement.
 - **FR-009**: The module MUST validate all numeric inputs (drill diameter, hole depth) and reject zero, negative, non-numeric, or out-of-range values, reporting a clear, actionable error in both the interactive text interface and the library API. Default maximum bounds are drill diameter ≤100 mm (≈4 in) and hole depth ≤500 mm (≈20 in); these defaults MUST be overridable via a configuration file without requiring code changes.
 - **FR-010**: The module MUST require a material selection and a drilling tool selection before performing any calculation and MUST report the missing selection(s), whether via an interactive prompt (text interface) or a structured error (library). If the selected material/drilling tool combination has no defined reference cutting parameters, the module MUST reject the request with a clear, structured error stating the combination is unsupported, and MUST NOT perform a calculation or fall back to generic/default values.
@@ -103,7 +106,7 @@ A software developer building their own user interface (graphical, web, or other
 ### Measurable Outcomes
 
 - **SC-001**: Users can obtain recommended spindle speed, feed rate, machining time, torque, and power for a drilling operation in under 30 seconds from opening the interactive text interface.
-- **SC-002**: Calculated spindle speed, feed rate, torque, and power values are within 5% of published industry reference values for the same material, drilling tool, and drill diameter.
+- **SC-002**: Calculated spindle speed, feed rate, torque, and power values are each independently within 5% of published industry reference values for the same material, drilling tool, and drill diameter (i.e., every one of the four values MUST individually meet the 5% tolerance, not merely an average across them).
 - **SC-003**: 95% of users can successfully complete a single-material, single-tool calculation on their first attempt via the interactive text interface without needing external help.
 - **SC-004**: Invalid input is identified and communicated within the same interaction, with zero calculations silently failing or producing incorrect results, in both the interactive text interface and the library API.
 - **SC-005**: Users who do not know their tool's or machine's power rating can still obtain an estimated power requirement for their operation in the same amount of time as users who do provide it.
@@ -118,5 +121,6 @@ A software developer building their own user interface (graphical, web, or other
 - Calculations assume conventional twist-drill drilling on a rigid setup (e.g., drill press or milling machine) rather than specialized deep-hole or gun-drilling processes.
 - Torque and power estimates use standard machining formulas and assume typical drill geometry; they are intended as planning estimates, not certified engineering values.
 - Tool/machine power rating is an optional input specifically because it may be unknown; the module always calculates the estimated power requirement and only performs a feasibility check when a rating is supplied.
+- The module does not model or validate a machine's maximum spindle speed (RPM) or feed rate capacity; the only feasibility check performed is the optional power comparison in FR-012. Calculated spindle speed and feed rate are reported as recommendations regardless of any particular machine's physical limits.
 - The module does not control or communicate directly with physical machine tools; it is used for planning and reference purposes, and as a calculation engine embedded in other software.
 - Single-user, single-session usage is assumed; no multi-user collaboration or result-sharing capability is required for this feature.
