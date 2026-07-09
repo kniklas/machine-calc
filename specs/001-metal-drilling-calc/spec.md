@@ -8,6 +8,12 @@
 
 **Input**: User description: "Metal drilling calculations module"
 
+## Clarifications
+
+### Session 2026-07-09
+
+- Q: What unit system should the module support for diameter, depth, feed, power, and torque? → A: Both metric and imperial, with the user/caller selecting the unit system per session/request.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Calculate Core Drilling Parameters Interactively (Priority: P1)
@@ -76,13 +82,14 @@ A software developer building their own user interface (graphical, web, or other
 - **FR-014**: The module MUST allow any input (diameter, depth, material, drilling tool, tool/machine power rating) to be changed and the calculated results refreshed accordingly, whether through repeated interactive entry or repeated library calls.
 - **FR-015**: The library API MUST report invalid input or missing selections as structured, programmatically identifiable errors (not only human-readable text), so calling programs can handle them without parsing free-form text.
 - **FR-016**: The interactive text interface and the library API MUST produce identical calculated results for identical inputs.
+- **FR-017**: The module MUST support both metric units (mm, mm/rev, RPM, kW, N·m) and imperial units (inches, in/rev, RPM, HP, in-lb), allowing the unit system to be selected per session (interactive text interface) or per request (library API); all inputs, outputs, and displayed labels MUST consistently reflect the selected unit system.
 
 ### Key Entities
 
-- **Drilling Operation**: Represents a single calculation request; includes drill diameter, hole depth, selected material, selected drilling tool, and optional tool/machine power rating, along with the resulting spindle speed, feed rate, machining time, torque, and power.
+- **Drilling Operation**: Represents a single calculation request; includes drill diameter, hole depth, selected material, selected drilling tool, selected unit system (metric or imperial), and optional tool/machine power rating, along with the resulting spindle speed, feed rate, machining time, torque, and power.
 - **Workpiece Material**: Represents a material available for selection; includes a name and its standard reference cutting speed and feed-per-revolution values used in calculations.
 - **Drilling Tool**: Represents a specific drill bit type available for selection (e.g., by material/coating such as high-speed steel, cobalt, or carbide); includes reference cutting speed and feed adjustments that combine with the selected workpiece material to influence recommended settings.
-- **Calculation Result**: Represents the structured output of a single Drilling Operation (spindle speed, feed rate, machining time, torque, power, and any warnings/errors), returned identically whether produced via the interactive text interface or the library API.
+- **Calculation Result**: Represents the structured output of a single Drilling Operation (spindle speed, feed rate, machining time, torque, power, unit system used, and any warnings/errors), returned identically whether produced via the interactive text interface or the library API.
 
 ## Success Criteria *(mandatory)*
 
