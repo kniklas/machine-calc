@@ -1,15 +1,12 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.0.0 → 1.1.0
-Modified principles: N/A (existing principles unchanged)
-Added sections:
-  - V. Resource-Constrained Compatibility
-  - VI. Extensibility by Design
-  - VII. Documentation & Publishing
-Expanded sections:
-  - Additional Constraints (Quality Gates): added CI/CD automation gate
-    (build, test, docs, PyPI publish) via GitHub Actions
+Version change: 1.1.0 → 1.2.0
+Modified principles:
+  - VI. Extensibility by Design (expanded: architecture must anticipate future
+    metal machining operations beyond drilling, e.g., turning, milling)
+Added sections: none
+Expanded sections: none (Principle VI expansion tracked above)
 Removed sections: none
 Templates requiring updates:
   ✅ .specify/templates/plan-template.md (Constitution Check gate references these principles generically; no changes needed)
@@ -20,6 +17,9 @@ Follow-up TODOs:
   - README.md must document unit test coverage once the package skeleton exists.
   - GitHub Actions workflows (build/test/docs/PyPI publish) to be created during
     implementation; none exist yet as of this amendment.
+  - specs/001-metal-drilling-calc/plan.md structure should reflect a per-operation
+    module boundary (e.g., an `operations/drilling` module) so future operations
+    (turning, milling) can be added per this amendment without refactoring shared code.
 -->
 
 # machine-calc Constitution
@@ -125,6 +125,22 @@ rewriting existing logic.
 - Hard-coded assumptions that would block adding a new calculation type, unit system, or
   input/output format MUST be called out in code review and avoided where a reasonable
   abstraction exists.
+- The module's architecture MUST anticipate growth beyond drilling into other metal
+  machining operations (e.g., turning, milling, and others to be identified later).
+  Concretely: operation-specific logic (e.g., drilling's spindle speed/feed/torque/power
+  formulas) MUST live behind a per-operation module/interface rather than being hard-coded
+  into shared infrastructure (CLI, configuration loading, unit conversion, material/tool
+  registries), so a future operation can be added as a new module implementing the same
+  kind of interface without modifying unrelated existing operations' code.
+- Cross-cutting concerns that are not operation-specific (workpiece material properties,
+  unit conversion, configuration loading, structured error/result reporting) MUST be shared
+  across current and future operations rather than duplicated per operation, while
+  operation-specific reference data (e.g., drilling tool cutting/feed factors) MAY remain
+  distinct per operation where the underlying physics differs.
+- Rationale: the set of machine calculations this project supports is expected to grow —
+  starting with drilling and extending to other metal machining operations such as turning
+  and milling — so extensibility keeps that growth cheap and low-risk instead of requiring
+  disruptive rewrites of shared infrastructure for every new operation.
 - Rationale: the set of machine calculations this project supports is expected to grow;
   extensibility keeps that growth cheap and low-risk instead of requiring disruptive
   rewrites for every new feature.
@@ -195,4 +211,4 @@ recurring pattern, MUST trigger a proposed constitution amendment rather than re
 ad-hoc exceptions. Use `.specify/memory/constitution.md` as the authoritative source for
 runtime development guidance until a dedicated guidance file is introduced.
 
-**Version**: 1.1.0 | **Ratified**: 2026-07-08 | **Last Amended**: 2026-07-09
+**Version**: 1.2.0 | **Ratified**: 2026-07-08 | **Last Amended**: 2026-07-09

@@ -17,6 +17,7 @@
 - Q: What upper bounds should validation enforce on drill diameter and hole depth? → A: Fixed realistic default max bounds (diameter ≤100 mm/4in, depth ≤500 mm/20in), overridable via a configuration file.
 - Q: How should the module handle a material/drilling tool combination with no defined reference parameters? → A: Reject with a clear structured error stating the combination has no defined reference parameters; no calculation is performed.
 - Q: How should the library API report validation/error conditions to calling programs? → A: Always return a structured result object with a distinct error/warning field (error code + message); never raise exceptions for expected validation failures.
+- Q: What unit should estimated machining time be reported in? → A: Minutes (fractional, e.g., 0.42 min), regardless of the selected unit system.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -77,7 +78,7 @@ A software developer building their own user interface (graphical, web, or other
 - **FR-005**: The module MUST provide a predefined list of drilling tools (e.g., differing by material composition such as high-speed steel, cobalt, or carbide), each with its own reference cutting speed and feed adjustments, so that selecting a different tool for the same material and diameter can change the recommended results.
 - **FR-006**: The module MUST calculate the recommended spindle speed (RPM) based on the selected material's and drilling tool's reference cutting speed and the entered drill diameter.
 - **FR-007**: The module MUST calculate the recommended feed rate based on the selected material's and drilling tool's reference feed-per-revolution value and the calculated spindle speed.
-- **FR-008**: The module MUST calculate the estimated machining time based on hole depth, feed rate, and a standard allowance for drill point engagement.
+- **FR-008**: The module MUST calculate the estimated machining time, in minutes (fractional, regardless of the selected unit system), based on hole depth, feed rate, and a standard allowance for drill point engagement.
 - **FR-009**: The module MUST validate all numeric inputs (drill diameter, hole depth) and reject zero, negative, non-numeric, or out-of-range values, reporting a clear, actionable error in both the interactive text interface and the library API. Default maximum bounds are drill diameter ≤100 mm (≈4 in) and hole depth ≤500 mm (≈20 in); these defaults MUST be overridable via a configuration file without requiring code changes.
 - **FR-010**: The module MUST require a material selection and a drilling tool selection before performing any calculation and MUST report the missing selection(s), whether via an interactive prompt (text interface) or a structured error (library). If the selected material/drilling tool combination has no defined reference cutting parameters, the module MUST reject the request with a clear, structured error stating the combination is unsupported, and MUST NOT perform a calculation or fall back to generic/default values.
 - **FR-011**: The module MUST calculate and return the estimated cutting torque and estimated power required for every drilling operation, as a standard part of the core calculation result (not a separate optional step).

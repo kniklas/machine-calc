@@ -1,0 +1,124 @@
+# Phase 1 Data Model: Metal Drilling Calculations Module
+
+**Feature**: [spec.md](./spec.md) | **Research**: [research.md](./research.md)
+
+This document defines the entities backing the calculation engine, derived
+from the spec's Key Entities section and clarified requirements.
+
+## WorkpieceMaterial
+
+Reference data for a selectable workpiece material (FR-004).
+
+| Field | Type | Notes |
+|---|---|---|
+| `name` | str | Unique identifier/display name (e.g., "Mild Steel") |
+| `reference_cutting_speed_m_min` | float | Standard `vc` reference in m/min (canonical metric storage; converted for imperial display per FR-017) |
+| `reference_feed_per_rev_mm` | float | Standard `fn` reference in mm/rev (canonical metric storage) |
+| `specific_cutting_force_kc` | float | `Kc` in N/mm², used in torque/power calculations (research.md #4) |
+
+Validation: `name` MUST be unique within the registry; all numeric fields MUST
+be positive (Principle III — no silently wrong reference data).
+
+## DrillingTool
+
+Reference data for a selectable drill bit type (FR-005), e.g., high-speed
+steel, cobalt, carbide.
+
+| Field | Type | Notes |
+|---|---|---|
+| `name` | str | Unique identifier/display name (e.g., "Carbide") |
+| `cutting_speed_factor` | float | Multiplier applied to the material's reference cutting speed |
+| `feed_factor` | float | Multiplier applied to the material's reference feed per revolution |
+
+Validation: `name` unique; factors MUST be positive.
+
+## MaterialToolCompatibility (registry relationship)
+
+Not a standalone entity but a registry-level rule (FR-010): a
+(`WorkpieceMaterial`, `DrillingTool`) pairing is either defined (both factors
+combine to produce a valid calculation) or undefined. Undefined pairings MUST
+be rejected with a structured error (`error_code=UNSUPPORTED_COMBINATION`) —
+see Configuration/error handling below. The initial release treats every
+material × tool combination in the registries as defined (per spec
+Assumptions); the rejection path exists for forward-compatibility as the
+registries grow (Principle VI).
+
+## UnitSystem (enum)
+
+- `METRIC` — mm, mm/rev, RPM, kW, N·m
+- `IMPERIAL` — inches, in/rev, RPM, HP, in-lb
+
+Selected per request/session (FR-017); does not change calculation results,
+only input parsing and output formatting/labels (canonical calculation is
+always performed in metric internally per research.md #4, then converted for
+display/output when `IMPERIAL` is selected).
+
+## DrillingOperation (request)
+
+Represents a single calculation request (FR-003).
+
+| Field | Type | Notes |
+|---|---|---|
+| `diameter` | float | In the units of the selected `unit_system` |
+| `depth` | float | In the units of the selected `unit_system` |
+| `material` | str (→ WorkpieceMaterial name) | Required (FR-010) |
+| `tool` | str (→ DrillingTool name) | Required (FR-010) |
+| `unit_system` | UnitSystem | Required (FR-017) |
+| `available_power` | float \| None | Optional (FR-012), same units as `unit_system`'s power unit |
+
+Validation (FR-009, FR-018):
+- `diameter` MUST be > 0 and ≤ configured max diameter (default 100 mm / 4 in).
+- `depth` MUST be > 0 and ≤ configured max depth (default 500 mm / 20 in).
+- `material` and `tool` MUST both be present and MUST resolve to a defined
+  registry combination (see MaterialToolCompatibility).
+
+## CalculationResult (response)
+
+Structured output returned identically by the CLI and library (FR-016),
+always returned — never raised as an exception — per FR-015.
+
+| Field | Type | Notes |
+|---|---|---|
+| `spindle_speed_rpm` | float \| None | RPM; `None` if calculation could not proceed |
+| `feed_rate` | float \| None | Units per `unit_system` (mm/min or in/min) |
+| `machining_time` | float \| None | Minutes (fractional), fixed regardless of `unit_system` per spec clarification |
+| `torque` | float \| None | N·m or in-lb per `unit_system` |
+| `power_required` | float \| None | kW or HP per `unit_system` |
+| `unit_system` | UnitSystem | Echoes the request's unit system |
+| `feasibility_warning` | str \| None | Set when `available_power` was supplied and is exceeded by `power_required` (FR-012) |
+| `error` | ErrorInfo \| None | Set when validation fails or an unsupported combination is requested (FR-015); when set, the numeric fields above MUST be `None` |
+
+## ErrorInfo
+
+| Field | Type | Notes |
+|---|---|---|
+| `code` | str | Machine-readable identifier, e.g. `INVALID_DIAMETER`, `MISSING_MATERIAL`, `MISSING_TOOL`, `UNSUPPORTED_COMBINATION`, `OUT_OF_RANGE_DEPTH` |
+| `message` | str | Human-readable explanation for display in the CLI |
+
+## Configuration
+
+Optional external settings overriding default validation bounds (FR-018).
+
+| Field | Type | Notes |
+|---|---|---|
+| `max_diameter_mm` | float | Overrides default 100 mm (canonical metric storage) |
+| `max_depth_mm` | float | Overrides default 500 mm (canonical metric storage) |
+
+Loaded from an external TOML file (research.md #3, #5); when the file or a
+given key is absent, the module MUST fall back to its built-in defaults
+(FR-018).
+
+## Relationships
+
+```
+Configuration ──(overrides bounds for)──▶ DrillingOperation validation
+WorkpieceMaterial ──(combined with)──▶ DrillingTool ──▶ MaterialToolCompatibility
+DrillingOperation ──(validated against registries + Configuration)──▶ CalculationResult
+```
+
+## State / Lifecycle
+
+These entities are stateless value objects computed per request; there is no
+persistence or state transition beyond a single calculation's lifecycle
+(request in → validate → calculate → result out), consistent with the spec's
+"single-user, single-session" assumption.
