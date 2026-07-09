@@ -13,6 +13,10 @@
 ### Session 2026-07-09
 
 - Q: What unit system should the module support for diameter, depth, feed, power, and torque? → A: Both metric and imperial, with the user/caller selecting the unit system per session/request.
+- Q: What interaction style should the interactive text interface use? → A: Interactive REPL that prompts step-by-step for material, tool, diameter, depth, and unit system, and loops to allow further calculations.
+- Q: What upper bounds should validation enforce on drill diameter and hole depth? → A: Fixed realistic default max bounds (diameter ≤100 mm/4in, depth ≤500 mm/20in), overridable via a configuration file.
+- Q: How should the module handle a material/drilling tool combination with no defined reference parameters? → A: Reject with a clear structured error stating the combination has no defined reference parameters; no calculation is performed.
+- Q: How should the library API report validation/error conditions to calling programs? → A: Always return a structured result object with a distinct error/warning field (error code + message); never raise exceptions for expected validation failures.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -56,7 +60,7 @@ A software developer building their own user interface (graphical, web, or other
 
 - What happens when the entered drill diameter, hole depth, or other numeric input is non-numeric, missing, or extremely large (e.g., outside realistic machining ranges)?
 - How does the module handle a workpiece material that is not in the supported material list?
-- How does the module handle a drilling tool that is not in the supported tool list, or a tool/material combination with no defined reference parameters?
+- How does the module handle a drilling tool that is not in the supported tool list, or a tool/material combination with no defined reference parameters? The module rejects the request with a clear, structured error (see FR-010) and performs no calculation.
 - How does the module handle a hole depth greater than commonly available drill lengths (deep-hole drilling scenarios)?
 - What happens when calculated feed rate or spindle speed would exceed practical machine limits?
 - How does the module behave when the tool's or machine's power rating is left unspecified (unknown)?
@@ -67,22 +71,23 @@ A software developer building their own user interface (graphical, web, or other
 ### Functional Requirements
 
 - **FR-001**: The module MUST expose its drilling calculation logic as a callable library so it can be embedded and invoked directly by other Python programs that provide their own user interface, independent of any interactive text interface.
-- **FR-002**: The module MUST provide an interactive text-based interface, built on top of the same calculation logic used by the library, for direct human use.
+- **FR-002**: The module MUST provide an interactive text-based interface, built on top of the same calculation logic used by the library, for direct human use. This interface MUST be a step-by-step, prompt-driven (REPL-style) session: it prompts the user in sequence for unit system, material, drilling tool, drill diameter, and hole depth (and optional power rating), displays the calculation result, and then loops to allow further calculations or input changes without restarting the program.
 - **FR-003**: The module MUST allow drill diameter, hole depth, workpiece material, and drilling tool to be supplied as inputs for a drilling operation, whether via the interactive text interface or direct library calls.
 - **FR-004**: The module MUST provide a predefined list of common workpiece materials, each associated with standard reference cutting speed and feed-per-revolution values.
 - **FR-005**: The module MUST provide a predefined list of drilling tools (e.g., differing by material composition such as high-speed steel, cobalt, or carbide), each with its own reference cutting speed and feed adjustments, so that selecting a different tool for the same material and diameter can change the recommended results.
 - **FR-006**: The module MUST calculate the recommended spindle speed (RPM) based on the selected material's and drilling tool's reference cutting speed and the entered drill diameter.
 - **FR-007**: The module MUST calculate the recommended feed rate based on the selected material's and drilling tool's reference feed-per-revolution value and the calculated spindle speed.
 - **FR-008**: The module MUST calculate the estimated machining time based on hole depth, feed rate, and a standard allowance for drill point engagement.
-- **FR-009**: The module MUST validate all numeric inputs (drill diameter, hole depth) and reject zero, negative, or non-numeric values, reporting a clear, actionable error in both the interactive text interface and the library API.
-- **FR-010**: The module MUST require a material selection and a drilling tool selection before performing any calculation and MUST report the missing selection(s), whether via an interactive prompt (text interface) or a structured error (library).
+- **FR-009**: The module MUST validate all numeric inputs (drill diameter, hole depth) and reject zero, negative, non-numeric, or out-of-range values, reporting a clear, actionable error in both the interactive text interface and the library API. Default maximum bounds are drill diameter ≤100 mm (≈4 in) and hole depth ≤500 mm (≈20 in); these defaults MUST be overridable via a configuration file without requiring code changes.
+- **FR-010**: The module MUST require a material selection and a drilling tool selection before performing any calculation and MUST report the missing selection(s), whether via an interactive prompt (text interface) or a structured error (library). If the selected material/drilling tool combination has no defined reference cutting parameters, the module MUST reject the request with a clear, structured error stating the combination is unsupported, and MUST NOT perform a calculation or fall back to generic/default values.
 - **FR-011**: The module MUST calculate and return the estimated cutting torque and estimated power required for every drilling operation, as a standard part of the core calculation result (not a separate optional step).
 - **FR-012**: The module MUST accept the drilling tool's or machine's maximum available power as an optional input parameter that MAY be left unknown; when supplied, the module MUST report a clear warning if the estimated required power exceeds it; when left unknown, the module MUST still calculate and return the estimated power requirement without attempting a feasibility comparison.
 - **FR-013**: The module MUST present all calculated results with their units of measure clearly labeled, in both the interactive text interface and the library's structured results.
 - **FR-014**: The module MUST allow any input (diameter, depth, material, drilling tool, tool/machine power rating) to be changed and the calculated results refreshed accordingly, whether through repeated interactive entry or repeated library calls.
-- **FR-015**: The library API MUST report invalid input or missing selections as structured, programmatically identifiable errors (not only human-readable text), so calling programs can handle them without parsing free-form text.
+- **FR-015**: The library API MUST report invalid input or missing selections as structured, programmatically identifiable errors (not only human-readable text), so calling programs can handle them without parsing free-form text. The library MUST NOT raise exceptions for expected validation failures (e.g., invalid input, missing selection, unsupported material/tool combination, or feasibility warnings); instead, it MUST always return a structured result object containing a distinct error/warning field (an error code plus a human-readable message) alongside any successfully calculated values.
 - **FR-016**: The interactive text interface and the library API MUST produce identical calculated results for identical inputs.
 - **FR-017**: The module MUST support both metric units (mm, mm/rev, RPM, kW, N·m) and imperial units (inches, in/rev, RPM, HP, in-lb), allowing the unit system to be selected per session (interactive text interface) or per request (library API); all inputs, outputs, and displayed labels MUST consistently reflect the selected unit system.
+- **FR-018**: The module MUST support an external configuration file (separate from source code) for overriding default validation bounds (e.g., maximum drill diameter and hole depth); when no configuration override is present, the module MUST fall back to its built-in default bounds.
 
 ### Key Entities
 
@@ -90,6 +95,7 @@ A software developer building their own user interface (graphical, web, or other
 - **Workpiece Material**: Represents a material available for selection; includes a name and its standard reference cutting speed and feed-per-revolution values used in calculations.
 - **Drilling Tool**: Represents a specific drill bit type available for selection (e.g., by material/coating such as high-speed steel, cobalt, or carbide); includes reference cutting speed and feed adjustments that combine with the selected workpiece material to influence recommended settings.
 - **Calculation Result**: Represents the structured output of a single Drilling Operation (spindle speed, feed rate, machining time, torque, power, unit system used, and any warnings/errors), returned identically whether produced via the interactive text interface or the library API.
+- **Configuration**: Represents optional external settings (e.g., a configuration file) that override built-in default validation bounds for drill diameter and hole depth; when absent, built-in defaults (diameter ≤100 mm/4in, depth ≤500 mm/20in) apply.
 
 ## Success Criteria *(mandatory)*
 
