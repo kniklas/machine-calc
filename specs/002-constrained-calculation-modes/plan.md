@@ -35,7 +35,7 @@ closed-form (non-iterative) algorithm this relies on — and the standard
 
 **Performance Goals**: Each calculation (including the new modes) completes within the same 0.5-1.0s target as the base spec (Constitution Principle V) — the power-constrained algorithm is closed-form (research.md #1), not iterative, so it adds negligible overhead over the standard calculation
 
-**Constraints**: Same as `001-metal-drilling-calc` (Constitution Principle V: ~64-128MB RAM, single-threaded, Debian-stable compatible); no exceptions raised for expected validation failures, including the two new failure modes this feature introduces (infeasible power budget, invalid target RPM, conflicting mode selection) — spec.md FR-004/FR-007/FR-009, base spec FR-015; application logging remains English-only regardless of locale (Constitution VIII)
+**Constraints**: Same as `001-metal-drilling-calc` (Constitution Principle V: ~64-128MB RAM, single-threaded, Debian-stable compatible); no exceptions raised for expected validation failures, including the two new failure modes this feature introduces (infeasible power budget, invalid target RPM, conflicting mode selection) — spec.md FR-004/FR-007/FR-009, base spec FR-015; invalid/blank REPL prompt entries (mode selection, required available-power) re-prompt rather than silently defaulting or erroring as MODE_CONFLICT, and a mode change on loop re-run clears mode-specific values (spec.md FR-001a, FR-013); application logging remains English-only regardless of locale (Constitution VIII)
 
 **Scale/Scope**: Extends the single existing drilling operation (`operations/drilling`) with two new modes; no new operation, no new registries, no new top-level library entry point. Interactive text interface gains one new prompt (mode selection, FR-001a) plus mode-conditional follow-up prompts (available power as constraint, or target RPM)
 
@@ -70,7 +70,9 @@ specs/002-constrained-calculation-modes/
 │   ├── library-api-delta.md
 │   └── cli-repl-delta.md
 ├── checklists/
-│   └── requirements.md
+│   ├── requirements.md
+│   ├── calculation-rigor.md
+│   └── mode-ux.md
 └── tasks.md              # Phase 2 output (/speckit.tasks command - NOT created by /speckit.plan)
 ```
 
@@ -82,7 +84,7 @@ src/
     ├── models.py                     # ADD: CalculationMode enum; CalculationResult gains `mode` field (additive, default STANDARD)
     ├── validation.py                  # ADD: validate_target_rpm(), validate_mode_arguments() (mutual-exclusivity / required-argument checks, FR-007/FR-009)
     ├── locales/en.py                   # ADD: new message keys (mode prompt text, new error/label strings, FR-011)
-    ├── cli.py                         # MODIFY: add mode-selection prompt (FR-001a) and mode-conditional follow-up prompts; no change to existing standard-mode prompt sequence when "standard" is chosen
+    ├── cli.py                         # MODIFY: add mode-selection prompt (FR-001a, re-prompts on invalid entry) and mode-conditional follow-up prompts (re-prompt on blank required available-power entry, never MODE_CONFLICT); on loop re-run, clear mode-specific values when the mode changes (FR-013); no change to existing standard-mode prompt sequence when "standard" is chosen
     └── operations/
         └── drilling/
             ├── __init__.py             # MODIFY: calculate() gains `mode` and `target_rpm` parameters; dispatches to the shared at-RPM helper for power-constrained/fixed-RPM modes; new error codes (FR-004, FR-007, FR-009)
