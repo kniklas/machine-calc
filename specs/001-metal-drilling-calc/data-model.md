@@ -134,3 +134,24 @@ These entities are stateless value objects computed per request; there is no
 persistence or state transition beyond a single calculation's lifecycle
 (request in → validate → calculate → result out), consistent with the spec's
 "single-user, single-session" assumption.
+
+## Message Catalog
+
+Represents the set of translatable user-facing strings (REPL prompts, labels,
+error/warning text) keyed by a stable message ID, one catalog per supported
+locale.
+
+- `locale`: str — e.g. `"en"`; identifies which catalog is active.
+- `messages`: dict[str, str] — message ID → localized string for this locale; strings MAY contain `str.format()`-style named placeholders (e.g. `{material}`) for dynamic values, populated by the caller at lookup time.
+- English (`en`) is always present and used as the fallback for any locale or
+  message key missing from a non-English catalog.
+- Consumed by both the CLI (`cli.py`) and the library (`calculate(locale=...)`)
+  for `ErrorInfo.message` and feasibility-warning text (FR-019).
+- The CLI resolves its active locale exactly once at process startup (from
+  `MACHINE_CALC_LOCALE`) and treats it as immutable for the remainder of that
+  process's REPL loop (FR-019c). The library re-evaluates `locale` on every
+  `calculate()` call, since it has no persistent session concept.
+- If a placeholder value required by a catalog string is missing at lookup
+  time, the lookup MUST return a usable string rather than raise (FR-019b);
+  any such formatting failure is reported only via an English-language log
+  entry, never surfaced as a user-facing exception.

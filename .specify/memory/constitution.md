@@ -1,19 +1,17 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.2.0 → 1.2.1
-Modified principles: none (wording correction only)
-Added sections: none
+Version change: 1.2.1 → 1.3.0
+Modified principles: none
+Added sections: Principle VIII - Internationalization of User-Facing Messages
+  (REPL/CLI/error messages MUST be sourced from a translatable language
+  file/config with English fallback; application logging MUST always remain
+  in English regardless of active user-facing locale)
 Expanded sections: none
 Removed sections: none
-Fixed: Additional Constraints (Quality Gates) referenced the `master` branch as
-  the repository default; the actual default branch is `main` (per
-  /speckit.analyze finding C1). Corrected to `main` to match reality and the
-  already-consistent references in specs/001-metal-drilling-calc/plan.md,
-  research.md, and tasks.md.
 Templates requiring updates:
   ✅ .specify/templates/plan-template.md (Constitution Check gate references these principles generically; no changes needed)
-  ✅ .specify/templates/tasks-template.md (test task guidance already supports test-first ordering; no changes needed)
+  ✅ .specify/templates/tasks-template.md (task categories are generic enough to accommodate a message-catalog/i18n setup task; no changes needed)
   ✅ .specify/templates/spec-template.md (no principle-specific mandatory sections introduced; no changes needed)
   ✅ .github/prompts/speckit.constitution.prompt.md (no agent-specific references requiring updates)
 Follow-up TODOs:
@@ -23,6 +21,10 @@ Follow-up TODOs:
   - specs/001-metal-drilling-calc/plan.md structure should reflect a per-operation
     module boundary (e.g., an `operations/drilling` module) so future operations
     (turning, milling) can be added per this amendment without refactoring shared code.
+  - The concrete i18n mechanism (e.g., gettext `.po`/`.mo` vs. a simple JSON/YAML
+    per-locale catalog) MUST be selected during `/speckit.plan` for the first
+    feature that introduces user-facing messages; not yet decided as of this
+    amendment.
 -->
 
 # machine-calc Constitution
@@ -166,6 +168,31 @@ and that documentation MUST be published automatically.
   unusable documentation; automating generation and publishing removes the risk of docs
   silently going stale relative to the code.
 
+### VIII. Internationalization of User-Facing Messages
+All user-facing text (REPL prompts/output, CLI help, and error messages) MUST be
+translatable, while internal application logging MUST always remain in English.
+- User-facing strings (REPL/CLI prompts, output labels, help text, and error/validation
+  messages surfaced to the user) MUST NOT be hard-coded inline in calculation or
+  presentation logic; they MUST be sourced from a language/message file or configuration
+  (e.g., a resource/catalog per locale, gettext `.po`/`.mo` files, or an equivalent
+  key-based lookup mechanism) so a new language can be added by providing a new file/config
+  rather than editing code.
+- Message keys MUST be stable identifiers independent of any specific language's wording,
+  so translations can be added, corrected, or replaced without touching calculation logic.
+- A default language (English) MUST always be bundled and MUST be used as the fallback
+  when a requested locale or a specific message key is missing, so the application never
+  fails or shows a blank message solely due to an incomplete translation.
+- Application/diagnostic logging (log lines intended for developers/operators, not shown
+  to the end user as REPL/CLI output) MUST always be written in English, regardless of the
+  active user-facing locale, so logs remain consistently searchable and diagnosable.
+- New user-facing strings introduced in any change MUST be added to the message
+  file/config (not inlined) and MUST have at least an English entry; missing translations
+  for other supported languages MUST fall back per the rule above rather than block merge.
+- Rationale: separating translatable user-facing messages from code enables adding new
+  languages without touching or risking calculation logic, while keeping logs in a single
+  language ensures maintainers can consistently search, correlate, and debug issues
+  regardless of which locale a user runs the application in.
+
 ## Additional Constraints (Quality Gates)
 
 - CI MUST run linting, the full automated test suite, and a package build check on every
@@ -214,4 +241,4 @@ recurring pattern, MUST trigger a proposed constitution amendment rather than re
 ad-hoc exceptions. Use `.specify/memory/constitution.md` as the authoritative source for
 runtime development guidance until a dedicated guidance file is introduced.
 
-**Version**: 1.2.1 | **Ratified**: 2026-07-08 | **Last Amended**: 2026-07-09
+**Version**: 1.3.0 | **Ratified**: 2026-07-08 | **Last Amended**: 2026-07-10

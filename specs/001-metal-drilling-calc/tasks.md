@@ -38,6 +38,8 @@
 - [X] T007 [P] Implement `WorkpieceMaterial` dataclass and the initial material registry (mild steel, stainless steel, aluminum, cast iron, brass, titanium) in `src/machine_calc/registry.py` (FR-004)
 - [X] T008 [P] Implement metric↔imperial conversion helpers in `src/machine_calc/units.py` (FR-017; research.md #4)
 - [X] T009 [P] Implement `DrillingTool` dataclass and the initial tool registry (HSS, cobalt, carbide) in `src/machine_calc/operations/drilling/tools.py` (FR-005)
+- [X] T009a [P] Implement message catalog loader (`src/machine_calc/i18n.py`) exposing: (a) a `get_locale()` function reading `os.environ["MACHINE_CALC_LOCALE"]` (defaulting to `"en"` if unset, empty, or not a recognized bundled locale module — no OS-locale auto-detection), and (b) a message-lookup function with key lookup, English fallback for missing keys/locales, and `str.format()` placeholder substitution that never raises to the caller if a placeholder value is missing (surfacing such failures only via an English-language log entry); implement the default English catalog (`src/machine_calc/locales/en.py`) (FR-019a, FR-019b, FR-019c, FR-019e; SC-007)
+- [X] T009b [P] Configure stdlib `logging` (`src/machine_calc/logging_setup.py`) with hard-coded English log message strings, independent of the i18n catalog (Constitution VIII)
 - [X] T010 Implement `Configuration` loading from an external TOML file with built-in default fallback (`max_diameter_mm=100`, `max_depth_mm=500`) in `src/machine_calc/config.py` (FR-018; research.md #3)
 - [X] T011 Implement shared input validation (diameter/depth positivity + configurable bounds, required material/tool presence, returning `ErrorInfo` rather than raising) in `src/machine_calc/validation.py` (FR-009, FR-010)
 - [X] T012 Implement drilling formulas (spindle speed, feed rate, machining time in minutes, torque, power) in `src/machine_calc/operations/drilling/formulas.py`, citing the formula sources in code comments (FR-006, FR-007, FR-008, FR-011; research.md #4; Constitution III)
@@ -47,6 +49,7 @@
 - [X] T016 [P] Unit tests for unit conversion helpers (metric↔imperial round-trip, tolerance-based comparisons) in `tests/unit/shared/test_units.py` (depends on T008)
 - [X] T017 [P] Unit tests for configuration loading and default-bound fallback in `tests/unit/shared/test_config.py` (depends on T010)
 - [X] T018 [P] Unit tests for the material and drilling-tool registries (uniqueness, positive reference values) in `tests/unit/shared/test_registry.py` (depends on T007, T009)
+- [X] T018a [P] Unit tests for the message catalog: key lookup, `str.format()` placeholder substitution (including a missing-placeholder-value case that MUST NOT raise), missing-key fallback to English, missing-locale fallback to English (unset/empty/unrecognized `MACHINE_CALC_LOCALE`) (depends on T009a) in `tests/unit/shared/test_i18n.py`
 
 **Checkpoint**: The drilling `calculate()` engine is fully implemented and unit-tested. User story phases below only add the CLI layer (US1) and library-facing contract guarantees (US2) on top of this foundation.
 
@@ -68,9 +71,12 @@
 ### Implementation for User Story 1
 
 - [X] T023 [US1] Implement the public package surface (`calculate`, `list_materials`, `list_tools`, `UnitSystem` re-exported from `operations.drilling`) in `src/machine_calc/__init__.py` (depends on T013)
-- [X] T024 [US1] Implement the interactive REPL prompt flow (unit system → material → tool → diameter → depth → optional power → display result → loop) in `src/machine_calc/cli.py` per contracts/cli-repl.md (depends on T023)
+- [X] T024 [US1] Implement the interactive REPL prompt flow (unit system → material → tool → diameter → depth → optional power → display result → loop) in `src/machine_calc/cli.py` per contracts/cli-repl.md, using message-catalog keys via `i18n.py` for all prompts/labels (no hard-coded user-facing strings) (depends on T023, T009a)
 - [X] T025 [US1] Add a runnable entry point: `src/machine_calc/__main__.py` (for `python -m machine_calc`) and a `console_scripts` entry in `pyproject.toml` (depends on T024)
 - [X] T026 [US1] Format CLI output with unit labels matching the selected unit system and render `feasibility_warning`/`error.message` clearly (FR-013; depends on T024)
+- [X] T026a [US1] Retrofit `cli.py`'s already-implemented hard-coded prompt/output strings (all `input()`/`print()` calls) to use `i18n.py` catalog key lookups instead of literal strings (English catalog values matching current text); wire `cli.py`/`__main__.py` startup to call `i18n.get_locale()` exactly once (reading `MACHINE_CALC_LOCALE`) and hold that value fixed for the entire REPL loop, never re-reading it mid-session (FR-019c; depends on T009a, T024, T026)
+  - Acceptance: no literal user-facing string remains in `cli.py`'s prompt/output paths outside `locales/en.py`; the CLI reads `MACHINE_CALC_LOCALE` exactly once at startup.
+- [X] T026b [P] [US1] Integration test for `MACHINE_CALC_LOCALE` env var handling at CLI startup: unset → English, set to an unrecognized value → English (no error), set to a valid non-English locale (if a test-only catalog fixture is provided) → that catalog's text is used (FR-019; depends on T026a) in `tests/integration/test_locale_env.py`
 
 **Checkpoint**: User Story 1 is fully functional and independently testable via the CLI alone.
 
@@ -86,7 +92,7 @@
 
 - [ ] T027 [P] [US2] Contract test for the `calculate()` success response shape per contracts/library-api.md in `tests/contract/test_library_api_success.py`
 - [ ] T027a [P] [US2] Contract test/doc-check asserting `calculate()`'s docstring documents the exact unit for every `CalculationResult` field under both `UnitSystem.METRIC` and `UnitSystem.IMPERIAL` (FR-013 unit-labeling contract; /speckit.analyze finding B1) in `tests/contract/test_library_api_unit_labels.py`
-- [ ] T028 [P] [US2] Contract test for every documented error code (`INVALID_DIAMETER`, `INVALID_DEPTH`, `MISSING_MATERIAL`, `MISSING_TOOL`, `UNSUPPORTED_COMBINATION`) asserting no exception is raised in `tests/contract/test_library_api_errors.py`
+- [ ] T028 [P] [US2] Contract test for every documented error code (`INVALID_DIAMETER`, `INVALID_DEPTH`, `MISSING_MATERIAL`, `MISSING_TOOL`, `UNSUPPORTED_COMBINATION`) asserting no exception is raised in `tests/contract/test_library_api_errors.py` (the `UNSUPPORTED_COMBINATION` case depends on T044)
 - [ ] T029 [P] [US2] Contract test for the feasibility-warning behavior (power supplied and exceeded vs. power omitted) in `tests/contract/test_library_api_feasibility.py`
 - [ ] T030 [P] [US2] Integration test proving identical `CalculationResult` values from direct `calculate()` calls and from driving the CLI with the same inputs (FR-016) in `tests/integration/test_identical_results.py`
 - [ ] T031 [P] [US2] Integration test for a `Configuration` file overriding default diameter/depth bounds (quickstart.md Scenario 7) in `tests/integration/test_config_override.py`
@@ -95,6 +101,8 @@
 
 - [ ] T032 [US2] Verify and finalize `list_materials()` / `list_tools()` exposure and docstrings (inputs/outputs/units per Constitution I) in `src/machine_calc/__init__.py` (depends on T023)
 - [ ] T033 [US2] Add a `config_path` parameter pass-through from `calculate()` to the `Configuration` loader (FR-018) in `src/machine_calc/operations/drilling/__init__.py` (depends on T013, T010)
+- [X] T033a [US2] Retrofit already-implemented hard-coded `ErrorInfo(...)` message strings in `validation.py` and `operations/drilling/__init__.py` to use `i18n.py` catalog key lookups (English catalog values matching current text, using `str.format()` placeholders for dynamic values e.g. material/tool name); add a `locale` parameter to `calculate()` and thread it through to `ErrorInfo.message`/`feasibility_warning` construction (FR-019; depends on T009a, T011, T013, T033)
+  - Acceptance: no literal message string remains in any `ErrorInfo(...)` constructor call outside `locales/en.py`; `calculate(locale="en")` and the CLI (post-T026a) produce identical text for the same catalog and error code.
 
 **Checkpoint**: Both user stories are independently functional; the FR-016 identical-results guarantee is proven by automated tests.
 
@@ -104,16 +112,17 @@
 
 **Purpose**: Documentation, CI/CD automation, and final validation spanning both user stories (Constitution Principles V, VII; Additional Constraints).
 
-- [ ] T034 [P] Write `README.md` with install/usage instructions for both the library and CLI, and a test coverage section/badge sourced from `pytest-cov` output (Constitution VII)
+- [ ] T034 [P] Write `README.md` with install/usage instructions for both the library and CLI, and a test coverage section reporting the actual current coverage percentage from the most recent `pytest --cov` run (not merely a placeholder note that coverage reporting is "tracked" for later) (Constitution VII)
 - [ ] T035 [P] Write the Sphinx end-user guide (`docs/source/user-guide.rst`): installation, CLI walkthrough, example library snippet
 - [ ] T036 [P] Write the Sphinx developer guide (`docs/source/developer-guide.rst`): architecture overview, `operations/` extensibility pattern (Constitution VI), autodoc-generated API reference for `machine_calc`
-- [ ] T037 Create the GitHub Actions CI workflow (`.github/workflows/ci.yml`): lint, `pytest --cov` with the 90% threshold, package build check (`python -m build`), and Sphinx docs build on every push/PR (research.md #8; Constitution Additional Constraints)
-- [ ] T038 Add the GitHub Pages docs-publish step/job to `.github/workflows/ci.yml` (or a dedicated `docs.yml`), publishing the Sphinx build output on successful builds of `main` (Constitution VII)
+- [ ] T037 Create the GitHub Actions CI workflow (`.github/workflows/ci.yml`): `ruff check` + `black --check` lint, `pytest --cov` with the 90% threshold, package build check (`python -m build`), and Sphinx docs build on every push/PR; all MUST pass before merge (research.md #8; Constitution Principle II, Additional Constraints)
+- [ ] T038 Add the GitHub Pages docs-publish step/job to `.github/workflows/ci.yml` (or a dedicated `docs.yml`), publishing the Sphinx build output on successful builds of `main` (Constitution VII; depends on T037, T035, T036)
 - [ ] T039 Create the GitHub Actions release workflow (`.github/workflows/release.yml`): build and publish the package to PyPI on every merge to `main` (Constitution Additional Constraints)
 - [ ] T040 Run `pytest --cov=machine_calc --cov-report=term-missing` and confirm ≥90% coverage on calculation modules; address any gaps (Constitution II)
-- [ ] T041 Execute all 7 quickstart.md scenarios manually (or via a validation script) and confirm actual behavior matches documented expected outcomes; explicitly time a full end-to-end CLI session (open → select unit system/material/tool → enter diameter/depth → view results) and confirm it completes in under 30 seconds (SC-001)
+- [ ] T041 Execute all 8 quickstart.md scenarios manually (or via a validation script) and confirm actual behavior matches documented expected outcomes; explicitly time a full end-to-end CLI session (open → select unit system/material/tool → enter diameter/depth → view results) and confirm it completes in under 30 seconds (SC-001)
 - [ ] T042 [P] Measure and record calculation execution time against the 0.5-1.0s legacy-hardware target (Constitution V); document the result and methodology in `specs/001-metal-drilling-calc/research.md` (append a "Validation" note) or a new `perf-notes.md`
 - [ ] T043 [P] Measure and record peak memory (RSS) usage of a representative CLI session and a representative library `calculate()` call, confirming it fits within the ~64-128 MB target in Constitution Principle V; document the methodology and result alongside T042
+- [X] T043a [P] Static check confirming no literal user-facing strings exist in `cli.py`/error paths outside the message catalog (post-T026a/T033a retrofit), and confirming log statements are plain English (Constitution VIII)
 
 ---
 
@@ -134,16 +143,16 @@
 ### Within Each User Story
 
 - Tests are written before/alongside implementation and MUST fail before the corresponding implementation task lands (Constitution II).
-- Public API surface (T023) before CLI (T024-T026) and before library contract finalization (T032-T033).
+- Public API surface (T023) before CLI (T024-T026) and before library contract finalization (T032-T033). Retrofit tasks (T026a, T033a) come last in each story, after their respective story's core implementation, since they replace already-implemented literal strings with catalog lookups.
 
 ### Parallel Opportunities
 
 - T003, T004, T005 (Setup) can run in parallel.
 - T006, T007, T008, T009 (Foundational, different files) can run in parallel; T010 and T011 can run in parallel with each other but depend on T006; T012 depends on T007-T009.
-- T014-T018 (Foundational tests, different files) can run in parallel once their respective implementation tasks land.
+- T014-T018 (Foundational tests, different files) can run in parallel once their respective implementation tasks land; T018a (message catalog tests) can run in parallel with T014-T018 once T009a lands.
 - Once Foundational (Phase 2) is complete, User Story 1 (Phase 3) and User Story 2 (Phase 4) can proceed fully in parallel (different files).
 - T019-T022 (US1 tests) can run in parallel with each other; T027-T031 (US2 tests) can run in parallel with each other.
-- T034, T035, T036 (Polish docs) can run in parallel; T042 and T043 can run in parallel with documentation tasks and with each other.
+- T034, T035, T036 (Polish docs) can run in parallel; T042 and T043 can run in parallel with documentation tasks and with each other. T026a/T026b (US1) and T033a (US2) can run in parallel with each other (different files) once T009a lands, but each depends on its own story's core tasks completing first; T026b depends on T026a.
 
 ---
 
@@ -161,8 +170,8 @@ Task: "Implement DrillingTool dataclass and tool registry in src/machine_calc/op
 
 ```bash
 # Two developers can work simultaneously once Phase 2 is done:
-Developer A (US1): T019 → T020 → T021 → T022 → T023 → T024 → T025 → T026
-Developer B (US2): T027 → T028 → T029 → T030 → T031 → T032 → T033
+Developer A (US1): T019 → T020 → T021 → T022 → T023 → T024 → T025 → T026 → T026a → T026b
+Developer B (US2): T027 → T028 → T029 → T030 → T031 → T032 → T033 → T033a
 ```
 
 ---
@@ -197,3 +206,9 @@ With two developers: both complete Setup + Foundational together, then Developer
 - Both user stories are Priority P1 per spec.md; Foundational carries the shared calculation engine so neither story duplicates it (Constitution Principle VI extensibility pattern also relies on this separation for future operations like turning/milling).
 - Commit after each task or logical group; verify tests fail before implementing per Constitution Principle II.
 - Stop at each checkpoint (end of Phase 2, Phase 3, Phase 4) to validate independently before proceeding.
+
+## Phase 6: Convergence
+
+**Purpose**: A single genuinely new gap found by `/speckit.converge` and confirmed by `/speckit.analyze` (2026-07-10): `UNSUPPORTED_COMBINATION` is documented (models.py, data-model.md, contracts/library-api.md, quickstart.md Scenario 6) but unreachable in the current implementation, since every material×tool pairing is accepted via independent multiplicative factors. Depends on Phase 2/4 (T013, T033) being complete; T028's `UNSUPPORTED_COMBINATION` sub-case depends on this.
+
+- [ ] T044 [P] Implement a material/drilling-tool combination-support check in `operations/drilling/__init__.py` so that an unsupported pairing is rejected with the documented `UNSUPPORTED_COMBINATION` error code before any calculation, or — if the current multiplicative model genuinely makes every material×tool pairing supported by design — update spec.md FR-010, data-model.md, and contracts/library-api.md to remove the now-unreachable `UNSUPPORTED_COMBINATION` code and its quickstart.md reference accordingly (FR-010) (partial; depends on T013, T033)

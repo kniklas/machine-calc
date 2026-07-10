@@ -134,6 +134,35 @@ topic follows the Decision / Rationale / Alternatives Considered format.
   releases were rejected as they conflict with the constitution's explicit
   automation requirements.
 
+## 9. Internationalization (i18n) mechanism
+
+- **Decision**: User-facing messages (REPL prompts/labels, library
+  `ErrorInfo`/warning text) are sourced from a message catalog implemented as
+  one pure-Python module per locale (`src/machine_calc/locales/en.py`,
+  exposing a `dict[str, str]` of message ID → string), loaded via
+  `src/machine_calc/i18n.py`. Dynamic values are substituted with
+  `str.format()`-style named placeholders (e.g. `{material}`) at lookup time.
+  The CLI selects its locale solely from the `MACHINE_CALC_LOCALE`
+  environment variable at startup (no OS/system locale auto-detection, no
+  new interactive prompt); the library's `calculate()` accepts an optional
+  `locale` parameter. Both fall back to the bundled English catalog for any
+  missing locale or message key. Only the English catalog ships with this
+  feature (spec.md Clarifications, 2026-07-10).
+- **Rationale**: A plain Python dict module avoids adding a JSON/YAML parser
+  or a `gettext` toolchain dependency, keeping the runtime footprint minimal
+  per Constitution Principle V, while fully satisfying Constitution Principle
+  VIII (translatable user-facing messages, English-only logging, English
+  default/fallback). An environment variable requires no new REPL prompt
+  step, keeping FR-002's prompt sequence unchanged.
+- **Alternatives considered**: `gettext` `.po`/`.mo` catalogs were rejected —
+  they add build-time tooling (`msgfmt`) and a runtime dependency footprint
+  disproportionate to a project targeting minimal resource usage. JSON/YAML
+  catalog files were rejected for the same minimal-dependency reason (JSON
+  lacks comments for translator context; YAML needs `PyYAML`). OS locale
+  auto-detection (`LANG`/`LC_ALL`) was rejected to keep locale selection
+  deterministic and testable, independent of inconsistent environment setup
+  on legacy/constrained target systems (Principle V).
+
 ## Outcome
 
 All NEEDS CLARIFICATION items from the Technical Context are resolved above.
