@@ -28,6 +28,28 @@ class UnitSystem(Enum):
     IMPERIAL = "imperial"
 
 
+class CalculationMode(Enum):
+    """Selects which of the three ways a drilling calculation is performed.
+
+    See ``specs/002-constrained-calculation-modes/data-model.md`` for the
+    authoritative definition.
+
+    Attributes:
+        STANDARD: Spindle speed derived from material/tool reference
+            values (the only mode in ``001-metal-drilling-calc``). Default;
+            existing callers that never set ``mode`` get this behavior
+            unchanged (SC-004).
+        POWER_CONSTRAINED: Spindle speed reduced to fit a required
+            ``available_power`` (FR-001, FR-002, FR-003, FR-004).
+        FIXED_RPM: Spindle speed supplied directly via ``target_rpm``
+            (FR-005, FR-006, FR-007, FR-008).
+    """
+
+    STANDARD = "standard"
+    POWER_CONSTRAINED = "power-constrained"
+    FIXED_RPM = "fixed-rpm"
+
+
 @dataclass(frozen=True)
 class ErrorInfo:
     """A structured, machine-readable validation/error result.
@@ -62,6 +84,13 @@ class CalculationResult:
     When ``error`` is set, all numeric fields above MUST be ``None`` — this
     type is always returned, never raised, for expected validation failures
     (FR-015).
+
+    Attributes:
+        mode: Which calculation mode produced this result (FR-012 of
+            ``002-constrained-calculation-modes``). Always set, including
+            on error results (mirrors the requested mode). Defaults to
+            ``CalculationMode.STANDARD`` for backward compatibility with
+            ``001-metal-drilling-calc`` construction sites.
     """
 
     spindle_speed_rpm: float | None
@@ -72,3 +101,4 @@ class CalculationResult:
     unit_system: UnitSystem
     feasibility_warning: str | None = None
     error: ErrorInfo | None = None
+    mode: CalculationMode = CalculationMode.STANDARD

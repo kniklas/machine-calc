@@ -7,7 +7,7 @@ import sys
 def test_module_entrypoint_runs_and_exits_cleanly():
     proc = subprocess.run(
         [sys.executable, "-m", "machine_calc"],
-        input="metric\nMild Steel\nCarbide\n10\n25\n\nn\n",
+        input="metric\n\nMild Steel\nCarbide\n10\n25\n\nn\n",
         capture_output=True,
         text=True,
         timeout=10,

@@ -1,0 +1,328 @@
+# Feature Specification: Constrained Drilling Calculation Modes (Power-Limited & Fixed-RPM)
+
+**Feature Branch**: `002-constrained-calculation-modes`
+
+**Created**: 2026-07-10
+
+**Status**: Draft
+
+**Input**: User description: "add requirement that spindle calculation should be calculated accordingly to given available power, so machining parameters could be adjusted; similarly it should be possible to define/constrain spindle RPM and other parameters should be calculated including required power of the machining tool"
+
+## Clarifications
+
+### Session 2026-07-10
+
+- Q: How should the interactive REPL let the user choose between standard calculation, power-constrained mode, and fixed-RPM mode? → A: Add one new REPL prompt (after unit system, before material/diameter) asking the user to pick a calculation mode: standard / power-constrained / fixed-RPM. Subsequent prompts adapt accordingly (power-constrained mode prompts for available power as the constraint, not advisory; fixed-RPM mode prompts for a target RPM instead of deriving it, with available power remaining optional/advisory).
+
+### Session 2026-07-11
+
+- Q: When a supplied `available_power` in power-constrained mode is exactly equal (within floating-point tolerance) to the power required at the material/tool's normally-recommended spindle speed, does the module apply FR-002's reduction logic or FR-003's no-op behavior? → A: Treated as "already sufficient" — FR-003's no-op applies; the standard (unconstrained) result is returned unchanged, with no reduction step taken.
+- Q: SC-003 says power-constrained results must not exceed the available power budget "within floating-point tolerance." What tolerance should this mean, precisely? → A: Python's `math.isclose()` default (`rel_tol=1e-9`) — a tight tolerance appropriate for an algebraic identity (research.md #1's exact closed-form derivation), not an empirical/physical accuracy claim like SC-002's 5%.
+- Q: FR-007 requires rejecting a `target_rpm` that is "zero, negative, or non-numeric" — should `NaN`/`Infinity` values be handled under this same rule and error code, or treated as a distinct case? → A: Same rule/code — `target_rpm` MUST be finite (`math.isfinite()`), rejecting `NaN`/`Infinity` the same way as zero/negative, all under the single `INVALID_TARGET_RPM` code; no new code is introduced.
+
+### Session 2026-07-11 (checklist follow-up)
+
+- Q: If a user enters an invalid/unrecognized value at the new calculation-mode prompt (FR-001a), what should the REPL do? → A: Re-prompt on invalid/empty mode entry, the same as material/tool selection (base spec FR-010).
+- Q: In power-constrained mode, if the user leaves the now-required available-power prompt blank, what should the REPL do? → A: Re-prompt for available power, the same as material/tool/target-RPM validation — a blank entry in this mode is a validation failure to re-prompt for, not a `MODE_CONFLICT`.
+- Q: On the REPL's loop re-run (FR-014), if the user changes the calculation mode, what should happen to previously entered mode-specific values (e.g., a target RPM from a prior fixed-RPM run)? → A: Clear mode-specific values (target RPM / available-power-as-constraint) when the mode changes; only shared inputs (diameter, depth, material, tool, unit system) are retained as editable defaults.
+
+### Session 2026-07-11 (second checklist follow-up)
+
+- Q: FR-009's mutual-exclusivity rule (MODE_CONFLICT) needs a precise trigger definition for the library API — given a caller can pass `mode`, `available_power`, and `target_rpm` independently, what exactly triggers `MODE_CONFLICT`? → A: `mode` is authoritative. `STANDARD` mode ignores any supplied `target_rpm`/`available_power` (they are simply unused, not a conflict). `MODE_CONFLICT` fires only when `mode=POWER_CONSTRAINED` but `target_rpm` is also supplied (power-constrained mode derives spindle speed, it does not accept one directly). Supplying `available_power` while `mode=FIXED_RPM` is never a conflict — it remains the existing optional/advisory feasibility-warning input (FR-008).
+- Q: Should FR-004/FR-007/FR-009's identically-worded "clear, structured error" requirement be tightened to require distinct, per-code user-facing message text? → A: Yes — each of the three new error codes (`INVALID_TARGET_RPM`, `MODE_CONFLICT`, `INFEASIBLE_POWER_BUDGET`) MUST have its own distinct, catalog-sourced message template, so a user reading only the message text can identify which condition occurred without needing the code.
+- Q: SC-002 says fixed-RPM mode has "the same response time as a standard calculation" without a numeric threshold — should this be quantified? → A: Yes — same numeric target as the base spec's per-calculation performance goal: 0.5–1.0s (matches plan.md's Technical Context / Constitution Principle V).
+- Q: Should `target_rpm` have an explicit maximum (or minimum beyond "positive") bound? → A: No — finiteness (`math.isfinite()`) and positivity (already required by FR-007) are sufficient; no additional range validation or clamping is introduced.
+- Q: Should FR-012 be tightened to cite the concrete field data-model.md already plans, rather than an informal example? → A: Yes — FR-012 now cites `CalculationResult.mode: CalculationMode` directly as the structural indicator.
+
+## User Scenarios & Testing *(mandatory)*
+
+### User Story 1 - Adjust Calculation to Fit Available Machine Power (Priority: P1)
+
+A machinist whose machine or tool has a known maximum available power wants
+the module to automatically determine the fastest safe spindle speed and
+feed rate that stay within that power limit, rather than simply being
+warned after the fact that the material's normally-recommended settings
+exceed it.
+
+**Why this priority**: Today, supplying an available power rating only
+produces an advisory warning (existing FR-012) — the user still has to
+manually guess a lower diameter/material/tool combination by trial and
+error. Automatically adjusting the recommendation to fit the real
+constraint is the core value of this feature.
+
+**Independent Test**: Can be fully tested by requesting a power-constrained
+calculation with an available power below what the material/tool/diameter
+combination would normally require at the standard recommended spindle
+speed, and verifying the returned spindle speed, feed rate, machining time,
+torque, and required power are all mutually consistent and the required
+power no longer exceeds the available power.
+
+**Acceptance Scenarios**:
+
+1. **Given** a supplied available power that is lower than the power
+   required at the material/tool's normally-recommended spindle speed,
+   **When** the user requests a power-constrained calculation, **Then** the
+   module returns a reduced spindle speed (and correspondingly recalculated
+   feed rate, machining time, and torque) such that the required power no
+   longer exceeds the available power.
+2. **Given** a supplied available power that is already sufficient for the
+   normally-recommended spindle speed, **When** the user requests a
+   power-constrained calculation, **Then** the module returns the same
+   values as the standard (unconstrained) calculation — no unnecessary
+   de-rating is applied. This includes the boundary case where the
+   supplied available power exactly equals the required power (within
+   floating-point tolerance): it is treated as sufficient, not as
+   triggering a reduction.
+3. **Given** a supplied available power so low that no positive spindle
+   speed can bring the required power within budget, **When** the user
+   requests a power-constrained calculation, **Then** the module rejects
+   the request with a clear, structured error and performs no calculation,
+   rather than returning an unsafe, degenerate (e.g., near-zero RPM), or
+   silently-exceeding result.
+
+---
+
+### User Story 2 - Calculate Parameters for a User-Specified Spindle RPM (Priority: P2)
+
+A machinist operating a machine that only supports specific fixed spindle
+speeds (e.g., a stepped-pulley drill press, or a machine already set up at
+a particular RPM) wants to enter that fixed spindle speed directly and have
+the module calculate the resulting feed rate, machining time, torque, and
+required power for their chosen material, tool, and diameter — instead of
+only ever receiving the material/tool's own recommended RPM.
+
+**Why this priority**: This directly complements User Story 1 by supporting
+the reverse workflow: instead of deriving RPM from material/tool and
+adjusting it for a power limit, the user provides the RPM their equipment
+is actually capable of and needs the remaining parameters, including the
+power the operation will require, calculated from it.
+
+**Independent Test**: Can be fully tested by supplying a specific target
+spindle RPM (distinct from the material/tool's own recommended RPM) along
+with diameter, material, and tool, and verifying the returned feed rate,
+machining time, torque, and required power are calculated consistently
+from that specified RPM rather than from the material/tool's own
+recommended value.
+
+**Acceptance Scenarios**:
+
+1. **Given** a user supplies a target spindle RPM instead of relying on the
+   material/tool-derived recommendation, **When** a calculation is
+   requested, **Then** the feed rate, machining time, torque, and required
+   power are all computed using that specified RPM.
+2. **Given** a specified spindle RPM that is zero, negative, or
+   non-numeric, **When** a calculation is requested, **Then** the module
+   rejects the request with a clear, structured error and performs no
+   calculation.
+3. **Given** a specified spindle RPM together with a known available
+   power, **When** the required power at that specified RPM exceeds the
+   available power, **Then** the result includes a feasibility warning
+   (same behavior as the existing FR-012), without altering the
+   user-specified RPM itself.
+
+---
+
+### Edge Cases
+
+- What happens when a power-constrained calculation would reduce spindle
+  speed to an impractically small value (e.g., so slow that machining time
+  becomes unreasonably long)? This feature does not impose a minimum
+  spindle speed floor beyond positivity — an extremely low but positive
+  adjusted RPM is still returned; only a non-positive/undefined solution is
+  rejected (see Acceptance Scenario 1.3).
+- What happens when a user-specified target RPM is far above what any
+  bundled drilling tool would normally support for that material? Per this
+  feature and the existing spec's Assumptions (no machine RPM/feed-rate
+  ceiling is modeled), the module does not reject a specified RPM for
+  being "too high" — it simply calculates and returns the resulting feed
+  rate, torque, and required power, which may themselves be very large.
+- How does the module behave if both a power constraint and a target-RPM
+  constraint are supplied on the same request? See FR-009 (Clarification
+  Q3 resolved below).
+- How does specifying a target RPM interact with imperial vs. metric unit
+  systems? RPM itself is unit-system-independent (per the existing spec's
+  data model), so a target RPM is entered and reported identically under
+  both unit systems; only feed rate, torque, and power convert per
+  `UnitSystem`, exactly as they already do for standard calculations.
+
+## Requirements *(mandatory)*
+
+### Functional Requirements
+
+- **FR-001**: The module MUST allow a calculation request (via the
+  interactive text interface or the library API) to optionally select a
+  **power-constrained calculation mode**, supplying a known available
+  power as the constraining input. In the interactive text interface,
+  this selection MUST be made via a dedicated calculation-mode prompt
+  (FR-001a), not by overloading the existing advisory available-power
+  input.
+- **FR-001a**: The interactive text interface MUST present a single
+  calculation-mode selection prompt (offering *standard*,
+  *power-constrained*, and *fixed-RPM*) after the unit-system prompt and
+  before the material/tool/diameter/depth prompts. The mode chosen there
+  determines which subsequent prompts are shown: standard mode keeps the
+  base spec's existing optional advisory available-power prompt (FR-012
+  of the base spec); power-constrained mode replaces it with a required
+  available-power prompt used as a hard constraint (FR-002/FR-004); and
+  fixed-RPM mode adds a required target-RPM prompt (FR-005/FR-007) plus
+  the existing optional advisory available-power prompt (FR-008). An
+  invalid or empty entry at the mode-selection prompt MUST be re-prompted,
+  the same as the base spec's existing material/tool re-prompt behavior
+  (FR-010); it MUST NOT silently fall back to a default mode. Likewise, an
+  empty/non-numeric entry at power-constrained mode's now-required
+  available-power prompt MUST be re-prompted as a validation failure (the
+  same posture as the required target-RPM prompt in fixed-RPM mode), never
+  treated as a `MODE_CONFLICT`.
+- **FR-002**: When power-constrained mode is used and the power required
+  at the material/tool's normally-recommended spindle speed **exceeds**
+  the supplied available power (i.e., is strictly greater, per FR-003's
+  boundary rule), the module MUST reduce the spindle speed (and
+  correspondingly recompute the feed rate using the existing tool/material
+  feed relationship, plus machining time and torque) to the highest value
+  at which the required power no longer exceeds the available power.
+- **FR-003**: When power-constrained mode is used and the supplied
+  available power is already sufficient for the normally-recommended
+  spindle speed — including the boundary case where it is exactly equal
+  to the required power (within floating-point tolerance) — the module
+  MUST return the same result as the standard (unconstrained) calculation,
+  without applying any unnecessary reduction. An exact match is always
+  treated as "sufficient", never as triggering FR-002's reduction logic.
+- **FR-004**: When power-constrained mode is used and no positive spindle
+  speed can bring the required power within the supplied available power
+  budget, the module MUST reject the request with a clear, structured
+  error under the dedicated `INFEASIBLE_POWER_BUDGET` code (distinct from
+  the existing `MISSING_MATERIAL`/`MISSING_TOOL`/`INVALID_DIAMETER`/
+  `INVALID_DEPTH`/`UNSUPPORTED_COMBINATION` codes, and from `MODE_CONFLICT`
+  and `INVALID_TARGET_RPM`) and MUST NOT return a calculation result. Its
+  user-facing message MUST be a distinct, catalog-sourced template (FR-011)
+  so a user can identify the infeasible-power-budget condition from the
+  message text alone, without needing to inspect the code.
+- **FR-005**: The module MUST allow a calculation request to optionally
+  select a **fixed-RPM calculation mode**, supplying a target spindle RPM
+  directly instead of deriving it from the selected material and drilling
+  tool.
+- **FR-006**: When fixed-RPM mode is used, the module MUST calculate feed
+  rate, machining time, torque, and required power from the supplied
+  target RPM (combined with the selected material's and drilling tool's
+  reference values), using the same underlying formulas as the standard
+  calculation (FR-007/FR-008/FR-011 of the base drilling spec), but with
+  spindle speed taken as a direct input rather than a derived output.
+- **FR-007**: The module MUST validate a supplied target RPM as a
+  positive, finite number (`math.isfinite()`) and MUST reject zero,
+  negative, non-numeric, `NaN`, or `Infinity` values — all under the same
+  `INVALID_TARGET_RPM` error code, with no calculation performed — the
+  same validation posture as diameter and depth in the base drilling spec
+  (FR-009). No additional maximum/minimum range validation or clamping is
+  applied beyond finiteness and positivity; any positive finite value is
+  accepted as-is and passed through to the shared formula helper
+  unchanged (research.md #1). Its user-facing message MUST be a distinct,
+  catalog-sourced template (FR-011), separate from `MODE_CONFLICT` and
+  `INFEASIBLE_POWER_BUDGET`'s messages.
+- **FR-008**: When fixed-RPM mode is used together with a supplied
+  available power, the module MUST apply the existing feasibility-warning
+  behavior (base spec FR-012): a warning is included in the result if the
+  power required at the specified RPM exceeds the available power, without
+  altering the user-specified RPM. Supplying `available_power` while
+  `mode=FIXED_RPM` is always accepted as this optional/advisory input —
+  it is never treated as a `MODE_CONFLICT` (FR-009).
+- **FR-009**: Power-constrained mode (FR-001) and fixed-RPM mode (FR-005)
+  MUST be mutually exclusive on a single calculation request. The
+  supplied `mode` value is authoritative: when `mode=STANDARD` (the
+  default), any supplied `target_rpm` or `available_power` is simply
+  unused, not a conflict. `MODE_CONFLICT` is raised when either (a)
+  `mode=POWER_CONSTRAINED` and a `target_rpm` is also supplied — since
+  power-constrained mode derives spindle speed rather than accepting one
+  directly — or (b) `mode=POWER_CONSTRAINED` and no `available_power` is
+  supplied (its required hard constraint is missing). Both conditions are
+  rejected with a clear, structured error distinct from a feasibility
+  warning and from the other two new error codes, rather than the module
+  silently prioritizing one over the other. Its user-facing message MUST
+  be a distinct, catalog-sourced template (FR-011), separate from
+  `INVALID_TARGET_RPM` and `INFEASIBLE_POWER_BUDGET`'s messages.
+- **FR-010**: Both new calculation modes MUST continue to satisfy the base
+  drilling spec's FR-015 (never raising exceptions for expected validation
+  failures; always returning a structured result) and FR-016 (the
+  interactive text interface and the library API MUST produce identical
+  results for identical inputs and mode selection).
+- **FR-011**: All new user-facing text introduced by this feature
+  (mode-selection prompts/parameters, adjusted-vs-recommended value
+  labeling, and any new error messages) MUST be sourced from the message
+  catalog per the base drilling spec's FR-019, not hard-coded — this
+  feature does not introduce any exception to Constitution Principle VIII.
+- **FR-012**: A calculation result produced in power-constrained or
+  fixed-RPM mode MUST clearly and structurally indicate which mode
+  produced it via a dedicated `CalculationResult.mode: CalculationMode`
+  field (data-model.md), so calling programs and the interactive text
+  interface can distinguish an adjusted or user-specified spindle speed
+  from the material/tool's own recommended one.
+- **FR-013**: When the interactive text interface loops for another
+  calculation (base spec FR-014) and the user changes the calculation mode
+  from the previous run, any previously entered mode-specific value (a
+  target RPM, or an available-power value entered as a power-constrained
+  hard constraint) MUST be cleared rather than carried over as an editable
+  default; shared inputs (unit system, material, tool, diameter, depth)
+  continue to be retained as editable defaults exactly as the base spec
+  already requires.
+
+### Key Entities
+
+- **Calculation Mode**: Represents which of the three ways a drilling
+  calculation was performed: *standard* (spindle speed derived from
+  material/tool reference values, as in the base drilling spec),
+  *power-constrained* (spindle speed reduced to fit a supplied available
+  power), or *fixed-RPM* (spindle speed supplied directly by the caller).
+  Exactly one mode applies per calculation request (FR-009).
+- **Power Constraint**: Represents an available-power input used to bound
+  (rather than merely warn about) the calculated spindle speed and its
+  dependent feed rate, machining time, and torque, when power-constrained
+  mode is selected.
+- **Spindle Speed Constraint**: Represents a caller-supplied target RPM
+  used as a direct input (rather than a derived output) to the drilling
+  calculation, when fixed-RPM mode is selected.
+
+## Success Criteria *(mandatory)*
+
+### Measurable Outcomes
+
+- **SC-001**: Given a supplied available power below the material/tool's
+  normal power requirement, users receive an adjusted spindle
+  speed/feed-rate recommendation that fits their machine's real capability
+  in a single calculation request, with no manual trial-and-error across
+  multiple materials, tools, or diameters.
+- **SC-002**: Given a fixed target spindle RPM, users receive complete
+  drilling parameters (feed rate, machining time, torque, required power)
+  for that RPM in the same single request, completing within 0.5–1.0s —
+  the same numeric performance target as a standard calculation
+  (Constitution Principle V).
+- **SC-003**: 100% of power-constrained results have a required power that
+  does not exceed the supplied available power, using `math.isclose()`'s
+  default relative tolerance (`rel_tol=1e-9`) — appropriate for an exact
+  algebraic identity (research.md #1), not an empirical measurement — or
+  are rejected with a clear structured error; never silently returning a
+  result that exceeds the stated power budget.
+- **SC-004**: Existing standard (unconstrained, no mode selected)
+  calculations continue to produce identical results after this feature
+  ships as they did before it (no regression to the base drilling spec's
+  behavior).
+
+## Assumptions
+
+- This feature extends the existing `001-metal-drilling-calc` feature's
+  `calculate()` API and interactive text interface; it does not introduce
+  a separate calculation engine or a new top-level entry point.
+- In power-constrained mode, only spindle speed (and its dependent feed
+  rate, via the existing tool/material feed-per-revolution relationship)
+  is adjusted; the underlying material and drilling-tool reference values
+  themselves are never altered.
+- No machine-specific maximum-RPM database or per-machine profile is
+  introduced by this feature; if a future need arises to bound a supplied
+  target RPM, it would reuse the existing `Configuration` file mechanism
+  (base drilling spec FR-018), analogous to the diameter/depth bounds.
+- Both new calculation modes are additive and optional: a calculation
+  request that specifies neither an available-power constraint nor a
+  target RPM behaves exactly as the existing (pre-this-feature) standard
+  calculation (SC-004).
+- This feature does not change the base drilling spec's decision to omit
+  a machine RPM/feed-rate ceiling as a feasibility check (base spec Edge
+  Cases); a fixed-RPM request is never rejected merely for being
+  "unrealistically high."

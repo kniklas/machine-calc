@@ -15,6 +15,7 @@ from machine_calc.cli import run
 
 _REPL_INPUTS = [
     "metric",  # unit system
+    "",  # calculation mode (default: standard)
     "Mild Steel",  # material
     "Carbide",  # tool
     "10",  # diameter

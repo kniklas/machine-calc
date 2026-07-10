@@ -12,7 +12,7 @@ without changing this drilling contract.
 
 from __future__ import annotations
 
-from machine_calc.models import CalculationResult, ErrorInfo, UnitSystem
+from machine_calc.models import CalculationMode, CalculationResult, ErrorInfo, UnitSystem
 from machine_calc.operations.drilling import calculate
 from machine_calc.operations.drilling.tools import list_tools
 from machine_calc.registry import list_materials
@@ -22,6 +22,7 @@ __all__ = [
     "list_materials",
     "list_tools",
     "UnitSystem",
+    "CalculationMode",
     "CalculationResult",
     "ErrorInfo",
 ]
