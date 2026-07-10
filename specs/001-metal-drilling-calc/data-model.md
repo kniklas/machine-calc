@@ -147,3 +147,11 @@ locale.
   message key missing from a non-English catalog.
 - Consumed by both the CLI (`cli.py`) and the library (`calculate(locale=...)`)
   for `ErrorInfo.message` and feasibility-warning text (FR-019).
+- The CLI resolves its active locale exactly once at process startup (from
+  `MACHINE_CALC_LOCALE`) and treats it as immutable for the remainder of that
+  process's REPL loop (FR-019c). The library re-evaluates `locale` on every
+  `calculate()` call, since it has no persistent session concept.
+- If a placeholder value required by a catalog string is missing at lookup
+  time, the lookup MUST return a usable string rather than raise (FR-019b);
+  any such formatting failure is reported only via an English-language log
+  entry, never surfaced as a user-facing exception.
