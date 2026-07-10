@@ -17,13 +17,13 @@ Constitution Principle III (Calculation Robustness & Accuracy).
 - CHK002 - Is a requirement stated for what precision/rounding applies to a caller-supplied `target_rpm` before it is used directly as spindle speed (e.g., is an extremely high-precision float accepted as-is, truncated, or validated only for sign/finiteness)? [Gap, Spec §FR-007]
 - CHK003 - ~~Are requirements defined for the specific behavior when `available_power` supplied in power-constrained mode is exactly equal to the power required at the nominal (unconstrained) spindle speed — is this treated as FR-002 (reduce) or FR-003 (no-op)?~~ **RESOLVED** (2026-07-11 clarification): treated as "already sufficient" — FR-003's no-op applies. [Spec §Clarifications, §FR-003]
 - CHK004 - Does the spec define what "no positive spindle speed can bring the required power within budget" (FR-004) means numerically — is `available_power <= 0` the only trigger, or could floating-point rounding near zero also trigger it, and is that distinction normatively stated? [Gap, Spec §FR-004]
-- CHK005 - Is a requirement stated for the maximum/minimum practically meaningful `target_rpm` value the module must handle without overflow or precision loss (e.g., extremely large target RPM values feeding into feed-rate/power formulas)? [Gap, Spec §Edge Cases]
+- CHK005 - ~~Is a requirement stated for the maximum/minimum practically meaningful `target_rpm` value the module must handle without overflow or precision loss (e.g., extremely large target RPM values feeding into feed-rate/power formulas)?~~ **RESOLVED** (2026-07-11 clarification): no additional max/min bound beyond finiteness+positivity (FR-007) is required; any positive finite value is accepted as-is, no clamping. [Spec §FR-007, data-model.md]
 
 ## Requirement Clarity
 
 - CHK006 - Is FR-002's "highest value at which the required power no longer exceeds the available power" clarified as an exact/closed-form solution (per research.md #1) rather than an approximation, so a test can assert exact equality within float tolerance rather than "close enough"? [Clarity, Spec §FR-002, research.md #1]
 - CHK007 - Is it explicit in the spec (not only research.md) that torque is mathematically independent of spindle speed, which is the load-bearing assumption behind the entire power-constrained derivation? [Clarity, Spec §FR-002 vs research.md #1]
-- CHK008 - Is "clear, structured error" in FR-004 and FR-007 clarified with a specific, stable error code (rather than only descriptive prose), consistent with how the base spec's FR-009/FR-010 name their codes explicitly? [Clarity, Spec §FR-004, §FR-007]
+- CHK008 - ~~Is "clear, structured error" in FR-004 and FR-007 clarified with a specific, stable error code (rather than only descriptive prose), consistent with how the base spec's FR-009/FR-010 name their codes explicitly?~~ **RESOLVED** (2026-07-11 clarification): FR-004/FR-007/FR-009 each now name their specific code (`INFEASIBLE_POWER_BUDGET`/`INVALID_TARGET_RPM`/`MODE_CONFLICT`) plus a distinct catalog-sourced message requirement. [Spec §FR-004, §FR-007, §FR-009]
 
 ## Requirement Consistency
 
@@ -34,7 +34,7 @@ Constitution Principle III (Calculation Robustness & Accuracy).
 ## Acceptance Criteria Quality
 
 - CHK012 - ~~Can SC-003 ("100% of power-constrained results have a required power that does not exceed the supplied available power... within floating-point tolerance") be tested deterministically, or does "within floating-point tolerance" need a concrete numeric tolerance value stated somewhere (spec, plan, or data-model)?~~ **RESOLVED** (2026-07-11 clarification): `math.isclose()` default `rel_tol=1e-9`. [Spec §Clarifications, §SC-003]
-- CHK013 - Is SC-002's "same response time as a standard calculation" for fixed-RPM mode measurable/testable, or is it a qualitative claim lacking a numeric threshold (contrast with the base spec's SC-001's explicit 30-second bound)? [Measurability, Spec §SC-002]
+- CHK013 - ~~Is SC-002's "same response time as a standard calculation" for fixed-RPM mode measurable/testable, or is it a qualitative claim lacking a numeric threshold (contrast with the base spec's SC-001's explicit 30-second bound)?~~ **RESOLVED** (2026-07-11 clarification): SC-002 now states an explicit 0.5–1.0s numeric target, matching plan.md's Technical Context / Constitution Principle V. [Spec §SC-002]
 - CHK014 - ~~Are acceptance scenarios present for the exact boundary case where `available_power` equals the nominal required power (see CHK003), matching whatever FR-002/FR-003 boundary rule is intended?~~ **RESOLVED** (2026-07-11 clarification): Acceptance Scenario 1.2 now explicitly covers this. [Spec §Acceptance Scenarios]
 
 ## Edge Case & Tolerance Coverage

@@ -23,8 +23,11 @@ Selects which of the three ways a drilling calculation is performed
 
 Exactly one mode applies per calculation request (FR-009); requesting
 `POWER_CONSTRAINED` without `available_power`, or supplying `target_rpm`
-together with a `POWER_CONSTRAINED`-mode power constraint, is rejected with
-`ErrorInfo(code="MODE_CONFLICT")` (research.md #4).
+while `mode is POWER_CONSTRAINED`, is rejected with
+`ErrorInfo(code="MODE_CONFLICT")` (research.md #4). Supplying `target_rpm`
+or `available_power` while `mode is STANDARD` is never a conflict — the
+`mode` value is authoritative and unused parameters are simply ignored
+(spec.md FR-009, Clarifications 2026-07-11 second checklist follow-up).
 
 ## DrillingOperation (request) — extended
 
@@ -54,10 +57,20 @@ before any mode-argument check below runs (/speckit.analyze finding U1):
   (`math.isfinite()`); zero, negative, non-numeric, `NaN`, or `Infinity`
   values are all rejected under the same
   `ErrorInfo(code="INVALID_TARGET_RPM")` (FR-007; spec.md Clarifications
-  2026-07-11).
-- `mode is FIXED_RPM` requires `target_rpm` to be supplied; `mode` values
-  other than `FIXED_RPM` require `target_rpm` to be `None`. Any mismatch is
-  rejected with `ErrorInfo(code="MODE_CONFLICT")` (FR-009).
+  2026-07-11). No additional maximum/minimum range validation or clamping
+  is applied — any positive finite value is accepted as-is (spec.md
+  Clarifications 2026-07-11 second checklist follow-up).
+- `target_rpm` supplied while `mode is STANDARD` (the default) is simply
+  ignored/unused — not a conflict (spec.md FR-009, Clarifications
+  2026-07-11 second checklist follow-up).
+- `mode is FIXED_RPM` requires `target_rpm` to be supplied; a missing
+  `target_rpm` in this mode is rejected with
+  `ErrorInfo(code="INVALID_TARGET_RPM")` (FR-007) rather than
+  `MODE_CONFLICT`, since it is a missing/invalid value for the selected
+  mode's own required input, not a cross-mode conflict.
+- `mode is POWER_CONSTRAINED` with a supplied `target_rpm` is rejected
+  with `ErrorInfo(code="MODE_CONFLICT")` (FR-009) — power-constrained mode
+  derives spindle speed, it does not accept one directly.
 - `mode is POWER_CONSTRAINED` requires `available_power` to be supplied and
   positive; a supplied `available_power` of zero or less in this mode makes
   the request infeasible by construction and is rejected with
@@ -86,9 +99,9 @@ Extends the base spec's `ErrorInfo.code` values
 
 | Code | Trigger |
 |---|---|
-| `INVALID_TARGET_RPM` | `target_rpm` is zero, negative, or non-numeric (FR-007). |
-| `MODE_CONFLICT` | Both a power constraint and a `target_rpm` supplied at once; or `POWER_CONSTRAINED` mode selected without `available_power`; or `target_rpm` supplied while `mode` is not `FIXED_RPM` (FR-009). |
-| `INFEASIBLE_POWER_BUDGET` | `POWER_CONSTRAINED` mode requested and no positive spindle speed keeps required power within the supplied `available_power` (FR-004). |
+| `INVALID_TARGET_RPM` | `target_rpm` is zero, negative, non-numeric, `NaN`, or `Infinity` (FR-007); or missing while `mode is FIXED_RPM`. Distinct, catalog-sourced message template (spec.md Clarifications 2026-07-11 second checklist follow-up). |
+| `MODE_CONFLICT` | `mode is POWER_CONSTRAINED` and a `target_rpm` is also supplied; or `mode is POWER_CONSTRAINED` and `available_power` is omitted (FR-009). Supplying `target_rpm`/`available_power` while `mode is STANDARD` is never a conflict — they are simply unused. Distinct, catalog-sourced message template. |
+| `INFEASIBLE_POWER_BUDGET` | `POWER_CONSTRAINED` mode requested and no positive spindle speed keeps required power within the supplied `available_power` (FR-004). Distinct, catalog-sourced message template. |
 
 ## Power Constraint (conceptual entity, spec.md Key Entities)
 
