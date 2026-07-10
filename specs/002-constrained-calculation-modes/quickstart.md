@@ -52,10 +52,24 @@ result = calculate(
 
 assert result.error is None
 assert result.spindle_speed_rpm == standard.spindle_speed_rpm
+
+# Boundary case: available_power exactly equals the nominal requirement
+# (within math.isclose default tolerance) is also treated as "sufficient"
+# — never triggering a reduction (spec.md Clarifications 2026-07-11).
+boundary_result = calculate(
+    diameter=10, depth=25, material="Mild Steel", tool="Carbide",
+    unit_system=UnitSystem.METRIC,
+    mode=CalculationMode.POWER_CONSTRAINED,
+    available_power=nominal_power,
+)
+assert boundary_result.error is None
+assert boundary_result.spindle_speed_rpm == standard.spindle_speed_rpm
 ```
 
 **Expected outcome**: Identical numeric results to the standard calculation;
-only `result.mode` differs (`POWER_CONSTRAINED` vs. `STANDARD`).
+only `result.mode` differs (`POWER_CONSTRAINED` vs. `STANDARD`). This holds
+both when the budget comfortably exceeds requirement and at the exact
+equality boundary.
 
 ## Scenario 3 — Power-constrained mode rejects an infeasible budget (FR-004)
 
