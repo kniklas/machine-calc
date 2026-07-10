@@ -45,7 +45,10 @@ reused with mode-dependent semantics:
 | `FIXED_RPM` | Optional; advisory-only feasibility warning if exceeded at the given `target_rpm` (FR-008), same semantics as `STANDARD`. |
 
 Validation (new, in addition to the base spec's diameter/depth/material/tool
-validation, all performed before calculation per FR-015):
+validation, all performed before calculation per FR-015). **Validation
+order**: the base spec's existing material/tool/diameter/depth checks run
+first, unchanged — a failure there (e.g., `INVALID_DIAMETER`) is returned
+before any mode-argument check below runs (/speckit.analyze finding U1):
 
 - `target_rpm`, when supplied, MUST be a positive, finite number; zero,
   negative, or non-numeric values are rejected with
