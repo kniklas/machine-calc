@@ -13,7 +13,7 @@ fixed for the entire REPL loop — it is never re-read mid-session.
 
 from __future__ import annotations
 
-from machine_calc import UnitSystem, calculate, list_materials, list_tools
+from machine_calc import CalculationMode, UnitSystem, calculate, list_materials, list_tools
 from machine_calc.config import Configuration
 from machine_calc.i18n import get_locale, translate
 from machine_calc.logging_setup import configure_logging
@@ -134,13 +134,84 @@ def _prompt_optional_power(unit: str, default: float | None, locale: str) -> flo
         return default
 
 
+_MODE_OPTION_KEYS = {
+    CalculationMode.STANDARD: "cli.mode.standard",
+    CalculationMode.POWER_CONSTRAINED: "cli.mode.power_constrained",
+    CalculationMode.FIXED_RPM: "cli.mode.fixed_rpm",
+}
+
+
+def _prompt_mode(default: CalculationMode, locale: str) -> CalculationMode:
+    """Prompt for the calculation mode (FR-001a).
+
+    Re-prompts on an invalid/unrecognized entry, the same as material/tool
+    selection (base spec FR-010) — it MUST NOT silently fall back to a
+    default mode on an unrecognized entry (spec.md Clarifications
+    2026-07-11). A blank entry accepts the current default, exactly like
+    the existing material/tool prompts.
+    """
+
+    labels_by_mode = {m: translate(locale, key) for m, key in _MODE_OPTION_KEYS.items()}
+    modes_by_label = {label: m for m, label in labels_by_mode.items()}
+    options = list(labels_by_mode.values())
+    label = translate(locale, "cli.label.mode")
+
+    choice = _prompt_choice(label, options, labels_by_mode[default], locale)
+    return modes_by_label[choice]
+
+
+def _prompt_required_power(unit: str, default: float | None, locale: str) -> float:
+    """Prompt for a required available-power value (power-constrained mode).
+
+    A blank or non-numeric entry re-prompts as a validation failure (FR-002;
+    spec.md Clarifications 2026-07-11) — never treated as ``MODE_CONFLICT``
+    — unless a default is available (a retained editable default from a
+    prior loop iteration in the same mode), in which case blank accepts it.
+    """
+
+    label = translate(locale, "cli.label.power_required")
+    while True:
+        value = _prompt_number(label, unit, default, locale)
+        if value > 0:
+            return value
+        print(translate(locale, "cli.prompt.power_required.invalid"))
+
+
+def _prompt_target_rpm(default: float | None, locale: str) -> float:
+    """Prompt for a required target spindle RPM (fixed-RPM mode).
+
+    A blank or non-numeric entry re-prompts as a validation failure
+    (FR-005, FR-007), unless a default is available (a retained editable
+    default from a prior loop iteration in the same mode).
+    """
+
+    label = translate(locale, "cli.label.target_rpm")
+    while True:
+        value = _prompt_number(label, "RPM", default, locale)
+        if value > 0:
+            return value
+        print(translate(locale, "cli.prompt.target_rpm.invalid"))
+
+
+_SPINDLE_SPEED_MODE_LABEL_KEYS = {
+    CalculationMode.STANDARD: "cli.result.spindle_speed.mode.standard",
+    CalculationMode.POWER_CONSTRAINED: "cli.result.spindle_speed.mode.power_constrained",
+    CalculationMode.FIXED_RPM: "cli.result.spindle_speed.mode.fixed_rpm",
+}
+
+
 def _display_result(result, labels: dict[str, str], locale: str) -> None:
     if result.error is not None:
         print(translate(locale, "cli.result.error", message=result.error.message))
         return
 
     print()
-    print(translate(locale, "cli.result.spindle_speed", value=f"{result.spindle_speed_rpm:.1f}"))
+    mode_label = translate(locale, _SPINDLE_SPEED_MODE_LABEL_KEYS[result.mode])
+    mode_suffix = translate(locale, "cli.result.spindle_speed.mode_suffix", label=mode_label)
+    print(
+        translate(locale, "cli.result.spindle_speed", value=f"{result.spindle_speed_rpm:.1f}")
+        + mode_suffix
+    )
     print(
         translate(
             locale,
@@ -185,17 +256,36 @@ def run() -> None:
     diameter: float | None = None
     depth: float | None = None
     available_power: float | None = None
+    mode = CalculationMode.STANDARD
+    target_rpm: float | None = None
+    previous_mode = mode
 
     while True:
         unit_system = _prompt_unit_system(unit_system, locale)
         labels = UNIT_LABELS[unit_system]
+        mode = _prompt_mode(mode, locale)
+        if mode is not previous_mode:
+            # Loop re-run mode switch (FR-013, spec.md Clarifications
+            # 2026-07-11): clear mode-specific values rather than carrying
+            # them over as editable defaults. Shared inputs (unit system,
+            # material, tool, diameter, depth) are unaffected.
+            target_rpm = None
+            available_power = None
+        previous_mode = mode
         material = _prompt_choice(
             translate(locale, "cli.label.material"), materials, material, locale
         )
         tool = _prompt_choice(translate(locale, "cli.label.tool"), tools, tool, locale)
         diameter = _prompt_diameter(labels["diameter"], diameter, unit_system, locale)
         depth = _prompt_depth(labels["depth"], depth, unit_system, locale)
-        available_power = _prompt_optional_power(labels["power"], available_power, locale)
+
+        if mode is CalculationMode.POWER_CONSTRAINED:
+            available_power = _prompt_required_power(labels["power"], available_power, locale)
+        elif mode is CalculationMode.FIXED_RPM:
+            target_rpm = _prompt_target_rpm(target_rpm, locale)
+            available_power = _prompt_optional_power(labels["power"], available_power, locale)
+        else:
+            available_power = _prompt_optional_power(labels["power"], available_power, locale)
 
         result = calculate(
             diameter=diameter,
@@ -205,6 +295,8 @@ def run() -> None:
             unit_system=unit_system,
             available_power=available_power,
             locale=locale,
+            mode=mode,
+            target_rpm=target_rpm,
         )
         _display_result(result, labels, locale)
 

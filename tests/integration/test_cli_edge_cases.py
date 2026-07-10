@@ -13,6 +13,7 @@ def test_invalid_unit_system_is_reprompted(monkeypatch, capsys):
         [
             "bogus",  # invalid unit system -> reprompt
             "metric",
+            "",  # calculation mode (default: standard)
             "Mild Steel",
             "Carbide",
             "10",
@@ -33,6 +34,7 @@ def test_imperial_flow_displays_imperial_labels(monkeypatch, capsys):
     inputs = iter(
         [
             "imperial",
+            "",  # calculation mode (default: standard)
             "Mild Steel",
             "Carbide",
             "0.4",
@@ -55,6 +57,7 @@ def test_feasibility_warning_is_displayed(monkeypatch, capsys):
     inputs = iter(
         [
             "metric",
+            "",  # calculation mode (default: standard)
             "Mild Steel",
             "Carbide",
             "10",
@@ -75,6 +78,7 @@ def test_invalid_optional_power_is_ignored(monkeypatch, capsys):
     inputs = iter(
         [
             "metric",
+            "",  # calculation mode (default: standard)
             "Mild Steel",
             "Carbide",
             "10",
@@ -92,7 +96,7 @@ def test_invalid_optional_power_is_ignored(monkeypatch, capsys):
 
 
 def test_main_runs_repl_to_completion(monkeypatch, capsys):
-    inputs = iter(["metric", "Mild Steel", "Carbide", "10", "25", "", "n"])
+    inputs = iter(["metric", "", "Mild Steel", "Carbide", "10", "25", "", "n"])
     monkeypatch.setattr(builtins, "input", lambda _prompt="": next(inputs))
 
     main()

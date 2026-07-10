@@ -13,6 +13,7 @@ def test_invalid_diameter_is_reprompted(monkeypatch, capsys):
     inputs = iter(
         [
             "metric",
+            "",  # calculation mode (default: standard)
             "Mild Steel",
             "Carbide",
             "not-a-number",  # invalid diameter -> reprompt
@@ -37,6 +38,7 @@ def test_invalid_material_choice_is_reprompted(monkeypatch, capsys):
     inputs = iter(
         [
             "metric",
+            "",  # calculation mode (default: standard)
             "Unknown Material",  # invalid -> reprompt
             "Mild Steel",  # valid
             "Carbide",

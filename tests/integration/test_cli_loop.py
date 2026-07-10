@@ -11,6 +11,7 @@ def test_loop_allows_changing_tool_and_recalculating(monkeypatch, capsys):
     inputs = iter(
         [
             "metric",
+            "",  # calculation mode (default: standard)
             "Mild Steel",
             "HSS",
             "10",
@@ -18,6 +19,7 @@ def test_loop_allows_changing_tool_and_recalculating(monkeypatch, capsys):
             "",
             "y",  # run another calculation
             "metric",  # unit system unchanged (default reused)
+            "",  # calculation mode unchanged (default reused)
             "",  # material unchanged (reuse previous default)
             "Carbide",  # switch drilling tool
             "",  # diameter unchanged

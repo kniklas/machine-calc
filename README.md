@@ -21,7 +21,7 @@ pip install -e ".[dev]"
 ## Use as a library
 
 ```python
-from machine_calc import calculate, UnitSystem
+from machine_calc import calculate, UnitSystem, CalculationMode
 
 result = calculate(
     diameter=10,
@@ -33,11 +33,40 @@ result = calculate(
 print(result)
 ```
 
+### Constrained calculation modes
+
+Two opt-in modes are available alongside the default `STANDARD` mode:
+
+```python
+# Power-constrained: reduce spindle speed to fit an available power budget.
+result = calculate(
+    diameter=10, depth=25, material="Mild Steel", tool="Carbide",
+    mode=CalculationMode.POWER_CONSTRAINED,
+    available_power=1.2,  # kW (METRIC) or HP (IMPERIAL)
+)
+
+# Fixed-RPM: calculate from a caller-supplied target spindle speed.
+result = calculate(
+    diameter=10, depth=25, material="Mild Steel", tool="Carbide",
+    mode=CalculationMode.FIXED_RPM,
+    target_rpm=500,
+)
+```
+
+See `specs/002-constrained-calculation-modes/quickstart.md` for full
+scenarios, including error handling (`INFEASIBLE_POWER_BUDGET`,
+`INVALID_TARGET_RPM`, `MODE_CONFLICT`).
+
 ## Use the interactive CLI
 
 ```bash
 python -m machine_calc
 ```
+
+The REPL prompts for a calculation mode (`standard`, `power-constrained`,
+`fixed-rpm`) right after the unit-system prompt; `power-constrained` then
+asks for a required available power, and `fixed-rpm` asks for a required
+target spindle speed (with an optional advisory available power).
 
 ## Run the tests
 
