@@ -13,7 +13,10 @@ the message catalog) is unchanged and still in effect.
 1. **Unit system**: unchanged (`metric`/`imperial`, default `metric`).
 2. **Calculation mode (NEW, FR-001a)**: prompt to choose `standard` /
    `power-constrained` / `fixed-rpm` (default: `standard`). This selection
-   determines which of steps 3a/6a/6b below apply.
+   determines which of steps 3a/6a/6b below apply. An invalid or empty
+   entry MUST be re-prompted, the same as the material/tool re-prompt
+   behavior in steps 3-4 below — it MUST NOT silently fall back to
+   `standard` (spec.md Clarifications 2026-07-11).
 3. **Material**: unchanged — display `list_materials()`, prompt, re-prompt
    on invalid/empty entry.
 4. **Drilling tool**: unchanged — display `list_tools()`, prompt, re-prompt
@@ -25,26 +28,35 @@ the message catalog) is unchanged and still in effect.
    - If mode is `standard`: unchanged — optional available-power prompt,
      advisory-only (base spec FR-012).
    - If mode is `power-constrained`: a **required** available-power
-     prompt (FR-002); blank/non-numeric input re-prompts using the
-     `MODE_CONFLICT`/validation message rather than proceeding with no
-     constraint.
+     prompt (FR-002); a blank or non-numeric entry MUST be re-prompted as
+     a validation failure — the same posture as the required target-RPM
+     prompt below — and MUST NOT be treated as `MODE_CONFLICT` (spec.md
+     Clarifications 2026-07-11).
    - If mode is `fixed-rpm`: a **required** target-RPM prompt (FR-005,
      FR-007), followed by the existing **optional** advisory available-power
-     prompt (FR-008) — both may be answered independently of one another.
+     prompt (FR-008) — both may be answered independently of one another;
+     a blank/invalid target-RPM entry MUST be re-prompted (FR-007), the
+     same posture as the power-constrained prompt above.
 8. Call `calculate(...)` with the collected inputs (including `mode` and,
    if applicable, `target_rpm`) and display the `CalculationResult`:
    - On success: spindle speed, feed rate, machining time, torque, power,
-     as today (FR-013), **plus** a clear label indicating the mode that
-     produced the result (FR-012) — e.g. distinguishing "recommended" vs.
-     "adjusted to fit available power" vs. "user-specified" spindle speed —
-     plus any `feasibility_warning`.
+     as today (base spec FR-013), **plus** a clear label indicating the
+     mode that produced the result (FR-012) — e.g. distinguishing
+     "recommended" vs. "adjusted to fit available power" vs.
+     "user-specified" spindle speed — plus any `feasibility_warning`.
    - On error: display `error.message` for any of the base spec's five
      codes or this feature's three new codes (`INVALID_TARGET_RPM`,
      `MODE_CONFLICT`, `INFEASIBLE_POWER_BUDGET`) and do not show numeric
      results, exactly as the base spec's existing error-display behavior.
-9. **Loop**: unchanged, except the calculation-mode selection (step 2) is
-   also preserved as an editable default on re-run, alongside the other
-   inputs.
+9. **Loop**: unchanged for shared inputs (unit system, material, tool,
+   diameter, depth), which continue to be preserved as editable defaults.
+   The calculation-mode selection (step 2) is also preserved as an
+   editable default. However, if the user changes the mode on this
+   re-run, any previously entered mode-specific value (a target RPM, or
+   an available-power value entered as a power-constrained hard
+   constraint) MUST be cleared rather than carried over (FR-013; spec.md
+   Clarifications 2026-07-11) — the new mode's own prompts (step 7) are
+   asked fresh.
 
 ## Example session (illustrative, power-constrained mode)
 

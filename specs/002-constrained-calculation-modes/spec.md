@@ -20,6 +20,12 @@
 - Q: SC-003 says power-constrained results must not exceed the available power budget "within floating-point tolerance." What tolerance should this mean, precisely? → A: Python's `math.isclose()` default (`rel_tol=1e-9`) — a tight tolerance appropriate for an algebraic identity (research.md #1's exact closed-form derivation), not an empirical/physical accuracy claim like SC-002's 5%.
 - Q: FR-007 requires rejecting a `target_rpm` that is "zero, negative, or non-numeric" — should `NaN`/`Infinity` values be handled under this same rule and error code, or treated as a distinct case? → A: Same rule/code — `target_rpm` MUST be finite (`math.isfinite()`), rejecting `NaN`/`Infinity` the same way as zero/negative, all under the single `INVALID_TARGET_RPM` code; no new code is introduced.
 
+### Session 2026-07-11 (checklist follow-up)
+
+- Q: If a user enters an invalid/unrecognized value at the new calculation-mode prompt (FR-001a), what should the REPL do? → A: Re-prompt on invalid/empty mode entry, the same as material/tool selection (base spec FR-010).
+- Q: In power-constrained mode, if the user leaves the now-required available-power prompt blank, what should the REPL do? → A: Re-prompt for available power, the same as material/tool/target-RPM validation — a blank entry in this mode is a validation failure to re-prompt for, not a `MODE_CONFLICT`.
+- Q: On the REPL's loop re-run (FR-014), if the user changes the calculation mode, what should happen to previously entered mode-specific values (e.g., a target RPM from a prior fixed-RPM run)? → A: Clear mode-specific values (target RPM / available-power-as-constraint) when the mode changes; only shared inputs (diameter, depth, material, tool, unit system) are retained as editable defaults.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Adjust Calculation to Fit Available Machine Power (Priority: P1)
@@ -151,7 +157,14 @@ recommended value.
   of the base spec); power-constrained mode replaces it with a required
   available-power prompt used as a hard constraint (FR-002/FR-004); and
   fixed-RPM mode adds a required target-RPM prompt (FR-005/FR-007) plus
-  the existing optional advisory available-power prompt (FR-008).
+  the existing optional advisory available-power prompt (FR-008). An
+  invalid or empty entry at the mode-selection prompt MUST be re-prompted,
+  the same as the base spec's existing material/tool re-prompt behavior
+  (FR-010); it MUST NOT silently fall back to a default mode. Likewise, an
+  empty/non-numeric entry at power-constrained mode's now-required
+  available-power prompt MUST be re-prompted as a validation failure (the
+  same posture as the required target-RPM prompt in fixed-RPM mode), never
+  treated as a `MODE_CONFLICT`.
 - **FR-002**: When power-constrained mode is used and the power required
   at the material/tool's normally-recommended spindle speed **exceeds**
   the supplied available power (i.e., is strictly greater, per FR-003's
@@ -214,6 +227,14 @@ recommended value.
   so calling programs and the interactive text interface can distinguish
   an adjusted or user-specified spindle speed from the material/tool's own
   recommended one.
+- **FR-013**: When the interactive text interface loops for another
+  calculation (base spec FR-014) and the user changes the calculation mode
+  from the previous run, any previously entered mode-specific value (a
+  target RPM, or an available-power value entered as a power-constrained
+  hard constraint) MUST be cleared rather than carried over as an editable
+  default; shared inputs (unit system, material, tool, diameter, depth)
+  continue to be retained as editable defaults exactly as the base spec
+  already requires.
 
 ### Key Entities
 
