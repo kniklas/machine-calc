@@ -38,8 +38,8 @@
 - [X] T007 [P] Implement `WorkpieceMaterial` dataclass and the initial material registry (mild steel, stainless steel, aluminum, cast iron, brass, titanium) in `src/machine_calc/registry.py` (FR-004)
 - [X] T008 [P] Implement metric↔imperial conversion helpers in `src/machine_calc/units.py` (FR-017; research.md #4)
 - [X] T009 [P] Implement `DrillingTool` dataclass and the initial tool registry (HSS, cobalt, carbide) in `src/machine_calc/operations/drilling/tools.py` (FR-005)
-- [ ] T009a [P] Implement message catalog loader (`src/machine_calc/i18n.py`) exposing: (a) a `get_locale()` function reading `os.environ["MACHINE_CALC_LOCALE"]` (defaulting to `"en"` if unset, empty, or not a recognized bundled locale module — no OS-locale auto-detection), and (b) a message-lookup function with key lookup, English fallback for missing keys/locales, and `str.format()` placeholder substitution that never raises to the caller if a placeholder value is missing (surfacing such failures only via an English-language log entry); implement the default English catalog (`src/machine_calc/locales/en.py`) (FR-019a, FR-019b, FR-019c, FR-019e; SC-007)
-- [ ] T009b [P] Configure stdlib `logging` (`src/machine_calc/logging_setup.py`) with hard-coded English log message strings, independent of the i18n catalog (Constitution VIII)
+- [X] T009a [P] Implement message catalog loader (`src/machine_calc/i18n.py`) exposing: (a) a `get_locale()` function reading `os.environ["MACHINE_CALC_LOCALE"]` (defaulting to `"en"` if unset, empty, or not a recognized bundled locale module — no OS-locale auto-detection), and (b) a message-lookup function with key lookup, English fallback for missing keys/locales, and `str.format()` placeholder substitution that never raises to the caller if a placeholder value is missing (surfacing such failures only via an English-language log entry); implement the default English catalog (`src/machine_calc/locales/en.py`) (FR-019a, FR-019b, FR-019c, FR-019e; SC-007)
+- [X] T009b [P] Configure stdlib `logging` (`src/machine_calc/logging_setup.py`) with hard-coded English log message strings, independent of the i18n catalog (Constitution VIII)
 - [X] T010 Implement `Configuration` loading from an external TOML file with built-in default fallback (`max_diameter_mm=100`, `max_depth_mm=500`) in `src/machine_calc/config.py` (FR-018; research.md #3)
 - [X] T011 Implement shared input validation (diameter/depth positivity + configurable bounds, required material/tool presence, returning `ErrorInfo` rather than raising) in `src/machine_calc/validation.py` (FR-009, FR-010)
 - [X] T012 Implement drilling formulas (spindle speed, feed rate, machining time in minutes, torque, power) in `src/machine_calc/operations/drilling/formulas.py`, citing the formula sources in code comments (FR-006, FR-007, FR-008, FR-011; research.md #4; Constitution III)
@@ -49,7 +49,7 @@
 - [X] T016 [P] Unit tests for unit conversion helpers (metric↔imperial round-trip, tolerance-based comparisons) in `tests/unit/shared/test_units.py` (depends on T008)
 - [X] T017 [P] Unit tests for configuration loading and default-bound fallback in `tests/unit/shared/test_config.py` (depends on T010)
 - [X] T018 [P] Unit tests for the material and drilling-tool registries (uniqueness, positive reference values) in `tests/unit/shared/test_registry.py` (depends on T007, T009)
-- [ ] T018a [P] Unit tests for the message catalog: key lookup, `str.format()` placeholder substitution (including a missing-placeholder-value case that MUST NOT raise), missing-key fallback to English, missing-locale fallback to English (unset/empty/unrecognized `MACHINE_CALC_LOCALE`) (depends on T009a) in `tests/unit/shared/test_i18n.py`
+- [X] T018a [P] Unit tests for the message catalog: key lookup, `str.format()` placeholder substitution (including a missing-placeholder-value case that MUST NOT raise), missing-key fallback to English, missing-locale fallback to English (unset/empty/unrecognized `MACHINE_CALC_LOCALE`) (depends on T009a) in `tests/unit/shared/test_i18n.py`
 
 **Checkpoint**: The drilling `calculate()` engine is fully implemented and unit-tested. User story phases below only add the CLI layer (US1) and library-facing contract guarantees (US2) on top of this foundation.
 
@@ -74,9 +74,9 @@
 - [X] T024 [US1] Implement the interactive REPL prompt flow (unit system → material → tool → diameter → depth → optional power → display result → loop) in `src/machine_calc/cli.py` per contracts/cli-repl.md, using message-catalog keys via `i18n.py` for all prompts/labels (no hard-coded user-facing strings) (depends on T023, T009a)
 - [X] T025 [US1] Add a runnable entry point: `src/machine_calc/__main__.py` (for `python -m machine_calc`) and a `console_scripts` entry in `pyproject.toml` (depends on T024)
 - [X] T026 [US1] Format CLI output with unit labels matching the selected unit system and render `feasibility_warning`/`error.message` clearly (FR-013; depends on T024)
-- [ ] T026a [US1] Retrofit `cli.py`'s already-implemented hard-coded prompt/output strings (all `input()`/`print()` calls) to use `i18n.py` catalog key lookups instead of literal strings (English catalog values matching current text); wire `cli.py`/`__main__.py` startup to call `i18n.get_locale()` exactly once (reading `MACHINE_CALC_LOCALE`) and hold that value fixed for the entire REPL loop, never re-reading it mid-session (FR-019c; depends on T009a, T024, T026)
+- [X] T026a [US1] Retrofit `cli.py`'s already-implemented hard-coded prompt/output strings (all `input()`/`print()` calls) to use `i18n.py` catalog key lookups instead of literal strings (English catalog values matching current text); wire `cli.py`/`__main__.py` startup to call `i18n.get_locale()` exactly once (reading `MACHINE_CALC_LOCALE`) and hold that value fixed for the entire REPL loop, never re-reading it mid-session (FR-019c; depends on T009a, T024, T026)
   - Acceptance: no literal user-facing string remains in `cli.py`'s prompt/output paths outside `locales/en.py`; the CLI reads `MACHINE_CALC_LOCALE` exactly once at startup.
-- [ ] T026b [P] [US1] Integration test for `MACHINE_CALC_LOCALE` env var handling at CLI startup: unset → English, set to an unrecognized value → English (no error), set to a valid non-English locale (if a test-only catalog fixture is provided) → that catalog's text is used (FR-019; depends on T026a) in `tests/integration/test_locale_env.py`
+- [X] T026b [P] [US1] Integration test for `MACHINE_CALC_LOCALE` env var handling at CLI startup: unset → English, set to an unrecognized value → English (no error), set to a valid non-English locale (if a test-only catalog fixture is provided) → that catalog's text is used (FR-019; depends on T026a) in `tests/integration/test_locale_env.py`
 
 **Checkpoint**: User Story 1 is fully functional and independently testable via the CLI alone.
 
@@ -101,7 +101,7 @@
 
 - [ ] T032 [US2] Verify and finalize `list_materials()` / `list_tools()` exposure and docstrings (inputs/outputs/units per Constitution I) in `src/machine_calc/__init__.py` (depends on T023)
 - [ ] T033 [US2] Add a `config_path` parameter pass-through from `calculate()` to the `Configuration` loader (FR-018) in `src/machine_calc/operations/drilling/__init__.py` (depends on T013, T010)
-- [ ] T033a [US2] Retrofit already-implemented hard-coded `ErrorInfo(...)` message strings in `validation.py` and `operations/drilling/__init__.py` to use `i18n.py` catalog key lookups (English catalog values matching current text, using `str.format()` placeholders for dynamic values e.g. material/tool name); add a `locale` parameter to `calculate()` and thread it through to `ErrorInfo.message`/`feasibility_warning` construction (FR-019; depends on T009a, T011, T013, T033)
+- [X] T033a [US2] Retrofit already-implemented hard-coded `ErrorInfo(...)` message strings in `validation.py` and `operations/drilling/__init__.py` to use `i18n.py` catalog key lookups (English catalog values matching current text, using `str.format()` placeholders for dynamic values e.g. material/tool name); add a `locale` parameter to `calculate()` and thread it through to `ErrorInfo.message`/`feasibility_warning` construction (FR-019; depends on T009a, T011, T013, T033)
   - Acceptance: no literal message string remains in any `ErrorInfo(...)` constructor call outside `locales/en.py`; `calculate(locale="en")` and the CLI (post-T026a) produce identical text for the same catalog and error code.
 
 **Checkpoint**: Both user stories are independently functional; the FR-016 identical-results guarantee is proven by automated tests.
@@ -122,7 +122,7 @@
 - [ ] T041 Execute all 8 quickstart.md scenarios manually (or via a validation script) and confirm actual behavior matches documented expected outcomes; explicitly time a full end-to-end CLI session (open → select unit system/material/tool → enter diameter/depth → view results) and confirm it completes in under 30 seconds (SC-001)
 - [ ] T042 [P] Measure and record calculation execution time against the 0.5-1.0s legacy-hardware target (Constitution V); document the result and methodology in `specs/001-metal-drilling-calc/research.md` (append a "Validation" note) or a new `perf-notes.md`
 - [ ] T043 [P] Measure and record peak memory (RSS) usage of a representative CLI session and a representative library `calculate()` call, confirming it fits within the ~64-128 MB target in Constitution Principle V; document the methodology and result alongside T042
-- [ ] T043a [P] Static check confirming no literal user-facing strings exist in `cli.py`/error paths outside the message catalog (post-T026a/T033a retrofit), and confirming log statements are plain English (Constitution VIII)
+- [X] T043a [P] Static check confirming no literal user-facing strings exist in `cli.py`/error paths outside the message catalog (post-T026a/T033a retrofit), and confirming log statements are plain English (Constitution VIII)
 
 ---
 

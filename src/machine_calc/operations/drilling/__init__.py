@@ -10,6 +10,7 @@ operations (turning, milling, ...) add their own sibling
 from __future__ import annotations
 
 from machine_calc.config import load_configuration
+from machine_calc.i18n import DEFAULT_LOCALE, translate
 from machine_calc.models import CalculationResult, ErrorInfo, UnitSystem
 from machine_calc.registry import get_material
 from machine_calc.units import (
@@ -51,6 +52,7 @@ def calculate(
     unit_system: UnitSystem = UnitSystem.METRIC,
     available_power: float | None = None,
     config_path: str | None = None,
+    locale: str = DEFAULT_LOCALE,
 ) -> CalculationResult:
     """Calculate drilling parameters for the given inputs.
 
@@ -74,6 +76,11 @@ def calculate(
             ``feasibility_warning`` is set on a successful result (FR-012).
         config_path: Optional path to a TOML file overriding the default
             diameter/depth validation bounds (FR-018).
+        locale: Optional locale used to translate ``ErrorInfo.message`` and
+            ``feasibility_warning`` text (FR-019d). Defaults to English; an
+            empty string is treated the same as omitting it. Falls back to
+            English for any locale or message key not present in the
+            requested catalog (FR-019e).
 
     Returns:
         A :class:`CalculationResult`. On success, ``error`` is ``None`` and:
@@ -90,13 +97,16 @@ def calculate(
         ``None``.
     """
 
+    # An empty string is treated the same as omitting locale (FR-019d).
+    locale = locale or DEFAULT_LOCALE
+
     config = load_configuration(config_path)
 
-    material_error = validate_material_present(material)
+    material_error = validate_material_present(material, locale)
     if material_error:
         return _error_result(unit_system, material_error)
 
-    tool_error = validate_tool_present(tool)
+    tool_error = validate_tool_present(tool, locale)
     if tool_error:
         return _error_result(unit_system, tool_error)
 
@@ -104,25 +114,28 @@ def calculate(
     if resolved_material is None:
         return _error_result(
             unit_system,
-            ErrorInfo("MISSING_MATERIAL", f"Unknown workpiece material: {material!r}."),
+            ErrorInfo(
+                "MISSING_MATERIAL",
+                translate(locale, "error.unknown_material", material=material),
+            ),
         )
 
     resolved_tool = get_tool(tool)
     if resolved_tool is None:
         return _error_result(
             unit_system,
-            ErrorInfo("MISSING_TOOL", f"Unknown drilling tool: {tool!r}."),
+            ErrorInfo("MISSING_TOOL", translate(locale, "error.unknown_tool", tool=tool)),
         )
 
     # Convert inputs to canonical metric before validation/calculation.
     diameter_mm = in_to_mm(diameter) if unit_system is UnitSystem.IMPERIAL else diameter
     depth_mm = in_to_mm(depth) if unit_system is UnitSystem.IMPERIAL else depth
 
-    diameter_error = validate_diameter_mm(diameter_mm, config)
+    diameter_error = validate_diameter_mm(diameter_mm, config, locale)
     if diameter_error:
         return _error_result(unit_system, diameter_error)
 
-    depth_error = validate_depth_mm(depth_mm, config)
+    depth_error = validate_depth_mm(depth_mm, config, locale)
     if depth_error:
         return _error_result(unit_system, depth_error)
 
@@ -134,9 +147,11 @@ def calculate(
             hp_to_kw(available_power) if unit_system is UnitSystem.IMPERIAL else available_power
         )
         if metrics.power_kw > available_power_kw:
-            feasibility_warning = (
-                f"Required power ({metrics.power_kw:.2f} kW) exceeds the available "
-                f"power ({available_power_kw:.2f} kW)."
+            feasibility_warning = translate(
+                locale,
+                "warning.feasibility",
+                required_kw=metrics.power_kw,
+                available_kw=available_power_kw,
             )
 
     if unit_system is UnitSystem.IMPERIAL:
