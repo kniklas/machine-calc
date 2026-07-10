@@ -40,8 +40,6 @@
 - [X] T009 [P] Implement `DrillingTool` dataclass and the initial tool registry (HSS, cobalt, carbide) in `src/machine_calc/operations/drilling/tools.py` (FR-005)
 - [ ] T009a [P] Implement message catalog loader (`src/machine_calc/i18n.py`) with locale selection, key lookup, and English fallback; implement the default English catalog (`src/machine_calc/locales/en.py`) (FR-019)
 - [ ] T009b [P] Configure stdlib `logging` (`src/machine_calc/logging_setup.py`) with hard-coded English log message strings, independent of the i18n catalog (Constitution VIII)
-- [ ] T009c [US1] [US2] Retrofit already-implemented hard-coded strings to use the `i18n.py` catalog: replace literal `print()`/`input()` prompt text in `cli.py`, and literal `ErrorInfo(...)` message strings in `validation.py` and `operations/drilling/__init__.py`, with catalog key lookups (English catalog values matching current text); add a `locale` parameter to `calculate()` and thread it through to `ErrorInfo.message` construction (FR-019; depends on T009a, T011, T013, T024)
-  - Acceptance: no literal user-facing string remains in `cli.py`'s prompt/output paths or in `ErrorInfo(...)` constructor calls outside `locales/en.py`; `calculate(locale="en")` and CLI output produce identical text for the same catalog.
 - [X] T010 Implement `Configuration` loading from an external TOML file with built-in default fallback (`max_diameter_mm=100`, `max_depth_mm=500`) in `src/machine_calc/config.py` (FR-018; research.md #3)
 - [X] T011 Implement shared input validation (diameter/depth positivity + configurable bounds, required material/tool presence, returning `ErrorInfo` rather than raising) in `src/machine_calc/validation.py` (FR-009, FR-010)
 - [X] T012 Implement drilling formulas (spindle speed, feed rate, machining time in minutes, torque, power) in `src/machine_calc/operations/drilling/formulas.py`, citing the formula sources in code comments (FR-006, FR-007, FR-008, FR-011; research.md #4; Constitution III)
@@ -76,6 +74,8 @@
 - [X] T024 [US1] Implement the interactive REPL prompt flow (unit system → material → tool → diameter → depth → optional power → display result → loop) in `src/machine_calc/cli.py` per contracts/cli-repl.md, using message-catalog keys via `i18n.py` for all prompts/labels (no hard-coded user-facing strings) (depends on T023, T009a)
 - [X] T025 [US1] Add a runnable entry point: `src/machine_calc/__main__.py` (for `python -m machine_calc`) and a `console_scripts` entry in `pyproject.toml` (depends on T024)
 - [X] T026 [US1] Format CLI output with unit labels matching the selected unit system and render `feasibility_warning`/`error.message` clearly (FR-013; depends on T024)
+- [ ] T026a [US1] Retrofit `cli.py`'s already-implemented hard-coded prompt/output strings (all `input()`/`print()` calls) to use `i18n.py` catalog key lookups instead of literal strings (English catalog values matching current text) (FR-019; depends on T009a, T024, T026)
+  - Acceptance: no literal user-facing string remains in `cli.py`'s prompt/output paths outside `locales/en.py`.
 
 **Checkpoint**: User Story 1 is fully functional and independently testable via the CLI alone.
 
@@ -100,6 +100,8 @@
 
 - [ ] T032 [US2] Verify and finalize `list_materials()` / `list_tools()` exposure and docstrings (inputs/outputs/units per Constitution I) in `src/machine_calc/__init__.py` (depends on T023)
 - [ ] T033 [US2] Add a `config_path` parameter pass-through from `calculate()` to the `Configuration` loader (FR-018) in `src/machine_calc/operations/drilling/__init__.py` (depends on T013, T010)
+- [ ] T033a [US2] Retrofit already-implemented hard-coded `ErrorInfo(...)` message strings in `validation.py` and `operations/drilling/__init__.py` to use `i18n.py` catalog key lookups (English catalog values matching current text, using `str.format()` placeholders for dynamic values e.g. material/tool name); add a `locale` parameter to `calculate()` and thread it through to `ErrorInfo.message`/`feasibility_warning` construction (FR-019; depends on T009a, T011, T013, T033)
+  - Acceptance: no literal message string remains in any `ErrorInfo(...)` constructor call outside `locales/en.py`; `calculate(locale="en")` and the CLI (post-T026a) produce identical text for the same catalog and error code.
 
 **Checkpoint**: Both user stories are independently functional; the FR-016 identical-results guarantee is proven by automated tests.
 
@@ -119,7 +121,7 @@
 - [ ] T041 Execute all 7 quickstart.md scenarios manually (or via a validation script) and confirm actual behavior matches documented expected outcomes; explicitly time a full end-to-end CLI session (open → select unit system/material/tool → enter diameter/depth → view results) and confirm it completes in under 30 seconds (SC-001)
 - [ ] T042 [P] Measure and record calculation execution time against the 0.5-1.0s legacy-hardware target (Constitution V); document the result and methodology in `specs/001-metal-drilling-calc/research.md` (append a "Validation" note) or a new `perf-notes.md`
 - [ ] T043 [P] Measure and record peak memory (RSS) usage of a representative CLI session and a representative library `calculate()` call, confirming it fits within the ~64-128 MB target in Constitution Principle V; document the methodology and result alongside T042
-- [ ] T043a [P] Static check confirming no literal user-facing strings exist in `cli.py`/error paths outside the message catalog (post-T009c retrofit), and confirming log statements are plain English (Constitution VIII)
+- [ ] T043a [P] Static check confirming no literal user-facing strings exist in `cli.py`/error paths outside the message catalog (post-T026a/T033a retrofit), and confirming log statements are plain English (Constitution VIII)
 
 ---
 
@@ -140,16 +142,16 @@
 ### Within Each User Story
 
 - Tests are written before/alongside implementation and MUST fail before the corresponding implementation task lands (Constitution II).
-- Public API surface (T023) before CLI (T024-T026) and before library contract finalization (T032-T033).
+- Public API surface (T023) before CLI (T024-T026) and before library contract finalization (T032-T033). Retrofit tasks (T026a, T033a) come last in each story, after their respective story's core implementation, since they replace already-implemented literal strings with catalog lookups.
 
 ### Parallel Opportunities
 
 - T003, T004, T005 (Setup) can run in parallel.
 - T006, T007, T008, T009 (Foundational, different files) can run in parallel; T010 and T011 can run in parallel with each other but depend on T006; T012 depends on T007-T009.
-- T014-T018 (Foundational tests, different files) can run in parallel once their respective implementation tasks land.
+- T014-T018 (Foundational tests, different files) can run in parallel once their respective implementation tasks land; T018a (message catalog tests) can run in parallel with T014-T018 once T009a lands.
 - Once Foundational (Phase 2) is complete, User Story 1 (Phase 3) and User Story 2 (Phase 4) can proceed fully in parallel (different files).
 - T019-T022 (US1 tests) can run in parallel with each other; T027-T031 (US2 tests) can run in parallel with each other.
-- T034, T035, T036 (Polish docs) can run in parallel; T042 and T043 can run in parallel with documentation tasks and with each other.
+- T034, T035, T036 (Polish docs) can run in parallel; T042 and T043 can run in parallel with documentation tasks and with each other. T026a and T033a can run in parallel with each other (different files) once T009a lands, but each depends on its own story's core tasks completing first.
 
 ---
 
@@ -167,8 +169,8 @@ Task: "Implement DrillingTool dataclass and tool registry in src/machine_calc/op
 
 ```bash
 # Two developers can work simultaneously once Phase 2 is done:
-Developer A (US1): T019 → T020 → T021 → T022 → T023 → T024 → T025 → T026
-Developer B (US2): T027 → T028 → T029 → T030 → T031 → T032 → T033
+Developer A (US1): T019 → T020 → T021 → T022 → T023 → T024 → T025 → T026 → T026a
+Developer B (US2): T027 → T028 → T029 → T030 → T031 → T032 → T033 → T033a
 ```
 
 ---
