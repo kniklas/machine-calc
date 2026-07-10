@@ -22,7 +22,7 @@ structured result object instead (see research.md and contracts/).
 
 **Language/Version**: Python 3.9+ (research.md #1 — Debian oldstable/stable compatibility per Constitution Principle V)
 
-**Primary Dependencies**: None required at runtime beyond the standard library; `tomli` (pure-Python TOML parser) only on Python < 3.11 for configuration file support (research.md #2, #3). Dev-only: `pytest`, `pytest-cov`, `ruff`, `black` (or equivalent), `sphinx`.
+**Primary Dependencies**: None required at runtime beyond the standard library; `tomli` (pure-Python TOML parser) only on Python < 3.11 for configuration file support (research.md #2, #3); message catalogs use a simple key→string mapping per locale (JSON or Python dict modules) via `src/machine_calc/i18n.py`, avoiding a `gettext` toolchain dependency to keep footprint minimal (Constitution V, VIII). Dev-only: `pytest`, `pytest-cov`, `ruff`, `black` (or equivalent), `sphinx`.
 
 **Storage**: N/A (stateless per-request calculations); optional local TOML configuration file for validation-bound overrides (FR-018)
 
@@ -34,7 +34,7 @@ structured result object instead (see research.md and contracts/).
 
 **Performance Goals**: Each calculation completes within 0.5-1.0s on the legacy/low-power hardware profile in Constitution Principle V; full interactive flow (open CLI → get results) under 30s (SC-001)
 
-**Constraints**: Runs within ~64-128 MB RAM on a single-threaded, low-clock-speed CPU (Constitution Principle V); no heavy third-party runtime dependencies (research.md #2); Debian-stable/oldstable OS compatibility; no exceptions raised for expected validation failures (FR-015)
+**Constraints**: Runs within ~64-128 MB RAM on a single-threaded, low-clock-speed CPU (Constitution Principle V); no heavy third-party runtime dependencies (research.md #2); Debian-stable/oldstable OS compatibility; no exceptions raised for expected validation failures (FR-015); application logging (developer/operator-facing, distinct from REPL/error-catalog output) uses the standard library `logging` module and MUST remain in English at all times regardless of active user-facing locale (Constitution VIII).
 
 **Scale/Scope**: Two user-facing entry points (library API + CLI REPL) for this feature's drilling operation; initial reference dataset of ~6 workpiece materials × ~3 drilling tool types (spec Assumptions); single-user, single-session usage. Per Constitution Principle VI (amended 2026-07-09), the architecture MUST anticipate future metal machining operations beyond drilling (e.g., turning, milling) without requiring rework of shared infrastructure — this shapes the per-operation module boundary in Project Structure below, even though only drilling is in scope for this feature.
 
@@ -51,6 +51,7 @@ structured result object instead (see research.md and contracts/).
 | V. Resource-Constrained Compatibility | ≤64-128MB RAM, single-threaded, low clock speed; Debian-stable compatible; ~0.5-1.0s per calculation | PASS — zero/near-zero runtime dependencies (research.md #2), simple arithmetic-only calculations, no threading/multiprocessing used; RAM footprint and calculation timing both explicitly measured and recorded (tasks.md T042, T043, resolving /speckit.analyze finding E1) |
 | VI. Extensibility by Design | New calculations/materials/tools addable without rewriting existing logic; architecture MUST anticipate future non-drilling machining operations (turning, milling, etc.) per the 2026-07-09 amendment | PASS — data-model.md registry pattern for `WorkpieceMaterial`/`DrillingTool`; calculation logic behind a stable `calculate()` interface (contracts/library-api.md); Project Structure below isolates drilling-specific formulas in an `operations/drilling` module distinct from shared infrastructure (registries, units, config, error reporting) so future operations can be added as sibling modules |
 | VII. Documentation & Publishing | Sphinx docs for end users + developers; auto-published to GitHub Pages; README reports coverage | PASS (planned, not yet implemented) — research.md #7 selects Sphinx+alabaster; CI/CD automation captured in research.md #8 for `/speckit.tasks` to schedule |
+| VIII. Internationalization of User-Facing Messages | REPL/error text sourced from a message catalog, not hard-coded; English bundled default/fallback; logging always English | PASS — planned `i18n.py`/`locales/` catalog module (see Project Structure); `cli.py` and `validation.py`/error-reporting code reference catalog keys, not literal strings; stdlib `logging` calls remain hard-coded English (Constitution VIII, resolving /speckit.analyze finding D1) |
 
 No violations requiring the Complexity Tracking table.
 
@@ -89,6 +90,11 @@ src/
     ├── units.py              # Shared metric<->imperial conversion helpers
     ├── validation.py         # Shared input validation + Configuration bound checks (FR-009, FR-018)
     ├── config.py             # Shared TOML configuration file loading (research.md #3)
+    ├── i18n.py               # Message catalog loader: locale selection, key lookup, English fallback (Constitution VIII)
+    ├── logging_setup.py       # stdlib `logging` configuration; all log messages hard-coded in English (Constitution VIII)
+    ├── locales/
+    │   ├── en.py               # Default/fallback message catalog (message_id -> English string)
+    │   └── ...                 # Additional locale catalogs added as new files, no code changes required
     ├── cli.py                # Interactive REPL (FR-002), built only on the public API (contracts/cli-repl.md)
     └── operations/
         ├── __init__.py        # Operation registry/dispatch (future: turning, milling register alongside drilling)
