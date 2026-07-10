@@ -111,3 +111,12 @@ CLI display), the public docstring for `calculate()` and the generated Sphinx
 API reference (Constitution Principle VII) MUST enumerate, for each field,
 the exact unit used under `UnitSystem.METRIC` and `UnitSystem.IMPERIAL`
 respectively (per Constitution Principle I's documentation requirement).
+
+## Localization contract (FR-019)
+
+`calculate()` accepts an optional `locale` parameter (default `"en"`) that
+selects the message catalog used to populate `ErrorInfo.message` and
+`feasibility_warning` text. Falls back to English for any locale or message
+key not present in the requested catalog — this MUST NOT raise an error or
+return a blank/missing message. This is the same catalog used by the CLI's
+`i18n.py`-driven prompts (see contracts/cli-repl.md).

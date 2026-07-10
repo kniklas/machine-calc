@@ -7,6 +7,11 @@ interface (FR-002), built strictly on top of the library API's
 `calculate()` — no independent calculation logic (see identical-results
 contract).
 
+All prompt text, labels, and messages shown by the REPL are sourced from the
+message catalog (`i18n.py`, default locale `en`) — see data-model.md's
+Message Catalog entity and FR-019. No prompt/label/error string in this
+contract is hard-coded in `cli.py`.
+
 ## Prompt sequence (one calculation cycle)
 
 1. **Unit system**: prompt to choose `metric` or `imperial` (default:

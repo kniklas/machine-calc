@@ -107,6 +107,12 @@ result = calculate(
 assert result.error is None  # would fail default 100mm bound without override
 ```
 
+## Scenario 8 — Non-default locale (if a second catalog is provided)
+
+Call `calculate(..., locale="xx")` where a partial `locales/xx.py` catalog
+exists. Verify translated keys use the `xx` catalog text and any missing key
+falls back to the English (`en`) catalog text, with no error raised.
+
 ## Running the automated test suite
 
 ```bash

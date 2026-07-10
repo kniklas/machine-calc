@@ -40,6 +40,8 @@
 - [X] T009 [P] Implement `DrillingTool` dataclass and the initial tool registry (HSS, cobalt, carbide) in `src/machine_calc/operations/drilling/tools.py` (FR-005)
 - [ ] T009a [P] Implement message catalog loader (`src/machine_calc/i18n.py`) with locale selection, key lookup, and English fallback; implement the default English catalog (`src/machine_calc/locales/en.py`) (FR-019)
 - [ ] T009b [P] Configure stdlib `logging` (`src/machine_calc/logging_setup.py`) with hard-coded English log message strings, independent of the i18n catalog (Constitution VIII)
+- [ ] T009c [US1] [US2] Retrofit already-implemented hard-coded strings to use the `i18n.py` catalog: replace literal `print()`/`input()` prompt text in `cli.py`, and literal `ErrorInfo(...)` message strings in `validation.py` and `operations/drilling/__init__.py`, with catalog key lookups (English catalog values matching current text); add a `locale` parameter to `calculate()` and thread it through to `ErrorInfo.message` construction (FR-019; depends on T009a, T011, T013, T024)
+  - Acceptance: no literal user-facing string remains in `cli.py`'s prompt/output paths or in `ErrorInfo(...)` constructor calls outside `locales/en.py`; `calculate(locale="en")` and CLI output produce identical text for the same catalog.
 - [X] T010 Implement `Configuration` loading from an external TOML file with built-in default fallback (`max_diameter_mm=100`, `max_depth_mm=500`) in `src/machine_calc/config.py` (FR-018; research.md #3)
 - [X] T011 Implement shared input validation (diameter/depth positivity + configurable bounds, required material/tool presence, returning `ErrorInfo` rather than raising) in `src/machine_calc/validation.py` (FR-009, FR-010)
 - [X] T012 Implement drilling formulas (spindle speed, feed rate, machining time in minutes, torque, power) in `src/machine_calc/operations/drilling/formulas.py`, citing the formula sources in code comments (FR-006, FR-007, FR-008, FR-011; research.md #4; Constitution III)
@@ -117,7 +119,7 @@
 - [ ] T041 Execute all 7 quickstart.md scenarios manually (or via a validation script) and confirm actual behavior matches documented expected outcomes; explicitly time a full end-to-end CLI session (open → select unit system/material/tool → enter diameter/depth → view results) and confirm it completes in under 30 seconds (SC-001)
 - [ ] T042 [P] Measure and record calculation execution time against the 0.5-1.0s legacy-hardware target (Constitution V); document the result and methodology in `specs/001-metal-drilling-calc/research.md` (append a "Validation" note) or a new `perf-notes.md`
 - [ ] T043 [P] Measure and record peak memory (RSS) usage of a representative CLI session and a representative library `calculate()` call, confirming it fits within the ~64-128 MB target in Constitution Principle V; document the methodology and result alongside T042
-- [ ] T043a [P] Static check confirming no literal user-facing strings exist in `cli.py`/error paths outside the message catalog, and confirming log statements are plain English (Constitution VIII)
+- [ ] T043a [P] Static check confirming no literal user-facing strings exist in `cli.py`/error paths outside the message catalog (post-T009c retrofit), and confirming log statements are plain English (Constitution VIII)
 
 ---
 
