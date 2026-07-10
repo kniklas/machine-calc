@@ -142,7 +142,7 @@ error/warning text) keyed by a stable message ID, one catalog per supported
 locale.
 
 - `locale`: str — e.g. `"en"`; identifies which catalog is active.
-- `messages`: dict[str, str] — message ID → localized string for this locale.
+- `messages`: dict[str, str] — message ID → localized string for this locale; strings MAY contain `str.format()`-style named placeholders (e.g. `{material}`) for dynamic values, populated by the caller at lookup time.
 - English (`en`) is always present and used as the fallback for any locale or
   message key missing from a non-English catalog.
 - Consumed by both the CLI (`cli.py`) and the library (`calculate(locale=...)`)

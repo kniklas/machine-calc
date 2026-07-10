@@ -22,7 +22,7 @@ structured result object instead (see research.md and contracts/).
 
 **Language/Version**: Python 3.9+ (research.md #1 — Debian oldstable/stable compatibility per Constitution Principle V)
 
-**Primary Dependencies**: None required at runtime beyond the standard library; `tomli` (pure-Python TOML parser) only on Python < 3.11 for configuration file support (research.md #2, #3); message catalogs use a simple key→string mapping per locale (JSON or Python dict modules) via `src/machine_calc/i18n.py`, avoiding a `gettext` toolchain dependency to keep footprint minimal (Constitution V, VIII). Dev-only: `pytest`, `pytest-cov`, `ruff`, `black` (or equivalent), `sphinx`.
+**Primary Dependencies**: None required at runtime beyond the standard library; `tomli` (pure-Python TOML parser) only on Python < 3.11 for configuration file support (research.md #2, #3); message catalogs are pure-Python dict modules, one per locale (e.g. `src/machine_calc/locales/en.py`), loaded via `src/machine_calc/i18n.py`, avoiding a JSON/YAML parser or `gettext` toolchain dependency to keep footprint minimal (Constitution V, VIII; spec.md Clarifications 2026-07-10). Dev-only: `pytest`, `pytest-cov`, `ruff`, `black` (or equivalent), `sphinx`.
 
 **Storage**: N/A (stateless per-request calculations); optional local TOML configuration file for validation-bound overrides (FR-018)
 
