@@ -14,6 +14,12 @@
 
 - Q: How should the interactive REPL let the user choose between standard calculation, power-constrained mode, and fixed-RPM mode? → A: Add one new REPL prompt (after unit system, before material/diameter) asking the user to pick a calculation mode: standard / power-constrained / fixed-RPM. Subsequent prompts adapt accordingly (power-constrained mode prompts for available power as the constraint, not advisory; fixed-RPM mode prompts for a target RPM instead of deriving it, with available power remaining optional/advisory).
 
+### Session 2026-07-11
+
+- Q: When a supplied `available_power` in power-constrained mode is exactly equal (within floating-point tolerance) to the power required at the material/tool's normally-recommended spindle speed, does the module apply FR-002's reduction logic or FR-003's no-op behavior? → A: Treated as "already sufficient" — FR-003's no-op applies; the standard (unconstrained) result is returned unchanged, with no reduction step taken.
+- Q: SC-003 says power-constrained results must not exceed the available power budget "within floating-point tolerance." What tolerance should this mean, precisely? → A: Python's `math.isclose()` default (`rel_tol=1e-9`) — a tight tolerance appropriate for an algebraic identity (research.md #1's exact closed-form derivation), not an empirical/physical accuracy claim like SC-002's 5%.
+- Q: FR-007 requires rejecting a `target_rpm` that is "zero, negative, or non-numeric" — should `NaN`/`Infinity` values be handled under this same rule and error code, or treated as a distinct case? → A: Same rule/code — `target_rpm` MUST be finite (`math.isfinite()`), rejecting `NaN`/`Infinity` the same way as zero/negative, all under the single `INVALID_TARGET_RPM` code; no new code is introduced.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Adjust Calculation to Fit Available Machine Power (Priority: P1)
@@ -49,7 +55,10 @@ power no longer exceeds the available power.
    normally-recommended spindle speed, **When** the user requests a
    power-constrained calculation, **Then** the module returns the same
    values as the standard (unconstrained) calculation — no unnecessary
-   de-rating is applied.
+   de-rating is applied. This includes the boundary case where the
+   supplied available power exactly equals the required power (within
+   floating-point tolerance): it is treated as sufficient, not as
+   triggering a reduction.
 3. **Given** a supplied available power so low that no positive spindle
    speed can bring the required power within budget, **When** the user
    requests a power-constrained calculation, **Then** the module rejects
@@ -144,15 +153,19 @@ recommended value.
   fixed-RPM mode adds a required target-RPM prompt (FR-005/FR-007) plus
   the existing optional advisory available-power prompt (FR-008).
 - **FR-002**: When power-constrained mode is used and the power required
-  at the material/tool's normally-recommended spindle speed exceeds the
-  supplied available power, the module MUST reduce the spindle speed (and
+  at the material/tool's normally-recommended spindle speed **exceeds**
+  the supplied available power (i.e., is strictly greater, per FR-003's
+  boundary rule), the module MUST reduce the spindle speed (and
   correspondingly recompute the feed rate using the existing tool/material
   feed relationship, plus machining time and torque) to the highest value
   at which the required power no longer exceeds the available power.
 - **FR-003**: When power-constrained mode is used and the supplied
   available power is already sufficient for the normally-recommended
-  spindle speed, the module MUST return the same result as the standard
-  (unconstrained) calculation, without applying any unnecessary reduction.
+  spindle speed — including the boundary case where it is exactly equal
+  to the required power (within floating-point tolerance) — the module
+  MUST return the same result as the standard (unconstrained) calculation,
+  without applying any unnecessary reduction. An exact match is always
+  treated as "sufficient", never as triggering FR-002's reduction logic.
 - **FR-004**: When power-constrained mode is used and no positive spindle
   speed can bring the required power within the supplied available power
   budget, the module MUST reject the request with a clear, structured
@@ -170,8 +183,9 @@ recommended value.
   calculation (FR-007/FR-008/FR-011 of the base drilling spec), but with
   spindle speed taken as a direct input rather than a derived output.
 - **FR-007**: The module MUST validate a supplied target RPM as a
-  positive, finite number and MUST reject zero, negative, or non-numeric
-  values with a clear, structured error, performing no calculation — the
+  positive, finite number (`math.isfinite()`) and MUST reject zero,
+  negative, non-numeric, `NaN`, or `Infinity` values — all under the same
+  `INVALID_TARGET_RPM` error code, with no calculation performed — the
   same validation posture as diameter and depth in the base drilling spec
   (FR-009).
 - **FR-008**: When fixed-RPM mode is used together with a supplied
@@ -231,9 +245,11 @@ recommended value.
   for that RPM in the same single request, with the same response time as
   a standard calculation.
 - **SC-003**: 100% of power-constrained results have a required power that
-  does not exceed the supplied available power (within floating-point
-  tolerance), or are rejected with a clear structured error — never
-  silently returning a result that exceeds the stated power budget.
+  does not exceed the supplied available power, using `math.isclose()`'s
+  default relative tolerance (`rel_tol=1e-9`) — appropriate for an exact
+  algebraic identity (research.md #1), not an empirical measurement — or
+  are rejected with a clear structured error; never silently returning a
+  result that exceeds the stated power budget.
 - **SC-004**: Existing standard (unconstrained, no mode selected)
   calculations continue to produce identical results after this feature
   ships as they did before it (no regression to the base drilling spec's

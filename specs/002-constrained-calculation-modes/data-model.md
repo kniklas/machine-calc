@@ -50,9 +50,11 @@ order**: the base spec's existing material/tool/diameter/depth checks run
 first, unchanged — a failure there (e.g., `INVALID_DIAMETER`) is returned
 before any mode-argument check below runs (/speckit.analyze finding U1):
 
-- `target_rpm`, when supplied, MUST be a positive, finite number; zero,
-  negative, or non-numeric values are rejected with
-  `ErrorInfo(code="INVALID_TARGET_RPM")` (FR-007).
+- `target_rpm`, when supplied, MUST be a positive, finite number
+  (`math.isfinite()`); zero, negative, non-numeric, `NaN`, or `Infinity`
+  values are all rejected under the same
+  `ErrorInfo(code="INVALID_TARGET_RPM")` (FR-007; spec.md Clarifications
+  2026-07-11).
 - `mode is FIXED_RPM` requires `target_rpm` to be supplied; `mode` values
   other than `FIXED_RPM` require `target_rpm` to be `None`. Any mismatch is
   rejected with `ErrorInfo(code="MODE_CONFLICT")` (FR-009).

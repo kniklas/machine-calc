@@ -15,7 +15,7 @@ Constitution Principle III (Calculation Robustness & Accuracy).
 
 - CHK001 - Are requirements defined for the exact tolerance used to judge "required power does not exceed available power" (SC-003), given that the adjusted spindle speed is derived via floating-point arithmetic (research.md #1)? [Gap, Spec §SC-003]
 - CHK002 - Is a requirement stated for what precision/rounding applies to a caller-supplied `target_rpm` before it is used directly as spindle speed (e.g., is an extremely high-precision float accepted as-is, truncated, or validated only for sign/finiteness)? [Gap, Spec §FR-007]
-- CHK003 - Are requirements defined for the specific behavior when `available_power` supplied in power-constrained mode is exactly equal to the power required at the nominal (unconstrained) spindle speed — is this treated as FR-002 (reduce) or FR-003 (no-op)? [Gap, Spec §FR-002 vs §FR-003]
+- CHK003 - ~~Are requirements defined for the specific behavior when `available_power` supplied in power-constrained mode is exactly equal to the power required at the nominal (unconstrained) spindle speed — is this treated as FR-002 (reduce) or FR-003 (no-op)?~~ **RESOLVED** (2026-07-11 clarification): treated as "already sufficient" — FR-003's no-op applies. [Spec §Clarifications, §FR-003]
 - CHK004 - Does the spec define what "no positive spindle speed can bring the required power within budget" (FR-004) means numerically — is `available_power <= 0` the only trigger, or could floating-point rounding near zero also trigger it, and is that distinction normatively stated? [Gap, Spec §FR-004]
 - CHK005 - Is a requirement stated for the maximum/minimum practically meaningful `target_rpm` value the module must handle without overflow or precision loss (e.g., extremely large target RPM values feeding into feed-rate/power formulas)? [Gap, Spec §Edge Cases]
 
@@ -33,13 +33,13 @@ Constitution Principle III (Calculation Robustness & Accuracy).
 
 ## Acceptance Criteria Quality
 
-- CHK012 - Can SC-003 ("100% of power-constrained results have a required power that does not exceed the supplied available power... within floating-point tolerance") be tested deterministically, or does "within floating-point tolerance" need a concrete numeric tolerance value stated somewhere (spec, plan, or data-model)? [Measurability, Spec §SC-003]
+- CHK012 - ~~Can SC-003 ("100% of power-constrained results have a required power that does not exceed the supplied available power... within floating-point tolerance") be tested deterministically, or does "within floating-point tolerance" need a concrete numeric tolerance value stated somewhere (spec, plan, or data-model)?~~ **RESOLVED** (2026-07-11 clarification): `math.isclose()` default `rel_tol=1e-9`. [Spec §Clarifications, §SC-003]
 - CHK013 - Is SC-002's "same response time as a standard calculation" for fixed-RPM mode measurable/testable, or is it a qualitative claim lacking a numeric threshold (contrast with the base spec's SC-001's explicit 30-second bound)? [Measurability, Spec §SC-002]
-- CHK014 - Are acceptance scenarios present for the exact boundary case where `available_power` equals the nominal required power (see CHK003), matching whatever FR-002/FR-003 boundary rule is intended? [Coverage, Spec §Acceptance Scenarios]
+- CHK014 - ~~Are acceptance scenarios present for the exact boundary case where `available_power` equals the nominal required power (see CHK003), matching whatever FR-002/FR-003 boundary rule is intended?~~ **RESOLVED** (2026-07-11 clarification): Acceptance Scenario 1.2 now explicitly covers this. [Spec §Acceptance Scenarios]
 
 ## Edge Case & Tolerance Coverage
 
-- CHK015 - Is there an explicit requirement or acceptance scenario for a `target_rpm` supplied as `NaN` or `Infinity` (distinct from "non-numeric" in the conventional sense), given FR-007 only names "zero, negative, or non-numeric"? [Gap, Spec §FR-007]
+- CHK015 - ~~Is there an explicit requirement or acceptance scenario for a `target_rpm` supplied as `NaN` or `Infinity` (distinct from "non-numeric" in the conventional sense), given FR-007 only names "zero, negative, or non-numeric"?~~ **RESOLVED** (2026-07-11 clarification): FR-007 now explicitly requires `math.isfinite()`, rejecting `NaN`/`Infinity` under the same `INVALID_TARGET_RPM` code. [Spec §Clarifications, §FR-007]
 - CHK016 - Is there a requirement addressing floating-point comparison expectations (tolerance-based, per Constitution Principle III) specifically for the new linear power-scaling calculation, mirroring how the base spec's Constitution alignment is already established for its own formulas? [Coverage, Constitution III]
 - CHK017 - Does the spec address whether an extremely small (but positive) adjusted spindle speed from power-constrained mode (e.g., resulting in machining time of hours) requires any advisory note to the user, or is this fully covered by the existing Edge Cases statement that no minimum floor is imposed? [Gap, Spec §Edge Cases]
 

@@ -34,9 +34,11 @@ dependencies, configuration format, testing/doc tooling, i18n mechanism).
   the same formulas as the standard calculation (`vf = n × fn`,
   `tc = (depth + allowance) / vf`); torque is unchanged (it does not depend
   on `n`); required power at `n_adjusted` equals `Pavail` exactly (up to
-  floating-point tolerance) by construction. If `Pavail ≥ Pc0`, no
-  adjustment is applied (spec.md FR-003). If `Pavail ≤ 0`, no positive `n`
-  can satisfy the budget, so the request is rejected per FR-004.
+  floating-point tolerance — `math.isclose()`'s default `rel_tol=1e-9`,
+  spec.md Clarifications 2026-07-11) by construction. If `Pavail ≥ Pc0`
+  (including exact equality, within that same tolerance — spec.md FR-003),
+  no adjustment is applied (spec.md FR-003). If `Pavail ≤ 0`, no positive
+  `n` can satisfy the budget, so the request is rejected per FR-004.
 
 - **Rationale**: Avoids introducing a numerical solver/iteration (which
   would add code complexity, potential non-convergence edge cases, and
