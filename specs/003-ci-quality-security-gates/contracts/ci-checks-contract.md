@@ -13,7 +13,7 @@ finding failed") are satisfiable from the PR's checks list alone.
 | Check name (job) | Enforces | Trigger | Blocks merge when |
 |---|---|---|---|
 | `lint` | Existing ruff + black formatting/style, now including FR-001 (`ruff C90` cyclomatic complexity) | push, pull_request | Any lint/format violation or function exceeding the configured complexity threshold |
-| `complexity` | FR-002 (`xenon`/`radon mi`, Maintainability Index) — FR-001 (`ruff C90`, cyclomatic complexity) is enforced by the `lint` job below, not duplicated here | push, pull_request | Any module exceeds the configured Maintainability Index threshold (research.md #2) |
+| `complexity` | FR-002 (`radon mi` via `scripts/check_maintainability.py`, Maintainability Index) — FR-001 (`ruff C90`, cyclomatic complexity) is enforced by the `lint` job below, not duplicated here; note `xenon` was found during implementation to only enforce cyclomatic complexity, not MI, and was dropped (research.md #2) | push, pull_request | Any module exceeds the configured Maintainability Index threshold (research.md #2) |
 | `typecheck` | FR-003 (`mypy`) | push, pull_request | Any new/changed type error in `src/machine_calc` |
 | `security` | FR-004 (`bandit`) | push, pull_request | Any open high/medium-severity finding without a Suppression Record |
 | `dependency-scan` | FR-005 (`pip-audit`) | push, pull_request, schedule (weekly) | Any known CVE in resolved dependencies without a documented risk acceptance |

@@ -36,7 +36,6 @@ dev = [
     "sphinx>=7.0",
     "mypy>=1.10",
     "radon>=6.0",
-    "xenon>=0.9",
     "bandit>=1.7",
     "pip-audit>=2.7",
 ]
@@ -83,7 +82,8 @@ exclude_dirs = ["tests"]
 # suppressions (`# nosec`) must carry a trailing rationale comment per
 # contracts/ci-checks-contract.md's Suppression contract (FR-009).
 
-# Maintainability Index (FR-002) is enforced via xenon, which has no native
-# pyproject.toml configuration section. Its thresholds are versioned here as
-# the CLI invocation itself (research.md #2):
-#   xenon --max-absolute B --max-modules A --max-average A src/
+# Maintainability Index (FR-002) is enforced via `radon mi`, which has no
+# native pyproject.toml configuration section or CLI failure-threshold flag.
+# Its minimum grade threshold is versioned in scripts/check_maintainability.py
+# (research.md #2; xenon does NOT enforce MI - it only wraps radon's
+# cyclomatic-complexity harvester - see that script's module docstring).

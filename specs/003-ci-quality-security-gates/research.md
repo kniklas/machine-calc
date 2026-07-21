@@ -18,24 +18,39 @@ inline with existing lint output, satisfying FR-001/FR-010 (thresholds versioned
 `ruff C90` for the same metric, adding a second tool/config surface for no additional signal.
 `xenon --max-absolute` for cyclomatic complexity — rejected as the sole CC gate because it
 reports per-block grades (A-F) rather than a numeric threshold per function, which is less
-precise for FR-001's "identify the offending function" requirement; `xenon` is retained
-instead for Maintainability Index (see #2).
+precise for FR-001's "identify the offending function" requirement; a `radon mi`-based script
+is used instead for Maintainability Index (see #2 — `xenon` was found not to enforce MI at
+all and was dropped from this feature entirely).
 
 ## 2. Maintainability Index threshold & tool
 
-**Decision**: Use `radon mi` computed and enforced via `xenon --max-absolute B --max-modules A
---max-average A src/`. Grade B (`xenon`'s default recommended floor) is the minimum per-module
-grade; module-average and single-worst-case are held to grade A per xenon's stricter
-aggregate defaults, which is achievable at the current repo size (~1500 LOC across small,
-single-responsibility modules per Constitution Principle I/VI).
+**Decision** *(revised during `/speckit.implement` — see Correction note below)*: Use
+`radon mi -n B -x F -j src/`, enforced via a small checked-in wrapper script
+(`scripts/check_maintainability.py`) that fails the process if any module ranks below
+grade B (i.e., anything other than "A"). Achievable at the current repo size (~1500 LOC
+across small, single-responsibility modules per Constitution Principle I/VI).
 
-**Rationale**: `radon`/`xenon` is the de facto standard, actively maintained pure-Python MI
-tool; `xenon` wraps `radon mi` specifically to provide CI-friendly pass/fail exit codes,
-satisfying FR-002.
+**Rationale**: `radon` is the de facto standard, actively maintained pure-Python MI tool.
+`radon mi` itself has no CLI flag to fail the process on a threshold, so a minimal wrapper
+script is the smallest addition that gives it a CI-friendly pass/fail exit code while
+keeping the threshold version-controlled (FR-010) rather than embedded only in CI YAML.
 
-**Alternatives considered**: `wily` (trend-tracking complexity tool) — rejected as it targets
-historical trend visualization rather than a simple per-PR pass/fail gate, adding scope beyond
-what FR-002 requires.
+**Correction note (added during implementation)**: This decision originally specified
+`xenon --max-absolute B --max-modules A --max-average A src/` as the enforcement
+mechanism. That was a factual error, caught only once the `complexity` job was exercised
+against a real scratch PR (T020a): `xenon` (`xenon/core.py`) only wraps radon's
+**cyclomatic-complexity** harvester (`radon.complexity.cc_rank`), not `radon.metrics`'s
+Maintainability Index — it cannot enforce MI at all, and would have silently duplicated
+FR-001's cyclomatic-complexity check (the exact double-gating the original F2 finding
+tried to avoid) while never actually gating on MI. `scripts/check_maintainability.py`'s
+module docstring documents this in full. All other artifacts (`pyproject.toml`,
+`contracts/ci-checks-contract.md`, `quickstart.md`, `.github/workflows/ci.yml`) have been
+updated to match this corrected decision.
+
+**Alternatives considered**: `wily` (trend-tracking complexity tool) — rejected as it
+targets historical trend visualization rather than a simple per-PR pass/fail gate, adding
+scope beyond what FR-002 requires. `xenon` — rejected per the correction above; it cannot
+enforce MI.
 
 ## 3. Static type-checking tool & scope
 

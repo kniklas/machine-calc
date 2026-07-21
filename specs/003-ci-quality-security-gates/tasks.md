@@ -25,12 +25,12 @@ description: "Task list template for feature implementation"
 
 **Purpose**: Establish the new dev-tool dependencies and version-controlled thresholds all gates read from (spec.md FR-010).
 
-- [x] T001 Add `mypy`, `radon`, `xenon`, `bandit`, `pip-audit` to `[project.optional-dependencies].dev` in `pyproject.toml` (research.md #1-#5)
+- [x] T001 Add `mypy`, `radon`, `bandit`, `pip-audit` to `[project.optional-dependencies].dev` in `pyproject.toml` (research.md #1-#5; `xenon` was added then removed during T020a's real-world validation once it was discovered not to enforce Maintainability Index at all)
 - [x] T002 [P] Add `"C90"` to `[tool.ruff.lint].select` and set `[tool.ruff.lint.mccabe] max-complexity = 10` in `pyproject.toml` (research.md #1, FR-001, FR-010)
 - [x] T003 [P] Add `[tool.mypy]` section to `pyproject.toml` targeting `src/machine_calc` with `warn_return_any = true`, `ignore_missing_imports = true` (research.md #3, FR-003, FR-010)
 - [x] T004 [P] Add `[tool.bandit]` section to `pyproject.toml` (`tests` excluded, medium+ severity) for FR-004/FR-010, ready to hold any future named-skip suppressions with rationale comments (research.md #4, FR-009)
-- [x] T005 [P] Document the `xenon --max-absolute B --max-modules A --max-average A src/` invocation and its thresholds in a short comment block near `[tool.ruff]` in `pyproject.toml` (xenon has no native `pyproject.toml` config section, so its CLI flags ARE its versioned threshold definition per FR-010; research.md #2)
-- [x] T006 `pip install -e ".[dev]"` locally and confirm all five new tools (`mypy`, `radon`, `xenon`, `bandit`, `pip-audit`) are importable/runnable before proceeding to Phase 2
+- [x] T005 [P] Document the Maintainability Index threshold in a short comment block near `[tool.ruff]` in `pyproject.toml`, referencing `scripts/check_maintainability.py` (radon `mi` has no native `pyproject.toml` config section or CLI failure-threshold flag; the threshold is versioned in that script per FR-010; research.md #2 — corrected from an original `xenon`-based design, see research.md #2 Correction note)
+- [x] T006 `pip install -e ".[dev]"` locally and confirm all four new tools (`mypy`, `radon`, `bandit`, `pip-audit`) are importable/runnable before proceeding to Phase 2
 
 **Checkpoint**: All five gates are runnable locally with version-controlled thresholds; nothing wired into CI yet.
 
@@ -42,7 +42,7 @@ description: "Task list template for feature implementation"
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [x] T007 Run `ruff check src/ tests/` (with T002's C90 rule) and `xenon --max-absolute B --max-modules A --max-average A src/` (T005) against current `main`; catalogue any findings in this task's PR description
+- [x] T007 Run `ruff check src/ tests/` (with T002's C90 rule) and `python scripts/check_maintainability.py src/` (T005) against current `main`; catalogue any findings in this task's PR description
 - [x] T008 Remediate or add a documented `# noqa: C901`-with-rationale suppression (per contracts/ci-checks-contract.md Suppression contract) for every finding from T007, so `src/machine_calc` passes both commands cleanly (depends on T007; FR-011)
 - [x] T009 [P] Run `mypy src/machine_calc` (T003) against current `main`; catalogue any findings in this task's PR description
 - [x] T010 [P] Remediate or add a documented `# type: ignore[<code>]`-with-rationale suppression for every finding from T009, so `mypy src/machine_calc` passes cleanly (depends on T009; FR-011)
@@ -72,12 +72,12 @@ description: "Task list template for feature implementation"
 
 ### Implementation for User Story 1
 
-- [x] T016 [P] [US1] Add a `complexity` job to `.github/workflows/ci.yml` running only `xenon --max-absolute B --max-modules A --max-average A src/` (T005) for Maintainability Index (FR-002); the C90 cyclomatic-complexity rule (FR-001, T002) is already enforced by the existing `lint` job's `ruff check` invocation and MUST NOT be re-run here to avoid gating the same rule twice, on `push`/`pull_request` (contracts/ci-checks-contract.md; depends on T008, T014)
+- [x] T016 [P] [US1] Add a `complexity` job to `.github/workflows/ci.yml` running only `python scripts/check_maintainability.py src/` (T005) for Maintainability Index (FR-002); the C90 cyclomatic-complexity rule (FR-001, T002) is already enforced by the existing `lint` job's `ruff check` invocation and MUST NOT be re-run here to avoid gating the same rule twice, on `push`/`pull_request` (contracts/ci-checks-contract.md; depends on T008, T014). **Implementation correction**: originally implemented with `xenon --max-absolute B --max-modules A --max-average A src/`; discovered during T020a's real scratch-PR validation that `xenon` only enforces cyclomatic complexity (via `radon.complexity`), never Maintainability Index, so it silently never gated FR-002 and duplicated the `lint` job's C90 check instead. Replaced with `scripts/check_maintainability.py` (a thin `radon mi` threshold wrapper); `xenon` removed from `pyproject.toml` dev extras entirely.
 - [x] T017 [P] [US1] Add a `typecheck` job to `.github/workflows/ci.yml` running `mypy src/machine_calc`, on `push`/`pull_request` (contracts/ci-checks-contract.md; depends on T010, T014)
 - [x] T018 [P] [US1] Add a `security` job to `.github/workflows/ci.yml` running `bandit -r src -ll`, on `push`/`pull_request` (contracts/ci-checks-contract.md; depends on T012, T014)
 - [x] T019 [US1] Enable GitHub CodeQL "default setup" for Python via repository Settings → Code security → Code scanning (research.md #6, FR-006) — not a workflow file change, a repository setting
 - [ ] T020 [US1] Open a scratch pull request per quickstart.md §2 introducing a deliberately over-threshold-complexity function; confirm the `lint` check (ruff C90) fails and clearly identifies the offending function/file (validates FR-001, spec.md Acceptance Scenario 1; depends on T002, T014)
-- [ ] T020a [US1] Open a scratch pull request introducing a module whose Maintainability Index drops below the configured minimum grade without exceeding the cyclomatic-complexity threshold; confirm the `complexity` check (xenon) fails independently of `lint`, clearly identifying the affected module (validates FR-002, spec.md Acceptance Scenario 6; depends on T016)
+- [x] T020a [US1] Open a scratch pull request introducing a module whose Maintainability Index drops below the configured minimum grade without exceeding the cyclomatic-complexity threshold; confirm the `complexity` check fails independently of `lint`, clearly identifying the affected module (validates FR-002, spec.md Acceptance Scenario 6; depends on T016). **Finding**: the original `xenon`-based `complexity` job never actually failed on this scenario (xenon doesn't measure MI) — this validation run is exactly what caught that bug; re-validated after switching to `scripts/check_maintainability.py`, which correctly fails with `MI=... rank=C` while `lint`/C90 stays green.
 - [ ] T021 [US1] Repeat quickstart.md-style validation for `typecheck` (introduce a type error) and `security` (introduce a known-bad pattern, e.g. `eval()`), confirming each failure clearly identifies file/line and cause (validates FR-003/FR-004, spec.md Acceptance Scenarios 2-3; depends on T017, T018); revert all scratch changes afterward
 
 **Checkpoint**: User Story 1 is fully functional and independently verifiable — every pull request now surfaces complexity, maintainability, type-checking, and security results as distinct checks.

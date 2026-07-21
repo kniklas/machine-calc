@@ -41,7 +41,10 @@ jobs:
       - run: pip install -e ".[dev]"
       # Maintainability Index (FR-002) only; cyclomatic complexity is the
       # `lint` job's responsibility (see contracts/ci-checks-contract.md).
-      - run: xenon --max-absolute B --max-modules A --max-average A src/
+      # NOTE: xenon only wraps radon's cyclomatic-complexity harvester, not
+      # its Maintainability Index metric, so it cannot enforce this check -
+      # see scripts/check_maintainability.py for why.
+      - run: python scripts/check_maintainability.py src/
 
   typecheck:
     name: typecheck

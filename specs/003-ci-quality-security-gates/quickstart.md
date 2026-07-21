@@ -1,15 +1,15 @@
 # Quickstart: Validating Automated CI Quality & Security Gates
 
 **Prerequisites**: Python 3.9+, a local clone of `machine-calc`, `pip install -e ".[dev]"`
-(once this feature adds the new tool extras to `dev`, e.g., `mypy`, `radon`, `xenon`,
+(once this feature adds the new tool extras to `dev`, e.g., `mypy`, `radon`,
 `bandit`, `pip-audit`).
 
 ## 1. Run each gate locally, exactly as CI will
 
 ```bash
-# Complexity (ruff C90 + xenon/radon MI)
+# Complexity (ruff C90) and Maintainability Index (radon mi)
 ruff check src/ tests/                # includes C90 once added to [tool.ruff.lint].select
-xenon --max-absolute B --max-modules A --max-average A src/
+python scripts/check_maintainability.py src/
 
 # Static type-checking
 mypy src/machine_calc
