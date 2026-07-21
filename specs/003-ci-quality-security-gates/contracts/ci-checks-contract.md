@@ -29,12 +29,18 @@ workflow file rather than duplicating it, adding the `complexity`, `typecheck`,
 
 ## Ruleset bypass contract (resolves FR-008)
 
-- The `main` ruleset's "Require a pull request before merging" rule MAY have a bypass entry
-  for the repository owner (actor-scoped).
-- No other rule in the ruleset (i.e., none of the required status checks above) MAY have a
-  bypass entry for any actor. A failing `complexity`, `typecheck`, `security`,
-  `dependency-scan`, `lint`, `test`, `build`, or `docs` check blocks merge for every actor,
-  including the repository owner.
+- `main` is protected by **two separate GitHub repository rulesets** (not one), because
+  GitHub's `bypass_actors` field is scoped to the ruleset as a whole, not to individual rules
+  within it (confirmed empirically in T022a) — a bypass entry on one rule would otherwise
+  exempt the same actor from every other rule sharing that ruleset.
+  1. **"PR review" ruleset**: contains only the "Require a pull request before merging" rule.
+     MAY have a bypass entry for the repository owner (actor-scoped, `bypass_mode:
+     pull_request`).
+  2. **"status checks" ruleset**: contains only the `required_status_checks` rule, listing
+     every check in the table above (including CodeQL). MUST NOT have a bypass entry for any
+     actor. A failing `complexity`, `typecheck`, `security`, `dependency-scan`, `lint`,
+     `test`, `build`, `docs`, or CodeQL check blocks merge for every actor, including the
+     repository owner — the PR-review ruleset's bypass has no effect on this ruleset.
 
 ## Suppression contract (resolves FR-009)
 

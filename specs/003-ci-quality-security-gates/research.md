@@ -110,23 +110,38 @@ adopted later if custom queries become necessary.
 
 ## 7. Branch-protection bypass scoping (resolves FR-008 / analysis finding C1)
 
-**Decision**: Migrate `main`'s protection from classic branch protection to a GitHub
-**repository ruleset**, with required status checks for all Principle IX gates (plus existing
-lint/test/build/docs checks) and a bypass list scoped to the repository owner for the
-**pull request approval rule only**. Rulesets support per-rule, per-actor bypass, unlike
-classic branch protection's single repo-wide `enforce_admins` toggle.
+**Decision**: Migrate `main`'s protection from classic branch protection to **two GitHub
+repository rulesets** both targeting `main`: (a) a "PR review" ruleset containing only the
+`pull_request` (require-review) rule, with a bypass actor scoped to the repository owner
+(`bypass_mode: pull_request`); and (b) a "status checks" ruleset containing only the
+`required_status_checks` rule for all Principle IX gates (plus existing lint/test/build/docs
+checks), with **no bypass actors at all**. Multiple rulesets targeting the same branch combine
+additively (GitHub enforces the union of all active rulesets), so the owner's bypass on
+ruleset (a) has no effect on ruleset (b)'s status-check requirement.
 
-**Rationale**: Confirmed via research that GitHub repository rulesets (the successor to
-classic branch protection) are available for public repositories on the Free plan, and
-support scoping bypass to specific actors and specific rules (not all-or-nothing), directly
-satisfying FR-008 and closing analysis finding C1 (the current all-or-nothing
-`enforce_admins: false` state).
+**Rationale**: Confirmed via research and **empirically validated in T022a** (disposable test
+branch + two throwaway rulesets + a real scratch PR, using the Statuses API to flip a `lint`
+context between failure/success) that GitHub repository rulesets are available for public
+repositories on the Free plan, and that per-actor bypass scoping is genuinely achievable —
+but **not** as originally described below. **Correction note**: GitHub's `bypass_actors` field
+lives on the *ruleset* object, not on individual rules within it — a bypass actor exempts that
+actor from **every** rule in the ruleset it's attached to, not just one named rule. There is no
+native "bypass this one rule but not that one within the same ruleset" mechanism. The
+originally-planned single ruleset with one rule-specific bypass entry does not exist as
+described; the correct way to achieve FR-008's "bypass review only, never bypass required
+checks" requirement is to split the rules across **two separate rulesets** as described above,
+relying on rulesets combining additively rather than any per-rule bypass field. T022a's
+real-PR test confirmed this split behaves correctly: merge was blocked by a failing `lint`
+status despite the owner's review bypass, and succeeded without review once the status passed.
 
 **Alternatives considered**: Keep classic branch protection and accept the all-or-nothing
 bypass risk — rejected, as it directly contradicts Principle IX's explicit bypass-scoping
 requirement. Re-enabling `enforce_admins: true` on classic protection — rejected, as it would
 re-block the repository owner from merging their own reviewed PRs entirely (the original
-problem this repo already hit with PR #3), not just scope the bypass correctly.
+problem this repo already hit with PR #3), not just scope the bypass correctly. A single
+ruleset with a rule-scoped bypass entry — rejected once T022a's empirical test (and the GitHub
+REST API schema for `bypass_actors`) confirmed this shape does not exist; bypass is always
+ruleset-scoped, not rule-scoped, so splitting into two rulesets is required instead.
 
 ## 8. Rollout strategy for pre-existing code (resolves spec.md FR-011 / Edge Cases)
 
