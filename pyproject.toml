@@ -32,6 +32,7 @@ dev = [
     "pytest-cov>=4.1",
     "ruff>=0.4",
     "black>=24.0",
+    "setuptools>=83.0.0",
     "sphinx>=7.0",
     "mypy>=1.10",
     "radon>=6.0",
