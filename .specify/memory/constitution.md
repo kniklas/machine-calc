@@ -21,7 +21,7 @@ Templates requiring updates:
 Follow-up TODOs:
   - specs/003-ci-quality-security-gates/tasks.md MUST get a new task adding the actual
     build-status and coverage badges to README.md (this amendment fixes the requirement,
-    not yet the implementation); see that feature's Phase 8/Convergence section.
+    not yet the implementation); see that feature's Phase 9 section.
   - README.md must document unit test coverage once the package skeleton exists.
   - GitHub Actions workflows (lint, type-check, complexity, security/CodeQL, test/coverage,
     build, docs, PyPI publish) to be created during implementation; none exist yet as of

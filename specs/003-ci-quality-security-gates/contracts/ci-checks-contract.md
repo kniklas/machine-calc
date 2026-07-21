@@ -17,7 +17,7 @@ finding failed") are satisfiable from the PR's checks list alone.
 | `typecheck` | FR-003 (`mypy`) | push, pull_request | Any new/changed type error in `src/machine_calc` |
 | `security` | FR-004 (`bandit`) | push, pull_request | Any open high/medium-severity finding without a Suppression Record |
 | `dependency-scan` | FR-005 (`pip-audit`) | push, pull_request, schedule (weekly) | Any known CVE in resolved dependencies without a documented risk acceptance |
-| `test` | Existing pytest + coverage (unchanged, ≥90%) | push, pull_request | Any test failure or coverage below threshold |
+| `test` | Existing pytest + coverage (≥90% threshold unchanged); now also exports `coverage.xml` (`--cov-report=xml`) and uploads it via `codecov/codecov-action@v4` so `README.md`'s coverage badge (Constitution Principle VII, Phase 9) stays auto-updating | push, pull_request | Any test failure or coverage below threshold (the Codecov upload step is non-blocking: `fail_ci_if_error: false`) |
 | `build` | Existing package build check (unchanged) | push, pull_request | Build failure |
 | `docs` | Existing Sphinx docs build (unchanged) | push, pull_request | Docs build failure |
 | CodeQL default setup (`Analyze (python)` + `CodeQL` check contexts) | FR-006 | push to `main`, pull_request (GitHub-managed, not a custom job) | New high-confidence alert (per GitHub's own gating, not a custom workflow step); both contexts are required in `main`'s status-checks ruleset (T023/T035/T037) |

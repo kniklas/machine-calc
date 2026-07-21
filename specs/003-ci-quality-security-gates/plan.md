@@ -60,12 +60,12 @@ logic
 | Principle | Gate | Status |
 |---|---|---|
 | I. Code Quality | Linting MUST pass in CI (existing); static type-checking (mypy) MUST be configured and pass in CI | PASS — `mypy` added as a new required job (research.md #3); permissive initial config avoids an unrelated rewrite of existing code |
-| II. Testing Standards | ≥90% coverage on calculation modules, CI-enforced | PASS (unaffected) — this feature adds no calculation logic; existing `pytest --cov --cov-fail-under=90` job is unchanged |
+| II. Testing Standards | ≥90% coverage on calculation modules, CI-enforced | PASS (unaffected) — this feature adds no calculation logic; existing `pytest --cov --cov-fail-under=90` job's threshold is unchanged (Phase 9/T040 added a `coverage.xml` export + Codecov upload step to the same job, for the README coverage badge, but did not change the threshold or test logic) |
 | III. Calculation Robustness & Accuracy | N/A — no calculation logic touched | PASS (not applicable) |
 | IV. Python Packaging & Versioning | New dev dependencies declared explicitly in `pyproject.toml` with version constraints | PASS — `mypy`, `radon`, `xenon`, `bandit`, `pip-audit` added to `dev` extras only, no runtime dependency change |
 | V. Resource-Constrained Compatibility | N/A to the application runtime; CI tooling runs on GitHub-hosted runners, not the constrained target hardware | PASS (not applicable) |
 | VI. Extensibility by Design | N/A — no operation/module architecture change | PASS (not applicable) |
-| VII. Documentation & Publishing | N/A — no new user/developer-facing documentation content beyond this feature's own spec/plan artifacts (README already tracks CI status per Principle VII, unaffected by this feature) | PASS (not applicable) |
+| VII. Documentation & Publishing | N/A at initial planning — no new user/developer-facing documentation content beyond this feature's own spec/plan artifacts (README already tracked CI status per Principle VII) | PASS — Phase 9 (constitution v1.5.0) added this feature's own build-status and Codecov coverage badges to `README.md` per T038-T040, so this row is now directly satisfied rather than N/A |
 | VIII. Internationalization of User-Facing Messages | N/A — no REPL/CLI/error message changes | PASS (not applicable) |
 | IX. Automated Code Quality, Complexity & Security Gates | This feature's entire purpose is implementing Principle IX itself | PASS — every FR in spec.md traces directly to a Principle IX bullet; research.md #1-#8 resolve tool/threshold/rollout/bypass-scoping decisions |
 
