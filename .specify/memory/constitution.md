@@ -2,15 +2,15 @@
 Sync Impact Report
 ==================
 Version change: 1.3.0 → 1.4.0
-Modified principles: none (Principle I expanded with measurable complexity/type-checking rules)
+Modified principles: Principle I (Code Quality) - expanded, not redefined
 Added sections: Principle IX - Automated Code Quality, Complexity & Security Gates
   (cyclomatic complexity and Maintainability Index thresholds via radon/xenon/ruff C90,
   mypy type-checking, bandit static security analysis, pip-audit dependency scanning,
   and GitHub CodeQL MUST run as required status checks on every pull request, including
   the repository owner's own)
 Expanded sections:
-  - Principle I (Code Quality): added explicit complexity/maintainability metrics and
-    static type-checking requirement
+  - Principle I (Code Quality): added a static type-checking (e.g., mypy) requirement;
+    complexity/Maintainability Index metrics live in the new Principle IX below
   - Additional Constraints (Quality Gates): added complexity, type-checking, security,
     and dependency-scanning CI jobs alongside existing lint/test/build/docs jobs
   - Development Workflow (Review Process): clarified that automated Principle IX gates

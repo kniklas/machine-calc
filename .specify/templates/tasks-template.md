@@ -51,8 +51,7 @@ description: "Task list template for feature implementation"
 
 - [ ] T001 Create project structure per implementation plan
 - [ ] T002 Initialize [language] project with [framework] dependencies
-- [ ] T003 [P] Configure linting, formatting, static type-checking (mypy), complexity
-      (radon/xenon, ruff C90), and security (bandit, pip-audit, CodeQL) tooling
+- [ ] T003 [P] Configure linting, formatting, static type-checking (mypy), complexity (radon/xenon, ruff C90), and security (bandit, pip-audit, CodeQL) tooling
 
 ---
 
