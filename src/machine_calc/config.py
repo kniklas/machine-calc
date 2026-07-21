@@ -12,7 +12,7 @@ from pathlib import Path
 try:  # Python 3.11+ ships tomllib in the standard library.
     import tomllib
 except ModuleNotFoundError:  # Python 3.9 / 3.10 fall back to the tomli backport.
-    import tomli as tomllib  # type: ignore[no-redef]
+    import tomli as tomllib  # type: ignore[no-redef]  # tomli is a drop-in tomllib backport; mypy sees this as an invalid redefinition, but it's the intended fallback for Python <3.11
 
 DEFAULT_MAX_DIAMETER_MM = 100.0
 DEFAULT_MAX_DEPTH_MM = 500.0

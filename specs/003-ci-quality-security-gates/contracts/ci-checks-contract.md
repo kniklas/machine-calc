@@ -20,7 +20,7 @@ finding failed") are satisfiable from the PR's checks list alone.
 | `test` | Existing pytest + coverage (unchanged, ≥90%) | push, pull_request | Any test failure or coverage below threshold |
 | `build` | Existing package build check (unchanged) | push, pull_request | Build failure |
 | `docs` | Existing Sphinx docs build (unchanged) | push, pull_request | Docs build failure |
-| CodeQL default setup | FR-006 | push to `main`, pull_request (GitHub-managed, not a custom job) | New high-confidence alert (per GitHub's own gating, not a custom workflow step) |
+| CodeQL default setup (`Analyze (python)` + `CodeQL` check contexts) | FR-006 | push to `main`, pull_request (GitHub-managed, not a custom job) | New high-confidence alert (per GitHub's own gating, not a custom workflow step); both contexts are required in `main`'s status-checks ruleset (T023/T035/T037) |
 
 **Note**: `lint`, `test`, `build`, `docs` already exist as planned (unimplemented) tasks from
 `001-metal-drilling-calc` tasks.md (T037); this feature's plan/tasks extend that same
