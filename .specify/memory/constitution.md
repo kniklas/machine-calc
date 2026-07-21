@@ -1,28 +1,27 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.3.0 → 1.4.0
-Modified principles: Principle I (Code Quality) - expanded, not redefined
-Added sections: Principle IX - Automated Code Quality, Complexity & Security Gates
-  (cyclomatic complexity and Maintainability Index thresholds via radon/xenon/ruff C90,
-  mypy type-checking, bandit static security analysis, pip-audit dependency scanning,
-  and GitHub CodeQL MUST run as required status checks on every pull request, including
-  the repository owner's own)
+Version change: 1.4.0 → 1.5.0
+Modified principles: Principle VII (Documentation & Publishing) - expanded, not redefined
+Added sections: none (new bullet + rationale text under existing Principle VII)
 Expanded sections:
-  - Principle I (Code Quality): added a static type-checking (e.g., mypy) requirement;
-    complexity/Maintainability Index metrics live in the new Principle IX below
-  - Additional Constraints (Quality Gates): added complexity, type-checking, security,
-    and dependency-scanning CI jobs alongside existing lint/test/build/docs jobs
-  - Development Workflow (Review Process): clarified that automated Principle IX gates
-    complement, not replace, human review
+  - Principle VII (Documentation & Publishing): added a requirement that README.md
+    display auto-updating build-status and test-coverage badges/icons near the top of
+    the file (part of specs/003-ci-quality-security-gates), not just a textual coverage
+    figure as previously required
 Removed sections: none
 Templates requiring updates:
-  ✅ .specify/templates/plan-template.md (Constitution Check gate references principles generically; no changes needed)
-  ✅ .specify/templates/tasks-template.md (Setup phase task T003 broadened to reference
-    complexity/type-check/security tooling explicitly)
-  ✅ .specify/templates/spec-template.md (no principle-specific mandatory sections introduced; no changes needed)
+  ✅ .specify/templates/plan-template.md (Constitution Check gate references principles
+    generically; no changes needed)
+  ✅ .specify/templates/tasks-template.md (no principle-specific mandatory task category
+    introduced; badge requirement folds into existing docs/README tasks)
+  ✅ .specify/templates/spec-template.md (no principle-specific mandatory sections
+    introduced; no changes needed)
   ✅ .github/copilot-instructions.md (no agent-specific references requiring updates)
 Follow-up TODOs:
+  - specs/003-ci-quality-security-gates/tasks.md MUST get a new task adding the actual
+    build-status and coverage badges to README.md (this amendment fixes the requirement,
+    not yet the implementation); see that feature's Phase 8/Convergence section.
   - README.md must document unit test coverage once the package skeleton exists.
   - GitHub Actions workflows (lint, type-check, complexity, security/CodeQL, test/coverage,
     build, docs, PyPI publish) to be created during implementation; none exist yet as of
@@ -181,9 +180,18 @@ and that documentation MUST be published automatically.
 - The `README.md` MUST report the current unit test coverage level (target: high or very
   high, per Principle II's minimum) so users and contributors can see test health at a
   glance without digging into CI logs.
+- The `README.md` MUST display, near the top of the file, a build-status badge/icon
+  reflecting the current state of the CI workflow's required checks (pass/fail) and a
+  test-coverage badge/icon reflecting the current coverage percentage, both generated or
+  updated automatically (e.g., via a CI-hosted badge service, a coverage-reporting
+  service, or an equivalent auto-updating badge mechanism) rather than a manually-edited,
+  static image or number that can silently go stale.
 - Rationale: undocumented or inconsistently published documentation is effectively
   unusable documentation; automating generation and publishing removes the risk of docs
-  silently going stale relative to the code.
+  silently going stale relative to the code. At-a-glance build-status and coverage badges
+  give users and contributors an immediate, unmissable, always-current signal of project
+  health directly on the landing page, without requiring them to open CI logs or run
+  coverage tools locally.
 
 ### VIII. Internationalization of User-Facing Messages
 All user-facing text (REPL prompts/output, CLI help, and error messages) MUST be
@@ -298,4 +306,4 @@ recurring pattern, MUST trigger a proposed constitution amendment rather than re
 ad-hoc exceptions. Use `.specify/memory/constitution.md` as the authoritative source for
 runtime development guidance until a dedicated guidance file is introduced.
 
-**Version**: 1.4.0 | **Ratified**: 2026-07-08 | **Last Amended**: 2026-07-21
+**Version**: 1.5.0 | **Ratified**: 2026-07-08 | **Last Amended**: 2026-07-21

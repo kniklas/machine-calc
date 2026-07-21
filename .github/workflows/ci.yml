@@ -91,7 +91,15 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: pip install -e ".[dev]"
-      - run: pytest --cov=machine_calc --cov-report=term-missing --cov-fail-under=90
+      - run: pytest --cov=machine_calc --cov-report=term-missing --cov-report=xml --cov-fail-under=90
+      # Publishes coverage.xml to Codecov so README.md's coverage badge stays
+      # auto-updating (Constitution Principle VII; specs/003-ci-quality-security-gates).
+      # Requires a CODECOV_TOKEN repository secret from https://codecov.io.
+      - uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          fail_ci_if_error: false
 
   build:
     name: build

@@ -1,12 +1,14 @@
 # machine-calc
 
+[![CI](https://github.com/kniklas/machine-calc/actions/workflows/ci.yml/badge.svg)](https://github.com/kniklas/machine-calc/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/kniklas/machine-calc/branch/main/graph/badge.svg)](https://codecov.io/gh/kniklas/machine-calc)
+
 A Python library and interactive command-line tool for metal machining
 calculations, starting with twist-drill drilling parameters (spindle speed,
 feed rate, machining time, torque, and required power).
 
 > **Status**: Early implementation (drilling calculation engine + CLI MVP).
-> Full end-user/developer documentation, coverage badge, and CI/CD
-> automation are tracked in
+> Full end-user/developer documentation and CI/CD automation are tracked in
 > [`specs/001-metal-drilling-calc/tasks.md`](specs/001-metal-drilling-calc/tasks.md)
 > (Polish phase) and will replace this placeholder README.
 

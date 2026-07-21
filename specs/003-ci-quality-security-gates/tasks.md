@@ -219,3 +219,15 @@ Task: "Run pip-audit against current dependency set and catalogue findings"
 
 - [x] T036 Add a trailing rationale comment to the pre-existing `# type: ignore[no-redef]` suppression in `src/machine_calc/config.py` (the `tomli`/`tomllib` fallback import), so it satisfies `contracts/ci-checks-contract.md`'s Suppression contract ("each with a trailing rationale comment") that T010 already claims to have fulfilled for every mypy finding on `main` per FR-009/FR-011 (partial). Fixed: added a rationale comment explaining tomli is the intended tomllib backport for Python <3.11.
 - [x] T037 Reconcile `quickstart.md` §6 with the actual `main-required-status-checks` ruleset (id 19477007): either add the `CodeQL` aggregate check context (confirmed as a real, distinct check-run name on this repo, alongside `Analyze (python)`) to the ruleset's `required_status_checks` list so both GitHub-managed CodeQL checks quickstart.md §6 describes are actually required, or update quickstart.md §6 to accurately describe that only `Analyze (python)` is enforced and why `CodeQL` is intentionally excluded — per `contracts/ci-checks-contract.md`'s CodeQL row and T035 (contradicts). Fixed: added `CodeQL` to the live ruleset's `required_status_checks` (both `Analyze (python)` and `CodeQL` now required on `main`); `contracts/ci-checks-contract.md`'s CodeQL row updated to reflect both contexts.
+
+---
+
+## Phase 9: README build-status & coverage badges (Constitution v1.5.0)
+
+**Goal**: Amend the constitution (Principle VII) to require auto-updating build-status and
+test-coverage badges/icons on `README.md`, and implement them for real, per the user's
+explicit request tying this to `specs/003-ci-quality-security-gates`.
+
+- [x] T038 Amend `.specify/memory/constitution.md` Principle VII (Documentation & Publishing) to require README.md display an auto-updating build-status badge and an auto-updating test-coverage badge near the top of the file, rather than only a textual coverage figure; bump to v1.5.0 (MINOR - expanded existing principle, no new principle added) with an updated Sync Impact Report.
+- [x] T039 Add a real, working build-status badge to `README.md` linking to `.github/workflows/ci.yml`'s native GitHub Actions badge endpoint (`.../actions/workflows/ci.yml/badge.svg`) — zero additional CI infrastructure needed, genuinely auto-updating.
+- [x] T040 Integrate Codecov for an auto-updating coverage badge: add `--cov-report=xml` to the `test` job's pytest invocation, add a `codecov/codecov-action@v4` upload step (`fail_ci_if_error: false` so a not-yet-configured token doesn't break the required `test` check), and add the Codecov badge to `README.md`. **Manual follow-up required from the repository owner** (cannot be automated by this agent): sign in to https://codecov.io with the GitHub account, link the `kniklas/machine-calc` repository, and add the resulting upload token as a `CODECOV_TOKEN` repository secret (Settings → Secrets and variables → Actions) so the badge starts reporting real coverage instead of showing "unknown".
