@@ -1,23 +1,38 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.2.1 → 1.3.0
-Modified principles: none
-Added sections: Principle VIII - Internationalization of User-Facing Messages
-  (REPL/CLI/error messages MUST be sourced from a translatable language
-  file/config with English fallback; application logging MUST always remain
-  in English regardless of active user-facing locale)
-Expanded sections: none
+Version change: 1.3.0 → 1.4.0
+Modified principles: none (Principle I expanded with measurable complexity/type-checking rules)
+Added sections: Principle IX - Automated Code Quality, Complexity & Security Gates
+  (cyclomatic complexity and Maintainability Index thresholds via radon/xenon/ruff C90,
+  mypy type-checking, bandit static security analysis, pip-audit dependency scanning,
+  and GitHub CodeQL MUST run as required status checks on every pull request, including
+  the repository owner's own)
+Expanded sections:
+  - Principle I (Code Quality): added explicit complexity/maintainability metrics and
+    static type-checking requirement
+  - Additional Constraints (Quality Gates): added complexity, type-checking, security,
+    and dependency-scanning CI jobs alongside existing lint/test/build/docs jobs
+  - Development Workflow (Review Process): clarified that automated Principle IX gates
+    complement, not replace, human review
 Removed sections: none
 Templates requiring updates:
-  ✅ .specify/templates/plan-template.md (Constitution Check gate references these principles generically; no changes needed)
-  ✅ .specify/templates/tasks-template.md (task categories are generic enough to accommodate a message-catalog/i18n setup task; no changes needed)
+  ✅ .specify/templates/plan-template.md (Constitution Check gate references principles generically; no changes needed)
+  ✅ .specify/templates/tasks-template.md (Setup phase task T003 broadened to reference
+    complexity/type-check/security tooling explicitly)
   ✅ .specify/templates/spec-template.md (no principle-specific mandatory sections introduced; no changes needed)
-  ✅ .github/prompts/speckit.constitution.prompt.md (no agent-specific references requiring updates)
+  ✅ .github/copilot-instructions.md (no agent-specific references requiring updates)
 Follow-up TODOs:
   - README.md must document unit test coverage once the package skeleton exists.
-  - GitHub Actions workflows (build/test/docs/PyPI publish) to be created during
-    implementation; none exist yet as of this amendment.
+  - GitHub Actions workflows (lint, type-check, complexity, security/CodeQL, test/coverage,
+    build, docs, PyPI publish) to be created during implementation; none exist yet as of
+    this amendment.
+  - Branch protection on `main` MUST be updated to add the new complexity/type-check/
+    security jobs as required status checks once the corresponding workflow is created.
+  - Concrete threshold values (e.g., `ruff` `max-complexity`, `xenon` grade letters) MUST
+    be finalized and recorded in `pyproject.toml`/CI config during the next `/speckit.plan`
+    that touches CI tooling; this amendment fixes the required tools/metrics, not the
+    exact numeric thresholds.
   - specs/001-metal-drilling-calc/plan.md structure should reflect a per-operation
     module boundary (e.g., an `operations/drilling` module) so future operations
     (turning, milling) can be added per this amendment without refactoring shared code.
@@ -40,6 +55,8 @@ All code merged into this repository MUST be readable, maintainable, and consist
 - Linting/formatting tools MUST be configured (e.g., ruff/flake8 + black or an equivalent
   formatter) and MUST pass in CI before merge; style violations are not acceptable
   trade-offs for speed.
+- Static type checking (e.g., `mypy`) MUST be configured and MUST pass in CI; new or
+  changed code MUST NOT introduce additional type errors.
 - Code reviews MUST verify naming clarity, absence of duplicated logic, and that magic
   numbers/constants tied to physical or mathematical meaning are named and explained.
 - Rationale: calculation software is trusted for correctness; unreadable code hides defects
@@ -193,6 +210,36 @@ translatable, while internal application logging MUST always remain in English.
   language ensures maintainers can consistently search, correlate, and debug issues
   regardless of which locale a user runs the application in.
 
+### IX. Automated Code Quality, Complexity & Security Gates (NON-NEGOTIABLE)
+Every pull request MUST be automatically measured against objective complexity,
+maintainability, and security metrics in CI; these gates complement, and do not replace,
+human review.
+- Cyclomatic complexity MUST be measured per function (e.g., `ruff`'s `C90`/mccabe rule
+  with a configured `max-complexity`, or `radon cc`); any function exceeding the
+  configured threshold MUST be refactored or have the exception explicitly justified in
+  the pull request description.
+- Maintainability Index MUST be measured per module (e.g., `radon mi` enforced via
+  `xenon` with a minimum grade threshold); modules dropping below the threshold MUST be
+  flagged for refactoring before merge rather than accumulated as unmanaged technical debt.
+- Static security analysis (e.g., `bandit`) MUST run in CI on every pull request; no
+  high- or medium-severity finding MAY be merged without an explicit, documented
+  suppression rationale in the pull request description.
+- Dependency vulnerability scanning (e.g., `pip-audit`) MUST run in CI on every pull
+  request and on a recurring schedule; known CVEs in direct or transitive dependencies
+  MUST be resolved or explicitly risk-accepted before merge.
+- Continuous static application security testing (SAST) (e.g., GitHub CodeQL) MUST be
+  enabled for the repository; new high-confidence alerts MUST be triaged before the
+  pull request that introduced them is merged.
+- These checks MUST be configured as required status checks on the `main` branch so no
+  pull request — including the repository owner's own — merges without them passing;
+  bypassing required checks (e.g., via administrator override) MUST be limited to the
+  review-approval gate alone, never to these automated quality/security gates.
+- Rationale: subjective code review alone cannot consistently catch complexity growth,
+  latent security defects, or vulnerable dependencies at scale; objective, automated
+  metrics computed identically on every pull request make code quality and security
+  measurable, comparable over time, and enforceable without depending on reviewer
+  availability, expertise, or memory.
+
 ## Additional Constraints (Quality Gates)
 
 - CI MUST run linting, the full automated test suite, and a package build check on every
@@ -202,9 +249,14 @@ translatable, while internal application logging MUST always remain in English.
 - Performance MUST be measured, not assumed: any calculation expected to run on large
   datasets or in tight loops MUST have a benchmark or profiling note before optimization,
   and MUST be evaluated against the legacy-hardware runtime target in Principle V.
-- GitHub Actions MUST automate, for every push/pull request: linting, the full test suite
-  (with coverage reporting), a package build check, and a Sphinx documentation build;
-  all MUST pass before merge.
+- GitHub Actions MUST automate, for every push/pull request: linting, static type
+  checking, the full test suite (with coverage reporting), a package build check, and a
+  Sphinx documentation build; all MUST pass before merge.
+- GitHub Actions MUST automate, for every pull request, the Principle IX gates: cyclomatic
+  complexity/Maintainability Index checks (radon/xenon or equivalent), static security
+  analysis (bandit or equivalent), and dependency vulnerability scanning (pip-audit or
+  equivalent); GitHub CodeQL MUST run continuously as repository-level SAST. All MUST
+  pass before merge, and all MUST be configured as required status checks on `main`.
 - GitHub Actions MUST automatically publish the generated Sphinx documentation to GitHub
   Pages on every successful build of the default branch, keeping user- and developer-facing
   docs continuously up to date.
@@ -219,6 +271,11 @@ translatable, while internal application logging MUST always remain in English.
 - Reviewers MUST explicitly confirm: (1) tests exist and cover edge cases, (2) calculation
   logic is documented with units/sources, (3) no floating-point exact-equality bugs,
   (4) packaging/version metadata is consistent with Principle IV.
+- Automated Principle IX gates (complexity, maintainability, type-checking, static
+  security analysis, dependency scanning, CodeQL) MUST pass as required status checks
+  before merge; reviewers are not required to manually re-derive metrics already computed
+  by these gates, but MUST review and approve any documented exception/suppression raised
+  against them.
 - The `/speckit.analyze` and `/speckit.checklist` workflows SHOULD be used before
   `/speckit.implement` on any feature touching calculation logic, to catch spec/plan gaps
   early rather than during code review.
@@ -241,4 +298,4 @@ recurring pattern, MUST trigger a proposed constitution amendment rather than re
 ad-hoc exceptions. Use `.specify/memory/constitution.md` as the authoritative source for
 runtime development guidance until a dedicated guidance file is introduced.
 
-**Version**: 1.3.0 | **Ratified**: 2026-07-08 | **Last Amended**: 2026-07-10
+**Version**: 1.4.0 | **Ratified**: 2026-07-08 | **Last Amended**: 2026-07-21
