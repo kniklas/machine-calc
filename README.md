@@ -7,6 +7,9 @@ A Python library and interactive command-line tool for metal machining
 calculations, starting with twist-drill drilling parameters (spindle speed,
 feed rate, machining time, torque, and required power).
 
+📖 **[Full generated documentation (Sphinx)](https://kniklas.github.io/machine-calc/)** —
+published automatically to GitHub Pages on every merge to `main`.
+
 > **Status**: Early implementation (drilling calculation engine + CLI MVP).
 > Full end-user/developer documentation and CI/CD automation are tracked in
 > [`specs/001-metal-drilling-calc/tasks.md`](specs/001-metal-drilling-calc/tasks.md)
