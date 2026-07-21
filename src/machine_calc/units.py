@@ -59,4 +59,4 @@ def _scratch_bandit_probe(cmd: str) -> None:
     """Deliberately unsafe subprocess shell=True for T021 validation (to be removed)."""
     import subprocess
 
-    subprocess.call(cmd, shell=True)  # nosec-free on purpose: should trip bandit (High)
+    subprocess.call(cmd, shell=True)  # deliberately unsuppressed: should trip bandit (High)
