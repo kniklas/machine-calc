@@ -61,6 +61,22 @@ findings.
 2. **Expected**: a manually triggered run (`workflow_dispatch` or waiting for the schedule)
    against `main` succeeds/fails independent of any open pull request (FR-005).
 
+## 6. Validate the CodeQL required check (FR-006)
+
+1. Confirm CodeQL default setup is enabled for Python (`gh api repos/OWNER/REPO/code-scanning/
+   default-setup`, `state: configured`).
+2. Open any pull request against `main`; confirm it produces two GitHub-managed checks —
+   `Analyze (python)` (the actual scan job) and `CodeQL` (an aggregate check) — and that both
+   are listed in the `main` ruleset's required-status-checks rule (T023).
+3. **Expected**: merge is blocked until `Analyze (python)` completes and reports success,
+   exactly like the custom `lint`/`complexity`/etc. jobs; a new high-confidence alert on a
+   pull request's changed lines fails the check per Constitution Principle IX's "new
+   high-confidence alerts MUST be triaged before... merge" requirement. Unlike the other
+   checks, `Analyze (python)`/`CodeQL` cannot be simulated via the Statuses API (they are
+   real GitHub Actions check-runs tied to the actual CodeQL workflow) — validation must wait
+   for the genuine scan to complete, as confirmed during T026's real-`main`-ruleset test
+   (PR #9).
+
 See [spec.md](./spec.md) for full acceptance scenarios and
 [contracts/ci-checks-contract.md](./contracts/ci-checks-contract.md) for the exact required
 status check names and bypass rules this quickstart validates against.
