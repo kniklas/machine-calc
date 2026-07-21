@@ -47,3 +47,14 @@ def hp_to_kw(value_hp: float) -> float:
     """Convert horsepower to kilowatts."""
 
     return value_hp / HP_PER_KW
+
+
+def _scratch_type_error_probe() -> int:
+    """Deliberately wrong type annotation for T021 validation (to be removed)."""
+    value: int = "not an int"
+    return value
+
+
+def _scratch_bandit_probe(user_input: str) -> None:
+    """Deliberately unsafe eval() for T021 validation (to be removed)."""
+    eval(user_input)  # nosec-free on purpose: should trip bandit
