@@ -47,3 +47,31 @@ def hp_to_kw(value_hp: float) -> float:
     """Convert horsepower to kilowatts."""
 
     return value_hp / HP_PER_KW
+
+
+def _scratch_over_complex(a, b, c, d, e, f, g, h, i, j, k):
+    """Scratch function for T020: deliberately over cyclomatic-complexity threshold."""
+    total = 0
+    if a:
+        total += 1
+    if b:
+        total += 1
+    if c:
+        total += 1
+    if d:
+        total += 1
+    if e:
+        total += 1
+    if f:
+        total += 1
+    if g:
+        total += 1
+    if h:
+        total += 1
+    if i:
+        total += 1
+    if j:
+        total += 1
+    if k:
+        total += 1
+    return total
