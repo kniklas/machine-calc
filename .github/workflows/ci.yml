@@ -8,6 +8,9 @@ on:
     # Weekly dependency-vulnerability scan, independent of pull request
     # activity (spec.md FR-005; specs/003-ci-quality-security-gates).
     - cron: "0 6 * * 1"
+  # Allows manually re-running the scan (e.g. T033's post-merge validation,
+  # or confirming a fix after a disclosed CVE) without waiting for the cron.
+  workflow_dispatch:
 
 env:
   PYTHON_VERSION: "3.11"
