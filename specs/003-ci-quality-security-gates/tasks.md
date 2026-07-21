@@ -57,8 +57,8 @@ description: "Task list template for feature implementation"
     The CI job (T015) runs in a fresh, isolated GitHub Actions runner
     installing only `pip install -e ".[dev]"`, so it will not reproduce this
     noise; no remediation/suppression needed for `machine-calc` itself.
-- [ ] T014 Create `.github/workflows/ci.yml` with `lint`, `test`, `build`, `docs` (build-only, not publish) jobs per `001-metal-drilling-calc` tasks.md T037 (still unimplemented) — this feature's `complexity`/`typecheck`/`security`/`dependency-scan` jobs (Phase 3-5 below) are added into this same file, not a separate one (plan.md Project Structure; depends on T006); the GitHub Pages publish step (`001-metal-drilling-calc` tasks.md T038) is a distinct job out of scope for this feature and is not affected by these changes
-- [ ] T015 Add a `dependency-scan` job to `.github/workflows/ci.yml` running `pip-audit`, triggered on `pull_request` AND on a weekly `schedule` cron (contracts/ci-checks-contract.md; research.md #5, FR-005; depends on T013, T014)
+- [x] T014 Create `.github/workflows/ci.yml` with `lint`, `test`, `build`, `docs` (build-only, not publish) jobs per `001-metal-drilling-calc` tasks.md T037 (still unimplemented) — this feature's `complexity`/`typecheck`/`security`/`dependency-scan` jobs (Phase 3-5 below) are added into this same file, not a separate one (plan.md Project Structure; depends on T006); the GitHub Pages publish step (`001-metal-drilling-calc` tasks.md T038) is a distinct job out of scope for this feature and is not affected by these changes
+- [x] T015 Add a `dependency-scan` job to `.github/workflows/ci.yml` running `pip-audit`, triggered on `pull_request` AND on a weekly `schedule` cron (contracts/ci-checks-contract.md; research.md #5, FR-005; depends on T013, T014)
 
 **Checkpoint**: `src/machine_calc` passes every new gate cleanly at the CLI level; the base CI workflow file exists with `lint`/`test`/`build`/`docs`/`dependency-scan` jobs. User story phases below add the remaining required-check jobs and the branch-protection/bypass changes.
 
@@ -72,10 +72,10 @@ description: "Task list template for feature implementation"
 
 ### Implementation for User Story 1
 
-- [ ] T016 [P] [US1] Add a `complexity` job to `.github/workflows/ci.yml` running only `xenon --max-absolute B --max-modules A --max-average A src/` (T005) for Maintainability Index (FR-002); the C90 cyclomatic-complexity rule (FR-001, T002) is already enforced by the existing `lint` job's `ruff check` invocation and MUST NOT be re-run here to avoid gating the same rule twice, on `push`/`pull_request` (contracts/ci-checks-contract.md; depends on T008, T014)
-- [ ] T017 [P] [US1] Add a `typecheck` job to `.github/workflows/ci.yml` running `mypy src/machine_calc`, on `push`/`pull_request` (contracts/ci-checks-contract.md; depends on T010, T014)
-- [ ] T018 [P] [US1] Add a `security` job to `.github/workflows/ci.yml` running `bandit -r src -ll`, on `push`/`pull_request` (contracts/ci-checks-contract.md; depends on T012, T014)
-- [ ] T019 [US1] Enable GitHub CodeQL "default setup" for Python via repository Settings → Code security → Code scanning (research.md #6, FR-006) — not a workflow file change, a repository setting
+- [x] T016 [P] [US1] Add a `complexity` job to `.github/workflows/ci.yml` running only `xenon --max-absolute B --max-modules A --max-average A src/` (T005) for Maintainability Index (FR-002); the C90 cyclomatic-complexity rule (FR-001, T002) is already enforced by the existing `lint` job's `ruff check` invocation and MUST NOT be re-run here to avoid gating the same rule twice, on `push`/`pull_request` (contracts/ci-checks-contract.md; depends on T008, T014)
+- [x] T017 [P] [US1] Add a `typecheck` job to `.github/workflows/ci.yml` running `mypy src/machine_calc`, on `push`/`pull_request` (contracts/ci-checks-contract.md; depends on T010, T014)
+- [x] T018 [P] [US1] Add a `security` job to `.github/workflows/ci.yml` running `bandit -r src -ll`, on `push`/`pull_request` (contracts/ci-checks-contract.md; depends on T012, T014)
+- [x] T019 [US1] Enable GitHub CodeQL "default setup" for Python via repository Settings → Code security → Code scanning (research.md #6, FR-006) — not a workflow file change, a repository setting
 - [ ] T020 [US1] Open a scratch pull request per quickstart.md §2 introducing a deliberately over-threshold-complexity function; confirm the `lint` check (ruff C90) fails and clearly identifies the offending function/file (validates FR-001, spec.md Acceptance Scenario 1; depends on T002, T014)
 - [ ] T020a [US1] Open a scratch pull request introducing a module whose Maintainability Index drops below the configured minimum grade without exceeding the cyclomatic-complexity threshold; confirm the `complexity` check (xenon) fails independently of `lint`, clearly identifying the affected module (validates FR-002, spec.md Acceptance Scenario 6; depends on T016)
 - [ ] T021 [US1] Repeat quickstart.md-style validation for `typecheck` (introduce a type error) and `security` (introduce a known-bad pattern, e.g. `eval()`), confirming each failure clearly identifies file/line and cause (validates FR-003/FR-004, spec.md Acceptance Scenarios 2-3; depends on T017, T018); revert all scratch changes afterward
@@ -205,3 +205,10 @@ Task: "Run pip-audit against current dependency set and catalogue findings"
 - T022 (re-enabling `enforce_admins` on classic protection) is a fast, low-risk interim fix
   and SHOULD be done first/early regardless of overall task sequencing, since it directly
   closes the CRITICAL exposure window identified in the constitution consistency analysis
+
+---
+
+## Phase 7: Convergence
+
+- [ ] T034 CRITICAL: Add a PR template / reviewer-checklist requirement that any accepted complexity (FR-001) or security (FR-004) exception be explicitly restated with its written rationale in the pull request description itself — not only as the in-file `# noqa: C901`/`# nosec` suppression comment already required by FR-009/T027/T028 — per Constitution Principle IX (both the complexity and security bullets explicitly require the rationale "in the pull request description") (contradicts)
+- [ ] T035 Add the CodeQL default-setup check to the `main` ruleset's required-status-check list configured in T023 (alongside `lint`, `complexity`, `typecheck`, `security`, `dependency-scan`, `test`, `build`, `docs`), and add a corresponding CodeQL validation scenario to `quickstart.md`, per `contracts/ci-checks-contract.md`'s required-checks table (which already lists CodeQL as a required row) and Constitution Principle IX's "new high-confidence alerts MUST be triaged before... merge" requirement (partial)

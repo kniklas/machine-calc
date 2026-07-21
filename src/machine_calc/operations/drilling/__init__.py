@@ -216,9 +216,11 @@ def _validate_mode_inputs(
                 mode,
             )
 
-    return _error_result(unit_system, mode_error, mode) if (
-        mode_error := validate_mode_arguments(mode, available_power, target_rpm, locale)
-    ) else None
+    return (
+        _error_result(unit_system, mode_error, mode)
+        if (mode_error := validate_mode_arguments(mode, available_power, target_rpm, locale))
+        else None
+    )
 
 
 def _validate_and_prepare(
@@ -253,9 +255,7 @@ def _validate_and_prepare(
         return geometry
     diameter_mm, depth_mm = geometry
 
-    mode_input_error = _validate_mode_inputs(
-        mode, available_power, target_rpm, unit_system, locale
-    )
+    mode_input_error = _validate_mode_inputs(mode, available_power, target_rpm, unit_system, locale)
     if mode_input_error is not None:
         return mode_input_error
 

@@ -69,8 +69,7 @@ MESSAGES: dict[str, str] = {
         "value."
     ),
     "error.infeasible_power_budget": (
-        "No spindle speed keeps the required power within the supplied "
-        "available power budget."
+        "No spindle speed keeps the required power within the supplied " "available power budget."
     ),
     "warning.feasibility": (
         "Required power ({required_kw:.2f} kW) exceeds the available "
