@@ -55,6 +55,8 @@ def _scratch_type_error_probe() -> int:
     return value
 
 
-def _scratch_bandit_probe(user_input: str) -> None:
-    """Deliberately unsafe eval() for T021 validation (to be removed)."""
-    eval(user_input)  # nosec-free on purpose: should trip bandit
+def _scratch_bandit_probe(cmd: str) -> None:
+    """Deliberately unsafe subprocess shell=True for T021 validation (to be removed)."""
+    import subprocess
+
+    subprocess.call(cmd, shell=True)  # nosec-free on purpose: should trip bandit (High)
