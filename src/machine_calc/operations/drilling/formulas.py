@@ -120,7 +120,9 @@ def calculate_drilling_metrics(
     # Spindle speed: n = (vc * 1000) / (pi * D)
     spindle_speed_rpm = (cutting_speed_m_min * 1000) / (math.pi * diameter_mm)
 
-    return calculate_drilling_metrics_at_rpm(diameter_mm, depth_mm, material, tool, spindle_speed_rpm)
+    return calculate_drilling_metrics_at_rpm(
+        diameter_mm, depth_mm, material, tool, spindle_speed_rpm
+    )
 
 
 def calculate_power_constrained_metrics(

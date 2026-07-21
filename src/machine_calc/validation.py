@@ -71,9 +71,7 @@ def validate_tool_present(tool: str | None, locale: str = DEFAULT_LOCALE) -> Err
     return None
 
 
-def validate_target_rpm(
-    target_rpm: float | None, locale: str = DEFAULT_LOCALE
-) -> ErrorInfo | None:
+def validate_target_rpm(target_rpm: float | None, locale: str = DEFAULT_LOCALE) -> ErrorInfo | None:
     """Validate a supplied target spindle RPM (fixed-RPM mode, FR-007).
 
     ``target_rpm`` MUST be a positive, finite number. Zero, negative,

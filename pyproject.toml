@@ -32,7 +32,12 @@ dev = [
     "pytest-cov>=4.1",
     "ruff>=0.4",
     "black>=24.0",
+    "setuptools>=83.0.0",
     "sphinx>=7.0",
+    "mypy>=1.10",
+    "radon>=6.0",
+    "bandit>=1.7",
+    "pip-audit>=2.7",
 ]
 
 [project.scripts]
@@ -57,8 +62,28 @@ line-length = 100
 target-version = "py39"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP"]
+select = ["E", "F", "I", "UP", "C90"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
 
 [tool.black]
 line-length = 100
 target-version = ["py39"]
+
+[tool.mypy]
+files = ["src/machine_calc"]
+warn_return_any = true
+ignore_missing_imports = true
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+# Only surface medium+ severity findings in CI (FR-004); any future named-skip
+# suppressions (`# nosec`) must carry a trailing rationale comment per
+# contracts/ci-checks-contract.md's Suppression contract (FR-009).
+
+# Maintainability Index (FR-002) is enforced via `radon mi`, which has no
+# native pyproject.toml configuration section or CLI failure-threshold flag.
+# Its minimum grade threshold is versioned in scripts/check_maintainability.py
+# (research.md #2; xenon does NOT enforce MI - it only wraps radon's
+# cyclomatic-complexity harvester - see that script's module docstring).

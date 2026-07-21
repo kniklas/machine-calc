@@ -1,0 +1,126 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly dependency-vulnerability scan, independent of pull request
+    # activity (spec.md FR-005; specs/003-ci-quality-security-gates).
+    - cron: "0 6 * * 1"
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -e ".[dev]"
+      # Cyclomatic complexity (FR-001) is enforced here via ruff's C90/mccabe
+      # rule, not in a separate job (specs/003-ci-quality-security-gates
+      # contracts/ci-checks-contract.md).
+      - run: ruff check src/ tests/
+      - run: black --check src/ tests/
+
+  complexity:
+    name: complexity
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -e ".[dev]"
+      # Maintainability Index (FR-002) only; cyclomatic complexity is the
+      # `lint` job's responsibility (see contracts/ci-checks-contract.md).
+      # NOTE: xenon only wraps radon's cyclomatic-complexity harvester, not
+      # its Maintainability Index metric, so it cannot enforce this check -
+      # see scripts/check_maintainability.py for why.
+      - run: python scripts/check_maintainability.py src/
+
+  typecheck:
+    name: typecheck
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -e ".[dev]"
+      - run: mypy src/machine_calc
+
+  security:
+    name: security
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -e ".[dev]"
+      - run: bandit -r src -ll
+
+  dependency-scan:
+    name: dependency-scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -e ".[dev]"
+      - run: pip-audit
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -e ".[dev]"
+      - run: pytest --cov=machine_calc --cov-report=term-missing --cov-report=xml --cov-fail-under=90
+      # Publishes coverage.xml to Codecov so README.md's coverage badge stays
+      # auto-updating (Constitution Principle VII; specs/003-ci-quality-security-gates).
+      # Requires a CODECOV_TOKEN repository secret from https://codecov.io.
+      - uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          fail_ci_if_error: false
+
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install build
+      - run: python -m build
+
+  docs:
+    name: docs
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -e ".[dev]"
+      - run: sphinx-build -b html docs/source docs/_build/html -W

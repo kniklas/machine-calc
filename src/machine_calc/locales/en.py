@@ -46,9 +46,13 @@ MESSAGES: dict[str, str] = {
     "cli.mode.power_constrained": "power-constrained",
     "cli.mode.fixed_rpm": "fixed-rpm",
     "cli.label.power_required": "Available power",
-    "cli.prompt.power_required.invalid": "Please enter a positive numeric value for available power.",
+    "cli.prompt.power_required.invalid": (
+        "Please enter a positive numeric value for available power."
+    ),
     "cli.label.target_rpm": "Target spindle speed",
-    "cli.prompt.target_rpm.invalid": "Please enter a positive numeric value for target spindle speed.",
+    "cli.prompt.target_rpm.invalid": (
+        "Please enter a positive numeric value for target spindle speed."
+    ),
     # --- Validation / structured errors (validation.py, operations.drilling) ---
     "error.invalid_diameter.zero": "Drill diameter must be greater than 0.",
     "error.invalid_diameter.max": "Drill diameter must not exceed {max_diameter_mm:g} mm.",
@@ -65,8 +69,7 @@ MESSAGES: dict[str, str] = {
         "value."
     ),
     "error.infeasible_power_budget": (
-        "No spindle speed keeps the required power within the supplied "
-        "available power budget."
+        "No spindle speed keeps the required power within the supplied " "available power budget."
     ),
     "warning.feasibility": (
         "Required power ({required_kw:.2f} kW) exceeds the available "
