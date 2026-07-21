@@ -14,7 +14,7 @@ CI implementation.
 ## Requirement Completeness
 
 - [x] CHK001 - Are requirements defined for every gate named in Constitution Principle IX (complexity, MI, mypy, bandit, pip-audit, CodeQL), with none left implicit? [Completeness, Spec §FR-001–FR-006]
-- [x] CHK002 - Is a requirement defined for how newly-added dev dependencies (mypy, radon, xenon, bandit, pip-audit) are declared/version-constrained, not just that they exist? [Completeness, Spec §FR-010]
+- [x] CHK002 - Is a requirement defined for how newly-added dev dependencies (mypy, radon, bandit, pip-audit) are declared/version-constrained, not just that they exist? [Completeness, Spec §FR-010] (Note: `xenon` was tried and removed — see research.md #2 Correction note — since it does not enforce Maintainability Index; `radon` alone, via `scripts/check_maintainability.py`, is used instead.)
 - [x] CHK003 - Are requirements defined for what happens to a check's status when a pull request touches no source files (e.g., docs-only change)? [Completeness, Spec Edge Cases]
 - [x] CHK004 - Are requirements defined for how the weekly scheduled dependency scan's failure is surfaced/actioned, given it runs independent of any pull request? [Gap, Spec §FR-005]
 - [x] CHK005 - Is there a requirement covering who/what remediates a CodeQL alert once raised, or is detection alone (FR-006) considered sufficient scope for this feature? [Gap, Spec §FR-006]
@@ -63,7 +63,7 @@ CI implementation.
 ## Dependencies & Assumptions
 
 - [x] CHK029 - Is the assumption that "the repository is public... making rulesets available even without a paid plan" validated, or does it remain an unverified assumption at spec-approval time? [Assumption, Spec Assumptions] *(Note: tasks.md T022a already schedules verification during implementation — confirm this checklist item is satisfied by that task's existence, not by the spec alone.)*
-- [x] CHK030 - Are all five external tools (ruff C90, radon/xenon, mypy, bandit, pip-audit) and the GitHub CodeQL platform feature treated as fixed dependencies whose unavailability/deprecation risk is out of scope, and is that stated explicitly rather than left implicit? [Assumption, Spec Assumptions]
+- [x] CHK030 - Are all five external tools (ruff C90, radon via `scripts/check_maintainability.py`, mypy, bandit, pip-audit) and the GitHub CodeQL platform feature treated as fixed dependencies whose unavailability/deprecation risk is out of scope, and is that stated explicitly rather than left implicit? [Assumption, Spec Assumptions]
 - [x] CHK031 - Does the spec identify its dependency on `001-metal-drilling-calc`'s still-unimplemented CI workflow task (T037) as a prerequisite/co-requisite, or could a reader implement this feature without realizing that base workflow doesn't exist yet? [Dependency, Plan Project Structure, tasks.md T014]
 
 ## Ambiguities & Conflicts
