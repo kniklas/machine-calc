@@ -25,6 +25,7 @@ my-project/
 
 # Docs build output
 docs/build/
+docs/_build/
 
 # Editors
 .vscode/
