@@ -119,6 +119,7 @@ def _resolve_material_and_tool(
     unit_system: UnitSystem,
     locale: str,
     mode: CalculationMode,
+    materials_config_path: str | None = None,
 ):
     """Validate and resolve the material/tool names to their registry entries.
 
@@ -127,6 +128,12 @@ def _resolve_material_and_tool(
     from ``_validate_and_prepare`` to keep it within the cyclomatic
     complexity/Maintainability Index thresholds configured in
     ``pyproject.toml`` (FR-001/FR-002).
+
+    Args:
+        materials_config_path: Optional path to a user-supplied
+            materials/tools configuration file (FR-002 of
+            005-configurable-materials-tools); unrelated to the
+            validation-bounds ``config_path`` (FR-017).
     """
     material_error = validate_material_present(material, locale)
     if material_error:
@@ -136,7 +143,7 @@ def _resolve_material_and_tool(
     if tool_error:
         return _error_result(unit_system, tool_error, mode)
 
-    resolved_material = get_material(material)
+    resolved_material = get_material(material, materials_config_path)
     if resolved_material is None:
         return _error_result(
             unit_system,
@@ -147,7 +154,7 @@ def _resolve_material_and_tool(
             mode,
         )
 
-    resolved_tool = get_tool(tool)
+    resolved_tool = get_tool(tool, materials_config_path)
     if resolved_tool is None:
         return _error_result(
             unit_system,
@@ -234,6 +241,7 @@ def _validate_and_prepare(
     locale: str,
     mode: CalculationMode,
     target_rpm: float | None,
+    materials_config_path: str | None = None,
 ):
     """Validate all inputs and resolve/convert them for calculation.
 
@@ -245,7 +253,9 @@ def _validate_and_prepare(
     """
     config = load_configuration(config_path)
 
-    resolved = _resolve_material_and_tool(material, tool, unit_system, locale, mode)
+    resolved = _resolve_material_and_tool(
+        material, tool, unit_system, locale, mode, materials_config_path
+    )
     if isinstance(resolved, CalculationResult):
         return resolved
     resolved_material, resolved_tool = resolved
@@ -323,6 +333,7 @@ def calculate(
     locale: str = DEFAULT_LOCALE,
     mode: CalculationMode = CalculationMode.STANDARD,
     target_rpm: float | None = None,
+    materials_config_path: str | None = None,
 ) -> CalculationResult:
     """Calculate drilling parameters for the given inputs.
 
@@ -366,6 +377,18 @@ def calculate(
             error) when ``mode is CalculationMode.STANDARD``. Supplying it
             together with ``mode is CalculationMode.POWER_CONSTRAINED`` is
             a ``MODE_CONFLICT`` (FR-009).
+        materials_config_path: Optional path to a user-supplied
+            materials/tools configuration file
+            (``contracts/materials-config-schema.md``) that adds new
+            materials/tools or overrides built-in ones (FR-002 of
+            005-configurable-materials-tools). Unrelated to ``config_path``
+            above, which continues to mean only the validation-bounds file
+            (FR-017). Defaults to ``None`` (bundled defaults only,
+            byte-for-byte identical to pre-feature behavior, FR-014). May
+            raise :class:`machine_calc.registry_config.RegistryConfigError`
+            if the supplied file exists but is malformed or contains a
+            duplicate/invalid entry; a missing/unreadable file is not an
+            error (FR-005) and behaves like ``None``.
 
     Returns:
         A :class:`CalculationResult`. On success, ``error`` is ``None`` and:
@@ -399,6 +422,7 @@ def calculate(
         locale,
         mode,
         target_rpm,
+        materials_config_path,
     )
     if isinstance(prepared, CalculationResult):
         return prepared

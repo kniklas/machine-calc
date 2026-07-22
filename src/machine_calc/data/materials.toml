@@ -1,0 +1,52 @@
+# Bundled default workpiece materials (FR-004 of 001-metal-drilling-calc).
+#
+# Lossless re-encoding of the hard-coded `_MATERIALS` list that used to live
+# in `registry.py` (specs/005-configurable-materials-tools/research.md #4).
+# Reference cutting-speed/feed values are canonical-metric, HSS-baseline
+# figures drawn from widely published machining data (Machinery's Handbook /
+# Sandvik Coromant general-purpose reference ranges for twist drilling); see
+# specs/001-metal-drilling-calc/research.md #4.
+#
+# Schema: specs/005-configurable-materials-tools/contracts/materials-config-schema.md
+
+[[materials]]
+name = "Mild Steel"
+reference_cutting_speed = 25.0
+reference_feed_per_rev = 0.20
+specific_cutting_force = 1900.0
+unit_system = "metric"
+
+[[materials]]
+name = "Stainless Steel"
+reference_cutting_speed = 15.0
+reference_feed_per_rev = 0.15
+specific_cutting_force = 2400.0
+unit_system = "metric"
+
+[[materials]]
+name = "Aluminum"
+reference_cutting_speed = 60.0
+reference_feed_per_rev = 0.25
+specific_cutting_force = 700.0
+unit_system = "metric"
+
+[[materials]]
+name = "Cast Iron"
+reference_cutting_speed = 20.0
+reference_feed_per_rev = 0.20
+specific_cutting_force = 1500.0
+unit_system = "metric"
+
+[[materials]]
+name = "Brass"
+reference_cutting_speed = 45.0
+reference_feed_per_rev = 0.20
+specific_cutting_force = 800.0
+unit_system = "metric"
+
+[[materials]]
+name = "Titanium"
+reference_cutting_speed = 12.0
+reference_feed_per_rev = 0.10
+specific_cutting_force = 2100.0
+unit_system = "metric"

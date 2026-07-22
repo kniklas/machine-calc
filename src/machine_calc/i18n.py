@@ -78,6 +78,23 @@ def get_locale() -> str:
     return DEFAULT_LOCALE
 
 
+def get_raw_locale() -> str:
+    """Return ``MACHINE_CALC_LOCALE`` verbatim, without requiring a bundled catalog.
+
+    Unlike :func:`get_locale`, this does **not** fall back to
+    :data:`DEFAULT_LOCALE` merely because no ``machine_calc.locales.<raw>``
+    message-catalog module exists — it is intended for **data-driven**
+    lookups (e.g. ``WorkpieceMaterial.display_name``/``DrillingTool.
+    display_name``, specs/005-configurable-materials-tools research.md #7)
+    that resolve translations from configuration data, not the message
+    catalog, and so must not be gated on a catalog module's existence.
+    Returns :data:`DEFAULT_LOCALE` only if the environment variable is
+    unset/empty.
+    """
+
+    return os.environ.get(_LOCALE_ENV_VAR, "") or DEFAULT_LOCALE
+
+
 def translate(locale: str, key: str, **kwargs: object) -> str:
     """Look up and format message ``key`` for ``locale``.
 

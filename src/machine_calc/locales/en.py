@@ -75,4 +75,22 @@ MESSAGES: dict[str, str] = {
         "Required power ({required_kw:.2f} kW) exceeds the available "
         "power ({available_kw:.2f} kW)."
     ),
+    # --- Materials/tools configuration file notices/errors (005) ---
+    "notice.materials_config.not_found": (
+        "Materials/tools configuration file {path!r} was not found or is not "
+        "readable; continuing with the built-in defaults."
+    ),
+    "error.materials_config.malformed": (
+        "Materials/tools configuration file {path!r} could not be parsed as "
+        "valid TOML: {details}"
+    ),
+    "error.materials_config.duplicate_entry": (
+        "Materials/tools configuration file {path!r} defines more than one "
+        "{kind} named {name!r}."
+    ),
+    "error.materials_config.invalid_entry": (
+        "Materials/tools configuration file {path!r} has an invalid {kind} "
+        "entry {name!r}: {details}"
+    ),
+    "cli.label.unit_system_suffix": "{name} [{unit_system}]",
 }

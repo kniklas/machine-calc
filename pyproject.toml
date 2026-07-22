@@ -46,6 +46,9 @@ machine-calc = "machine_calc.__main__:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+machine_calc = ["data/*.toml", "operations/drilling/data/*.toml"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--cov=machine_calc --cov-report=term-missing --cov-fail-under=90"
