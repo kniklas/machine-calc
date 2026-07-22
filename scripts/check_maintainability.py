@@ -17,6 +17,7 @@ Usage: python scripts/check_maintainability.py <path> [<path> ...]
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 
@@ -46,12 +47,51 @@ def main(paths: list[str]) -> int:
     findings = json.loads(result.stdout or "{}")
     if not findings:
         print(f"All modules under {paths} meet the Maintainability Index threshold (rank A).")
+        _emit_mi_summary(paths)
         return 0
 
     print("Maintainability Index threshold violations (FR-002):", file=sys.stderr)
     for path, info in findings.items():
         print(f"  {path}: MI={info['mi']:.2f} rank={info['rank']}", file=sys.stderr)
     return 1
+
+
+def _emit_mi_summary(paths: list[str]) -> None:
+    """Write an `mi_summary` line to `$GITHUB_OUTPUT`, if set (research.md #4).
+
+    Re-runs `radon mi -j` *unfiltered* (no `-n`/`-x`) to get every module's
+    rank/MI value -- the passing path above only received the (empty, by
+    definition) set of modules *below* the threshold. Computes the average MI
+    value and worst (alphabetically last, i.e. lowest) per-module rank across
+    all modules. No-op if `GITHUB_OUTPUT` is unset (local/non-CI use), and
+    intentionally best-effort: any failure here must not affect the script's
+    CLI/stdout/exit-code contract for the passing path.
+    """
+    output_path = os.environ.get("GITHUB_OUTPUT")
+    if not output_path:
+        return
+
+    try:
+        result = subprocess.run(
+            ["radon", "mi", "-j", *paths],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            return
+        modules = json.loads(result.stdout or "{}")
+        if not modules:
+            return
+
+        mi_values = [info["mi"] for info in modules.values()]
+        avg_mi = sum(mi_values) / len(mi_values)
+        worst_rank = max(info["rank"] for info in modules.values())
+    except (json.JSONDecodeError, KeyError, ValueError, ZeroDivisionError):
+        return
+
+    with open(output_path, "a", encoding="utf-8") as fh:
+        fh.write(f"mi_summary=avg={avg_mi:.1f} worst={worst_rank}\n")
 
 
 if __name__ == "__main__":

@@ -47,7 +47,13 @@ jobs:
       # NOTE: xenon only wraps radon's cyclomatic-complexity harvester, not
       # its Maintainability Index metric, so it cannot enforce this check -
       # see scripts/check_maintainability.py for why.
-      - run: python scripts/check_maintainability.py src/
+      # `id: mi` lets the `quality-summary` job (specs/004-pr-quality-check-summary)
+      # surface the script's `mi_summary` $GITHUB_OUTPUT line as a job output
+      # below, without a second `radon` invocation (research.md #4).
+      - id: mi
+        run: python scripts/check_maintainability.py src/
+    outputs:
+      mi_summary: ${{ steps.mi.outputs.mi_summary }}
 
   typecheck:
     name: typecheck
@@ -103,6 +109,14 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage.xml
           fail_ci_if_error: false
+      # Surfaces the coverage percentage to the `quality-summary` job
+      # (specs/004-pr-quality-check-summary research.md #3); reuses the
+      # `.coverage` data file the `pytest --cov=...` step above already left
+      # in place, rather than a second coverage computation.
+      - id: coverage
+        run: echo "coverage_pct=$(coverage report --format=total)" >> "$GITHUB_OUTPUT"
+    outputs:
+      coverage_pct: ${{ steps.coverage.outputs.coverage_pct }}
 
   build:
     name: build
@@ -132,6 +146,105 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: docs/_build/html
+
+  # Posts/updates a single consolidated PR comment summarizing every quality
+  # check's result (specs/004-pr-quality-check-summary). Runs after all eight
+  # existing quality-check jobs, even if one of them failed/was cancelled
+  # (`if: always()`), so it can accurately report that outcome instead of
+  # being skipped itself (research.md #2). Restricted to `pull_request` runs
+  # only (FR-006) - never for `push`-to-`main`, `schedule`, or
+  # `workflow_dispatch` runs.
+  quality-summary:
+    name: quality-summary
+    needs: [lint, complexity, typecheck, security, dependency-scan, test, build, docs]
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      # Assembles the Markdown table + overall status into a file, which is
+      # handed to the comment-posting step below via `path:` (research.md
+      # #5). Failures here are left to fail this step normally (not
+      # continue-on-error) since they indicate a bug in this logic, not a
+      # permissions/environment limitation (research.md #6).
+      - name: Build summary
+        id: build-summary
+        env:
+          LINT_RESULT: ${{ needs.lint.result }}
+          COMPLEXITY_RESULT: ${{ needs.complexity.result }}
+          COMPLEXITY_METRIC: ${{ needs.complexity.outputs.mi_summary }}
+          TYPECHECK_RESULT: ${{ needs.typecheck.result }}
+          SECURITY_RESULT: ${{ needs.security.result }}
+          DEPENDENCY_SCAN_RESULT: ${{ needs.dependency-scan.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+          TEST_METRIC: ${{ needs.test.outputs.coverage_pct }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          DOCS_RESULT: ${{ needs.docs.result }}
+        run: |
+          set -euo pipefail
+
+          # status_label STATUS -> a distinct label per success/failure/
+          # cancelled/skipped (contracts/pr-summary-comment-contract.md
+          # Output contract item 1; never collapses skipped/cancelled into a
+          # bare "failed", never omits a row).
+          status_label() {
+            case "$1" in
+              success) echo "✅ success" ;;
+              failure) echo "❌ failure" ;;
+              cancelled) echo "🚫 cancelled" ;;
+              skipped) echo "⏭️ skipped" ;;
+              *) echo "❓ unknown" ;;
+            esac
+          }
+
+          # metric_or_placeholder VALUE -> the metric string, or the
+          # explicit "no metric" placeholder if absent/empty (data-model.md
+          # Quality Check Result; spec.md FR-005, US3 Acceptance Scenario 3).
+          metric_or_placeholder() {
+            if [ -n "$1" ]; then echo "$1"; else echo "—"; fi
+          }
+
+          {
+            echo "<!-- quality-check-summary -->"
+            echo "### Quality Check Summary"
+            echo
+            echo "| Check | Status | Metric |"
+            echo "|---|---|---|"
+            echo "| lint | $(status_label "$LINT_RESULT") | $(metric_or_placeholder "") |"
+            echo "| complexity | $(status_label "$COMPLEXITY_RESULT") | $(metric_or_placeholder "$COMPLEXITY_METRIC") |"
+            echo "| typecheck | $(status_label "$TYPECHECK_RESULT") | $(metric_or_placeholder "") |"
+            echo "| security | $(status_label "$SECURITY_RESULT") | $(metric_or_placeholder "") |"
+            echo "| dependency-scan | $(status_label "$DEPENDENCY_SCAN_RESULT") | $(metric_or_placeholder "") |"
+            echo "| test | $(status_label "$TEST_RESULT") | $(metric_or_placeholder "$TEST_METRIC") |"
+            echo "| build | $(status_label "$BUILD_RESULT") | $(metric_or_placeholder "") |"
+            echo "| docs | $(status_label "$DOCS_RESULT") | $(metric_or_placeholder "") |"
+            echo
+            # Overall status (data-model.md PR Summary Comment.overall_status):
+            # FAIL if any check failed; else cancelled/incomplete if any
+            # check was cancelled; else PASS. A `skipped` check never flips
+            # this by itself (spec.md Assumptions).
+            results="$LINT_RESULT $COMPLEXITY_RESULT $TYPECHECK_RESULT $SECURITY_RESULT $DEPENDENCY_SCAN_RESULT $TEST_RESULT $BUILD_RESULT $DOCS_RESULT"
+            if echo "$results" | grep -qw "failure"; then
+              echo "**Overall status: ❌ FAIL**"
+            elif echo "$results" | grep -qw "cancelled"; then
+              echo "**Overall status: 🚫 CANCELLED**"
+            else
+              echo "**Overall status: ✅ PASS**"
+            fi
+          } > summary.md
+
+      # Posts/updates the single PR comment identified by `header:` (never
+      # more than one per PR, edited in place on every subsequent run -
+      # contracts/pr-summary-comment-contract.md Idempotency contract).
+      # `continue-on-error: true` on this step only (not the whole job) so a
+      # posting failure (e.g. a fork PR's read-only GITHUB_TOKEN) never fails
+      # the job/workflow (FR-008; research.md #6).
+      - name: Post or update PR comment
+        continue-on-error: true
+        uses: marocchino/sticky-pull-request-comment@v3.0.5
+        with:
+          header: quality-check-summary
+          path: summary.md
 
   deploy-docs:
     name: deploy-docs
