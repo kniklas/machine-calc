@@ -73,6 +73,53 @@ The REPL prompts for a calculation mode (`standard`, `power-constrained`,
 asks for a required available power, and `fixed-rpm` asks for a required
 target spindle speed (with an optional advisory available power).
 
+### Configurable materials & tools
+
+The six built-in materials (Mild Steel, Stainless Steel, Aluminum, Cast Iron,
+Brass, Titanium) and three built-in tools (HSS, Cobalt, Carbide) are bundled
+with the package and used automatically with no configuration required.
+
+To add your own materials/tools, or override a built-in tool's factors,
+pass an optional user TOML file to the `machine-calc` console script (CLI
+only — this flag is not available via `python -m machine_calc`):
+
+```bash
+machine-calc --materials-config my-machine-calc.toml
+```
+
+```toml
+# my-machine-calc.toml
+[[materials]]
+name = "Bronze"
+reference_cutting_speed = 45.0    # m/min (or ft/min if unit_system = "imperial")
+reference_feed_per_rev = 0.18     # mm/rev (or in/rev if imperial)
+specific_cutting_force = 750.0    # N/mm^2 (or psi if imperial)
+
+[[tools]]
+name = "Carbide"                  # matches a built-in name -> overrides its factors
+cutting_speed_factor = 3.0
+feed_factor = 1.1
+```
+
+- Entries with a new `name` are **added** alongside the built-in defaults;
+  entries whose `name` matches a built-in material/tool **override** it.
+- `unit_system = "imperial"` (default: `"metric"`) declares that the entry's
+  numeric fields are in imperial units; they are converted to metric
+  automatically and produce identical results to an equivalent metric entry.
+- An optional `[materials.translations]` (or `[tools.translations]`) table
+  maps a locale code (e.g. `fr`) to a translated display name, shown when
+  `MACHINE_CALC_LOCALE` is set accordingly; unset/unsupported locales and
+  entries without a translation fall back to the English `name`.
+- A missing/unreadable `--materials-config` file is a non-fatal notice — the
+  CLI falls back to the bundled defaults. A malformed TOML file or a
+  duplicate material/tool `name` within the file is a fatal, translated
+  error and the CLI exits without starting the REPL.
+
+See [`specs/005-configurable-materials-tools/quickstart.md`](specs/005-configurable-materials-tools/quickstart.md)
+for full runnable scenarios, and
+[`specs/005-configurable-materials-tools/contracts/materials-config-schema.md`](specs/005-configurable-materials-tools/contracts/materials-config-schema.md)
+for the exact TOML schema.
+
 ## Run the tests
 
 ```bash

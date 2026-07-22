@@ -13,14 +13,28 @@ fixed for the entire REPL loop — it is never re-read mid-session.
 
 from __future__ import annotations
 
+import argparse
+
 from machine_calc import CalculationMode, UnitSystem, calculate, list_materials, list_tools
 from machine_calc.config import Configuration
-from machine_calc.i18n import get_locale, translate
+from machine_calc.i18n import get_locale, get_raw_locale, translate
 from machine_calc.logging_setup import configure_logging
+from machine_calc.operations.drilling.tools import DrillingTool, get_tool
+from machine_calc.registry import WorkpieceMaterial, get_material
+from machine_calc.registry_config import RegistryConfigError, load_and_merge
 from machine_calc.units import in_to_mm
 from machine_calc.validation import validate_depth_mm, validate_diameter_mm
 
 _DEFAULT_CONFIG = Configuration()
+
+# Bundled package/resource identifiers, reused (not duplicated) here purely
+# to detect a "missing/unreadable materials-config path" startup notice
+# ahead of the REPL loop (contracts/library-cli-extensions.md "Startup
+# sequence"); the actual parse/merge/validate logic lives in
+# ``registry.py``/``operations/drilling/tools.py``/``registry_config.py``.
+_MATERIALS_BUNDLED_PACKAGE = "machine_calc.data"
+_MATERIALS_BUNDLED_RESOURCE = "materials.toml"
+_MATERIALS_TABLE_KEY = "materials"
 
 UNIT_LABELS = {
     UnitSystem.METRIC: {
@@ -75,6 +89,88 @@ def _prompt_choice(label: str, options: list[str], default: str | None, locale: 
         if raw in options:
             return raw
         print(translate(locale, "cli.prompt.choice.invalid", options=options_display))
+
+
+def _display_label(
+    entry: WorkpieceMaterial | DrillingTool, display_locale: str, message_locale: str
+) -> str:
+    """Build a material/tool prompt option label (User Story 3, 4).
+
+    Displays the translated name (falling back to English, research.md #7),
+    resolved from ``display_locale`` — the *raw* ``MACHINE_CALC_LOCALE``
+    value (:func:`machine_calc.i18n.get_raw_locale`), independent of
+    whether a bundled message catalog exists for it (quickstart.md Scenario
+    4: a data-driven translation is shown even when the message-catalog
+    locale falls back to English). Only when the entry declares a
+    non-default (``"imperial"``) unit system is a unit-system suffix
+    appended (FR-013), translated via ``message_locale`` (the
+    catalog-resolved active locale) — this keeps the bundled, all-metric
+    defaults' prompt labels byte-for-byte identical to
+    pre-``005-configurable-materials-tools`` behavior (FR-014, SC-002).
+    """
+
+    name = entry.display_name(display_locale)
+    if entry.unit_system == "metric":
+        return name
+    return translate(
+        message_locale, "cli.label.unit_system_suffix", name=name, unit_system=entry.unit_system
+    )
+
+
+def _prompt_material_choice(
+    names: list[str],
+    config_path: str | None,
+    default: str | None,
+    locale: str,
+    display_locale: str,
+) -> str:
+    """Prompt for a material, displaying translated name + unit system.
+
+    Resolves the user's selection back to the canonical English ``name``
+    before returning it (research.md #7), the same "label dict /
+    reverse-lookup dict" pattern already used by :func:`_prompt_mode`.
+    """
+
+    materials = {name: get_material(name, config_path) for name in names}
+    labels_by_name = {
+        name: _display_label(material, display_locale, locale)
+        for name, material in materials.items()
+        if material is not None
+    }
+    names_by_label = {label: name for name, label in labels_by_name.items()}
+    options = list(labels_by_name.values())
+    default_label = labels_by_name.get(default) if default else None
+    choice_label = _prompt_choice(
+        translate(locale, "cli.label.material"), options, default_label, locale
+    )
+    return names_by_label[choice_label]
+
+
+def _prompt_tool_choice(
+    names: list[str],
+    config_path: str | None,
+    default: str | None,
+    locale: str,
+    display_locale: str,
+) -> str:
+    """Prompt for a drilling tool, displaying translated name + unit system.
+
+    Mirrors :func:`_prompt_material_choice` for :class:`DrillingTool`.
+    """
+
+    tools = {name: get_tool(name, config_path) for name in names}
+    labels_by_name = {
+        name: _display_label(tool, display_locale, locale)
+        for name, tool in tools.items()
+        if tool is not None
+    }
+    names_by_label = {label: name for name, label in labels_by_name.items()}
+    options = list(labels_by_name.values())
+    default_label = labels_by_name.get(default) if default else None
+    choice_label = _prompt_choice(
+        translate(locale, "cli.label.tool"), options, default_label, locale
+    )
+    return names_by_label[choice_label]
 
 
 def _prompt_number(label: str, unit: str, default: float | None, locale: str) -> float:
@@ -237,18 +333,63 @@ def _display_result(result, labels: dict[str, str], locale: str) -> None:
     print()
 
 
-def run() -> None:
+def _resolve_materials_config(materials_config_path: str | None, locale: str) -> None:
+    """Validate ``materials_config_path`` once at CLI startup and print any notice.
+
+    Raises :class:`SystemExit` (after printing a translated error, no raw
+    traceback) if the file exists but is malformed or invalid
+    (``RegistryConfigError``, FR-007). If the path is missing/unreadable,
+    prints the translated non-fatal notice and returns normally, so the
+    REPL proceeds with bundled defaults only (FR-005). Does nothing if
+    ``materials_config_path`` is ``None`` (contracts/library-cli-extensions.md
+    "Startup sequence").
+    """
+
+    if materials_config_path is None:
+        return
+
+    try:
+        # Triggers the full parse/duplicate/validate/convert path for both
+        # materials and tools, exactly as the REPL loop will use them.
+        list_materials(config_path=materials_config_path)
+        list_tools(config_path=materials_config_path)
+    except RegistryConfigError as exc:
+        print(translate(locale, exc.message_key, **exc.kwargs))
+        raise SystemExit(1) from exc
+
+    result = load_and_merge(
+        _MATERIALS_BUNDLED_PACKAGE,
+        _MATERIALS_BUNDLED_RESOURCE,
+        materials_config_path,
+        _MATERIALS_TABLE_KEY,
+    )
+    if result.notice_key:
+        print(translate(locale, result.notice_key, **dict(result.notice_kwargs)))
+
+
+def run(materials_config_path: str | None = None) -> None:
     """Run the interactive drilling-calculation REPL until the user exits.
 
     Resolves the active locale exactly once, at the start of the session
     (FR-019c); it is not re-read on subsequent loop iterations even if
     ``MACHINE_CALC_LOCALE`` changes in the environment mid-session.
+
+    Args:
+        materials_config_path: Optional path (resolved once at startup from
+            the ``--materials-config`` CLI flag) to a user-supplied
+            materials/tools configuration file. Forwarded, unchanged for
+            the whole session, to every ``list_materials()``/
+            ``list_tools()``/``calculate()`` call in the REPL loop
+            (research.md #3).
     """
 
     locale = get_locale()
+    display_locale = get_raw_locale()
 
-    materials = list_materials()
-    tools = list_tools()
+    _resolve_materials_config(materials_config_path, locale)
+
+    materials = list_materials(config_path=materials_config_path)
+    tools = list_tools(config_path=materials_config_path)
 
     unit_system = UnitSystem.METRIC
     material: str | None = None
@@ -272,10 +413,10 @@ def run() -> None:
             target_rpm = None
             available_power = None
         previous_mode = mode
-        material = _prompt_choice(
-            translate(locale, "cli.label.material"), materials, material, locale
+        material = _prompt_material_choice(
+            materials, materials_config_path, material, locale, display_locale
         )
-        tool = _prompt_choice(translate(locale, "cli.label.tool"), tools, tool, locale)
+        tool = _prompt_tool_choice(tools, materials_config_path, tool, locale, display_locale)
         diameter = _prompt_diameter(labels["diameter"], diameter, unit_system, locale)
         depth = _prompt_depth(labels["depth"], depth, unit_system, locale)
 
@@ -297,6 +438,7 @@ def run() -> None:
             locale=locale,
             mode=mode,
             target_rpm=target_rpm,
+            materials_config_path=materials_config_path,
         )
         _display_result(result, labels, locale)
 
@@ -305,12 +447,30 @@ def run() -> None:
             break
 
 
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Parse CLI arguments (currently just ``--materials-config``, FR-002)."""
+
+    parser = argparse.ArgumentParser(prog="machine-calc")
+    parser.add_argument(
+        "--materials-config",
+        dest="materials_config",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Optional path to a TOML file adding/overriding materials and "
+            "drilling tools (see contracts/materials-config-schema.md)."
+        ),
+    )
+    return parser.parse_args(argv)
+
+
 def main() -> None:
     """Console-script entry point (``machine-calc`` / ``python -m machine_calc``)."""
 
     configure_logging()
+    args = _parse_args()
     try:
-        run()
+        run(materials_config_path=args.materials_config)
     except (KeyboardInterrupt, EOFError):
         print()
 

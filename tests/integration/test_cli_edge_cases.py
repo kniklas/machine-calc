@@ -4,6 +4,7 @@ feasibility-warning display, invalid optional power input, and the
 """
 
 import builtins
+import sys
 
 from machine_calc.cli import main, run
 
@@ -98,6 +99,7 @@ def test_invalid_optional_power_is_ignored(monkeypatch, capsys):
 def test_main_runs_repl_to_completion(monkeypatch, capsys):
     inputs = iter(["metric", "", "Mild Steel", "Carbide", "10", "25", "", "n"])
     monkeypatch.setattr(builtins, "input", lambda _prompt="": next(inputs))
+    monkeypatch.setattr(sys, "argv", ["machine-calc"])
 
     main()
 
@@ -110,6 +112,7 @@ def test_main_handles_keyboard_interrupt(monkeypatch, capsys):
         raise KeyboardInterrupt
 
     monkeypatch.setattr(builtins, "input", _raise_interrupt)
+    monkeypatch.setattr(sys, "argv", ["machine-calc"])
 
     main()  # must not propagate the interrupt
 
