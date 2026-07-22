@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from machine_calc.registry_config import RawRegistryEntry, load_and_merge
+from machine_calc.registry_config import RawRegistryEntry, RegistryConfigError, load_and_merge
 from machine_calc.units import ft_min_to_m_min, in_to_mm, psi_to_n_per_mm2
 
 _BUNDLED_PACKAGE = "machine_calc.data"
@@ -73,13 +73,40 @@ class WorkpieceMaterial:
         return self.translations.get(locale, self.name)
 
 
-def _validate(material: WorkpieceMaterial) -> None:
+def _validate(material: WorkpieceMaterial, source_path: str = _BUNDLED_RESOURCE) -> None:
+    """Validate ``material``'s numeric fields, raising ``RegistryConfigError`` if invalid.
+
+    Args:
+        source_path: The bundled resource name or user-supplied path this
+            material was parsed from (``RawRegistryEntry.source_path``),
+            used to report an accurate error location (FR-007) rather than
+            always pointing at the bundled file.
+    """
+
     if material.reference_cutting_speed_m_min <= 0:
-        raise ValueError(f"{material.name}: reference_cutting_speed_m_min must be positive")
+        raise RegistryConfigError(
+            "error.materials_config.invalid_entry",
+            path=source_path,
+            kind="material",
+            name=material.name,
+            details="reference_cutting_speed_m_min must be positive",
+        )
     if material.reference_feed_per_rev_mm <= 0:
-        raise ValueError(f"{material.name}: reference_feed_per_rev_mm must be positive")
+        raise RegistryConfigError(
+            "error.materials_config.invalid_entry",
+            path=source_path,
+            kind="material",
+            name=material.name,
+            details="reference_feed_per_rev_mm must be positive",
+        )
     if material.specific_cutting_force_kc <= 0:
-        raise ValueError(f"{material.name}: specific_cutting_force_kc must be positive")
+        raise RegistryConfigError(
+            "error.materials_config.invalid_entry",
+            path=source_path,
+            kind="material",
+            name=material.name,
+            details="specific_cutting_force_kc must be positive",
+        )
 
 
 def _to_material(entry: RawRegistryEntry) -> WorkpieceMaterial:
@@ -95,14 +122,20 @@ def _to_material(entry: RawRegistryEntry) -> WorkpieceMaterial:
         try:
             raw_value = float(entry.fields[toml_key])
         except KeyError as exc:
-            from machine_calc.registry_config import RegistryConfigError
-
             raise RegistryConfigError(
                 "error.materials_config.invalid_entry",
-                path=_BUNDLED_RESOURCE,
+                path=entry.source_path or _BUNDLED_RESOURCE,
                 kind="material",
                 name=entry.name,
                 details=f"missing required field {toml_key!r}",
+            ) from exc
+        except (TypeError, ValueError) as exc:
+            raise RegistryConfigError(
+                "error.materials_config.invalid_entry",
+                path=entry.source_path or _BUNDLED_RESOURCE,
+                kind="material",
+                name=entry.name,
+                details=f"field {toml_key!r} must be a number, got {entry.fields[toml_key]!r}",
             ) from exc
         values[dataclass_field] = raw_value
 
@@ -121,7 +154,7 @@ def _to_material(entry: RawRegistryEntry) -> WorkpieceMaterial:
         unit_system=entry.unit_system,
         translations=dict(entry.translations),
     )
-    _validate(material)
+    _validate(material, entry.source_path or _BUNDLED_RESOURCE)
     return material
 
 

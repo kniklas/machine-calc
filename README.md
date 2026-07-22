@@ -80,11 +80,13 @@ Brass, Titanium) and three built-in tools (HSS, Cobalt, Carbide) are bundled
 with the package and used automatically with no configuration required.
 
 To add your own materials/tools, or override a built-in tool's factors,
-pass an optional user TOML file to the `machine-calc` console script (CLI
-only — this flag is not available via `python -m machine_calc`):
+pass an optional user TOML file via `--materials-config`, either through the
+`machine-calc` console script or `python -m machine_calc` (both parse the
+same CLI flag):
 
 ```bash
 machine-calc --materials-config my-machine-calc.toml
+# or: python -m machine_calc --materials-config my-machine-calc.toml
 ```
 
 ```toml

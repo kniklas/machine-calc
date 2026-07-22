@@ -55,28 +55,26 @@ def test_get_tool_returns_expected_entry():
 
 
 def test_material_validate_rejects_non_positive_fields():
-    import pytest
-
     from machine_calc.registry import WorkpieceMaterial
     from machine_calc.registry import _validate as validate_material
+    from machine_calc.registry_config import RegistryConfigError
 
-    with pytest.raises(ValueError):
+    with pytest.raises(RegistryConfigError):
         validate_material(WorkpieceMaterial("Bad", 0, 0.2, 1900.0))
-    with pytest.raises(ValueError):
+    with pytest.raises(RegistryConfigError):
         validate_material(WorkpieceMaterial("Bad", 25.0, 0, 1900.0))
-    with pytest.raises(ValueError):
+    with pytest.raises(RegistryConfigError):
         validate_material(WorkpieceMaterial("Bad", 25.0, 0.2, 0))
 
 
 def test_tool_validate_rejects_non_positive_fields():
-    import pytest
-
     from machine_calc.operations.drilling.tools import DrillingTool
     from machine_calc.operations.drilling.tools import _validate as validate_tool
+    from machine_calc.registry_config import RegistryConfigError
 
-    with pytest.raises(ValueError):
+    with pytest.raises(RegistryConfigError):
         validate_tool(DrillingTool("Bad", 0, 1.0))
-    with pytest.raises(ValueError):
+    with pytest.raises(RegistryConfigError):
         validate_tool(DrillingTool("Bad", 1.0, 0))
 
 
@@ -256,5 +254,38 @@ def test_invalid_entry_raises_registry_config_error(tmp_path):
         reference_cutting_speed = 25.0
         specific_cutting_force = 1900.0
         """)
-    with pytest.raises(RegistryConfigError):
+    with pytest.raises(RegistryConfigError) as exc_info:
         get_material("Incomplete", str(path))
+    # The error must point at the user file that actually defined the
+    # invalid entry, not the bundled materials.toml (Copilot review fix).
+    assert exc_info.value.kwargs["path"] == str(path)
+
+
+def test_invalid_override_entry_reports_user_path_not_bundled(tmp_path):
+    path = tmp_path / "override.toml"
+    path.write_text("""
+        [[materials]]
+        name = "Mild Steel"
+        reference_cutting_speed = -1.0
+        reference_feed_per_rev = 0.2
+        specific_cutting_force = 1900.0
+        """)
+    with pytest.raises(RegistryConfigError) as exc_info:
+        get_material("Mild Steel", str(path))
+    assert exc_info.value.kwargs["path"] == str(path)
+
+
+def test_wrong_type_field_raises_registry_config_error(tmp_path):
+    path = tmp_path / "wrong_type.toml"
+    path.write_text("""
+        [[materials]]
+        name = "Bad Type"
+        reference_cutting_speed = "not-a-number"
+        reference_feed_per_rev = 0.2
+        specific_cutting_force = 1900.0
+        """)
+    with pytest.raises(RegistryConfigError) as exc_info:
+        get_material("Bad Type", str(path))
+    assert exc_info.value.message_key == "error.materials_config.invalid_entry"
+    assert exc_info.value.kwargs["path"] == str(path)
+    assert exc_info.value.kwargs["path"] != "materials.toml"

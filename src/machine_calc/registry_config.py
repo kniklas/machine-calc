@@ -62,12 +62,18 @@ class RawRegistryEntry:
         unit_system: ``"metric"`` or ``"imperial"``; defaults to
             ``"metric"`` when the TOML entry omits the key (FR-011).
         translations: Locale code -> translated display name; may be empty.
+        source_path: The bundled resource name or user-supplied path this
+            entry was parsed from (or, after an override merge, the user
+            path that replaced it). Used by callers (``registry.py``/
+            ``tools.py``) to report accurate ``RegistryConfigError``
+            locations instead of always pointing at the bundled file.
     """
 
     name: str
     fields: dict[str, float]
     unit_system: str = "metric"
     translations: dict[str, str] = field(default_factory=dict)
+    source_path: str = ""
 
 
 def _parse_entries(data: dict[str, Any], table_key: str, path: str) -> list[RawRegistryEntry]:
@@ -108,6 +114,7 @@ def _parse_entries(data: dict[str, Any], table_key: str, path: str) -> list[RawR
                 fields=fields_dict,
                 unit_system=unit_system,
                 translations=translations,
+                source_path=path,
             )
         )
     return entries
@@ -181,6 +188,7 @@ def merge_entries(
             fields=dict(user_entry.fields),
             unit_system=user_entry.unit_system,
             translations=merged_translations,
+            source_path=user_entry.source_path,
         )
 
     return [merged_by_name[name] for name in order]

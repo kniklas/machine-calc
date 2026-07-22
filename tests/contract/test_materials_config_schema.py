@@ -33,8 +33,9 @@ def test_required_fields_and_positivity(tmp_path):
         specific_cutting_force = 1900.0
         """,
     )
-    with pytest.raises(ValueError):
+    with pytest.raises(RegistryConfigError) as exc_info:
         list_materials(config_path=path)
+    assert exc_info.value.kwargs["path"] == path
 
 
 def test_missing_required_field_raises(tmp_path):
@@ -118,8 +119,9 @@ def test_tools_schema_required_fields_and_positivity(tmp_path):
         feed_factor = 1.0
         """,
     )
-    with pytest.raises(ValueError):
+    with pytest.raises(RegistryConfigError) as exc_info:
         list_tools(config_path=path)
+    assert exc_info.value.kwargs["path"] == path
 
 
 def test_user_override_shares_name_with_bundled_is_not_duplicate(tmp_path):

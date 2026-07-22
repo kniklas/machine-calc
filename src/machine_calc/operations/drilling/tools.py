@@ -68,11 +68,32 @@ class DrillingTool:
         return self.translations.get(locale, self.name)
 
 
-def _validate(tool: DrillingTool) -> None:
+def _validate(tool: DrillingTool, source_path: str = _BUNDLED_RESOURCE) -> None:
+    """Validate ``tool``'s numeric fields, raising ``RegistryConfigError`` if invalid.
+
+    Args:
+        source_path: The bundled resource name or user-supplied path this
+            tool was parsed from (``RawRegistryEntry.source_path``), used
+            to report an accurate error location (FR-007) rather than
+            always pointing at the bundled file.
+    """
+
     if tool.cutting_speed_factor <= 0:
-        raise ValueError(f"{tool.name}: cutting_speed_factor must be positive")
+        raise RegistryConfigError(
+            "error.materials_config.invalid_entry",
+            path=source_path,
+            kind="tool",
+            name=tool.name,
+            details="cutting_speed_factor must be positive",
+        )
     if tool.feed_factor <= 0:
-        raise ValueError(f"{tool.name}: feed_factor must be positive")
+        raise RegistryConfigError(
+            "error.materials_config.invalid_entry",
+            path=source_path,
+            kind="tool",
+            name=tool.name,
+            details="feed_factor must be positive",
+        )
 
 
 def _to_tool(entry: RawRegistryEntry) -> DrillingTool:
@@ -90,10 +111,18 @@ def _to_tool(entry: RawRegistryEntry) -> DrillingTool:
         except KeyError as exc:
             raise RegistryConfigError(
                 "error.materials_config.invalid_entry",
-                path=_BUNDLED_RESOURCE,
+                path=entry.source_path or _BUNDLED_RESOURCE,
                 kind="tool",
                 name=entry.name,
                 details=f"missing required field {toml_key!r}",
+            ) from exc
+        except (TypeError, ValueError) as exc:
+            raise RegistryConfigError(
+                "error.materials_config.invalid_entry",
+                path=entry.source_path or _BUNDLED_RESOURCE,
+                kind="tool",
+                name=entry.name,
+                details=f"field {toml_key!r} must be a number, got {entry.fields[toml_key]!r}",
             ) from exc
 
     tool = DrillingTool(
@@ -103,7 +132,7 @@ def _to_tool(entry: RawRegistryEntry) -> DrillingTool:
         unit_system=entry.unit_system,
         translations=dict(entry.translations),
     )
-    _validate(tool)
+    _validate(tool, entry.source_path or _BUNDLED_RESOURCE)
     return tool
 
 

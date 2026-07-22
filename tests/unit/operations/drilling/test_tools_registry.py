@@ -134,5 +134,36 @@ def test_tool_invalid_entry_raises_registry_config_error(tmp_path):
         name = "Incomplete"
         cutting_speed_factor = 2.0
         """)
-    with pytest.raises(RegistryConfigError):
+    with pytest.raises(RegistryConfigError) as exc_info:
         get_tool("Incomplete", str(path))
+    # The error must point at the user file that actually defined the
+    # invalid entry, not the bundled tools.toml (Copilot review fix).
+    assert exc_info.value.kwargs["path"] == str(path)
+
+
+def test_tool_invalid_override_entry_reports_user_path_not_bundled(tmp_path):
+    path = tmp_path / "override.toml"
+    path.write_text("""
+        [[tools]]
+        name = "HSS"
+        cutting_speed_factor = -1.0
+        feed_factor = 1.0
+        """)
+    with pytest.raises(RegistryConfigError) as exc_info:
+        get_tool("HSS", str(path))
+    assert exc_info.value.kwargs["path"] == str(path)
+    assert exc_info.value.kwargs["path"] != "tools.toml"
+
+
+def test_tool_wrong_type_field_raises_registry_config_error(tmp_path):
+    path = tmp_path / "wrong_type.toml"
+    path.write_text("""
+        [[tools]]
+        name = "Bad Type"
+        cutting_speed_factor = "not-a-number"
+        feed_factor = 1.0
+        """)
+    with pytest.raises(RegistryConfigError) as exc_info:
+        get_tool("Bad Type", str(path))
+    assert exc_info.value.message_key == "error.materials_config.invalid_entry"
+    assert exc_info.value.kwargs["path"] == str(path)

@@ -64,6 +64,29 @@ def test_malformed_file_exits_without_traceback(monkeypatch, capsys, tmp_path):
     assert "could not be parsed" in out
 
 
+def test_invalid_positive_value_exits_without_traceback(monkeypatch, capsys, tmp_path):
+    """A non-positive numeric field is caught as a translated fatal error at
+
+    CLI startup, not a raw ``ValueError`` traceback (Copilot review fix:
+    ``_resolve_materials_config`` only handled ``RegistryConfigError``, but
+    ``registry.py``/``tools.py`` used to raise a plain ``ValueError`` for
+    this case)."""
+
+    bad = tmp_path / "bad.toml"
+    bad.write_text("""
+        [[materials]]
+        name = "Bad"
+        reference_cutting_speed = -1.0
+        reference_feed_per_rev = 0.2
+        specific_cutting_force = 1900.0
+        """)
+    with pytest.raises(SystemExit):
+        run(materials_config_path=str(bad))
+    out = capsys.readouterr().out
+    assert "Traceback" not in out
+    assert str(bad) in out
+
+
 def test_valid_override_file_lists_new_material(monkeypatch, capsys, tmp_path):
     config = tmp_path / "my-machine-calc.toml"
     config.write_text("""
