@@ -66,8 +66,7 @@ def test_malformed_file_exits_without_traceback(monkeypatch, capsys, tmp_path):
 
 def test_valid_override_file_lists_new_material(monkeypatch, capsys, tmp_path):
     config = tmp_path / "my-machine-calc.toml"
-    config.write_text(
-        """
+    config.write_text("""
         [[materials]]
         name = "Bronze"
         reference_cutting_speed = 45.0
@@ -78,8 +77,7 @@ def test_valid_override_file_lists_new_material(monkeypatch, capsys, tmp_path):
         name = "Carbide"
         cutting_speed_factor = 3.0
         feed_factor = 1.1
-        """
-    )
+        """)
     inputs = [
         "metric",
         "",
@@ -101,8 +99,7 @@ def test_valid_override_file_lists_new_material(monkeypatch, capsys, tmp_path):
 
 def test_duplicate_name_within_file_rejected(monkeypatch, capsys, tmp_path):
     dup = tmp_path / "dup.toml"
-    dup.write_text(
-        """
+    dup.write_text("""
         [[materials]]
         name = "Bronze"
         reference_cutting_speed = 45.0
@@ -114,8 +111,7 @@ def test_duplicate_name_within_file_rejected(monkeypatch, capsys, tmp_path):
         reference_cutting_speed = 50.0
         reference_feed_per_rev = 0.18
         specific_cutting_force = 750.0
-        """
-    )
+        """)
     with pytest.raises(SystemExit):
         run(materials_config_path=str(dup))
     out = capsys.readouterr().out
@@ -128,8 +124,7 @@ def test_duplicate_name_within_file_rejected(monkeypatch, capsys, tmp_path):
 
 def test_translated_name_shown_for_active_locale(monkeypatch, capsys, tmp_path):
     config = tmp_path / "translations.toml"
-    config.write_text(
-        """
+    config.write_text("""
         [[materials]]
         name = "Mild Steel"
         reference_cutting_speed = 25.0
@@ -138,8 +133,7 @@ def test_translated_name_shown_for_active_locale(monkeypatch, capsys, tmp_path):
 
         [materials.translations]
         fr = "Acier doux"
-        """
-    )
+        """)
     monkeypatch.setenv("MACHINE_CALC_LOCALE", "fr")
     i18n.clear_catalog_cache()
     inputs = iter(
@@ -167,8 +161,7 @@ def test_translated_name_shown_for_active_locale(monkeypatch, capsys, tmp_path):
 
 def test_unsupported_locale_falls_back_to_english_name(monkeypatch, capsys, tmp_path):
     config = tmp_path / "translations.toml"
-    config.write_text(
-        """
+    config.write_text("""
         [[materials]]
         name = "Mild Steel"
         reference_cutting_speed = 25.0
@@ -177,8 +170,7 @@ def test_unsupported_locale_falls_back_to_english_name(monkeypatch, capsys, tmp_
 
         [materials.translations]
         fr = "Acier doux"
-        """
-    )
+        """)
     monkeypatch.setenv("MACHINE_CALC_LOCALE", "xx-no-catalog")
     i18n.clear_catalog_cache()
     # No translation exists for "xx-no-catalog" -> the material prompt's
@@ -198,8 +190,7 @@ def test_imperial_declared_material_matches_metric_equivalent_metric_mode(
     monkeypatch, capsys, tmp_path
 ):
     config = tmp_path / "imperial.toml"
-    config.write_text(
-        """
+    config.write_text("""
         [[materials]]
         name = "Bronze Imperial"
         reference_cutting_speed = 250.0
@@ -212,8 +203,7 @@ def test_imperial_declared_material_matches_metric_equivalent_metric_mode(
         reference_cutting_speed = 76.2
         reference_feed_per_rev = 0.2032
         specific_cutting_force = 896.3
-        """
-    )
+        """)
     from machine_calc import calculate
 
     imperial_result = calculate(

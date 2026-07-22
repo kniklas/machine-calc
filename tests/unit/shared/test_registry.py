@@ -112,15 +112,13 @@ def test_get_material_zero_config_none_path_matches_no_config_path():
 
 def test_material_override_takes_effect(tmp_path):
     path = tmp_path / "override.toml"
-    path.write_text(
-        """
+    path.write_text("""
         [[materials]]
         name = "Mild Steel"
         reference_cutting_speed = 28.0
         reference_feed_per_rev = 0.20
         specific_cutting_force = 1900.0
-        """
-    )
+        """)
     overridden = get_material("Mild Steel", str(path))
     assert overridden is not None
     assert math.isclose(overridden.reference_cutting_speed_m_min, 28.0, rel_tol=1e-9)
@@ -131,15 +129,13 @@ def test_material_override_takes_effect(tmp_path):
 
 def test_material_append_new_name(tmp_path):
     path = tmp_path / "add.toml"
-    path.write_text(
-        """
+    path.write_text("""
         [[materials]]
         name = "Bronze"
         reference_cutting_speed = 45.0
         reference_feed_per_rev = 0.18
         specific_cutting_force = 750.0
-        """
-    )
+        """)
     names = list_materials(config_path=str(path))
     assert "Bronze" in names
     assert "Mild Steel" in names
@@ -148,15 +144,13 @@ def test_material_append_new_name(tmp_path):
 
 def test_material_unaffected_built_ins_untouched(tmp_path):
     path = tmp_path / "override.toml"
-    path.write_text(
-        """
+    path.write_text("""
         [[materials]]
         name = "Mild Steel"
         reference_cutting_speed = 28.0
         reference_feed_per_rev = 0.20
         specific_cutting_force = 1900.0
-        """
-    )
+        """)
     aluminum = get_material("Aluminum", str(path))
     assert aluminum is not None
     assert math.isclose(aluminum.reference_cutting_speed_m_min, 60.0, rel_tol=1e-9)
@@ -186,8 +180,7 @@ def test_display_name_falls_back_to_english_when_no_translations():
 
 def test_translation_merge_preserves_untouched_locale(tmp_path):
     path = tmp_path / "translations.toml"
-    path.write_text(
-        """
+    path.write_text("""
         [[materials]]
         name = "Mild Steel"
         reference_cutting_speed = 25.0
@@ -196,8 +189,7 @@ def test_translation_merge_preserves_untouched_locale(tmp_path):
 
         [materials.translations]
         de = "Weichstahl"
-        """
-    )
+        """)
     material = get_material("Mild Steel", str(path))
     assert material is not None
     assert material.translations.get("de") == "Weichstahl"
@@ -208,16 +200,14 @@ def test_translation_merge_preserves_untouched_locale(tmp_path):
 
 def test_imperial_declared_material_converts_to_expected_metric(tmp_path):
     path = tmp_path / "imperial.toml"
-    path.write_text(
-        """
+    path.write_text("""
         [[materials]]
         name = "Bronze Imperial"
         reference_cutting_speed = 250.0
         reference_feed_per_rev = 0.008
         specific_cutting_force = 130000.0
         unit_system = "imperial"
-        """
-    )
+        """)
     material = get_material("Bronze Imperial", str(path))
     assert material is not None
     assert material.unit_system == "imperial"
@@ -228,8 +218,7 @@ def test_imperial_declared_material_converts_to_expected_metric(tmp_path):
 
 def test_imperial_declared_material_matches_metric_authored_equivalent(tmp_path):
     path = tmp_path / "imperial.toml"
-    path.write_text(
-        """
+    path.write_text("""
         [[materials]]
         name = "Bronze Imperial"
         reference_cutting_speed = 250.0
@@ -242,8 +231,7 @@ def test_imperial_declared_material_matches_metric_authored_equivalent(tmp_path)
         reference_cutting_speed = 76.2
         reference_feed_per_rev = 0.2032
         specific_cutting_force = 896.3
-        """
-    )
+        """)
     imperial = get_material("Bronze Imperial", str(path))
     metric = get_material("Bronze Metric", str(path))
     assert imperial is not None and metric is not None
@@ -262,13 +250,11 @@ def test_imperial_declared_material_matches_metric_authored_equivalent(tmp_path)
 
 def test_invalid_entry_raises_registry_config_error(tmp_path):
     path = tmp_path / "missing_field.toml"
-    path.write_text(
-        """
+    path.write_text("""
         [[materials]]
         name = "Incomplete"
         reference_cutting_speed = 25.0
         specific_cutting_force = 1900.0
-        """
-    )
+        """)
     with pytest.raises(RegistryConfigError):
         get_material("Incomplete", str(path))

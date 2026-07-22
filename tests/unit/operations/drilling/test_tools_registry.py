@@ -50,14 +50,12 @@ def test_tool_registry_names_unique_and_positive():
 
 def test_tool_override_takes_effect(tmp_path):
     path = tmp_path / "override.toml"
-    path.write_text(
-        """
+    path.write_text("""
         [[tools]]
         name = "Carbide"
         cutting_speed_factor = 3.0
         feed_factor = 1.1
-        """
-    )
+        """)
     overridden = get_tool("Carbide", str(path))
     assert overridden is not None
     assert math.isclose(overridden.cutting_speed_factor, 3.0, rel_tol=1e-9)
@@ -66,14 +64,12 @@ def test_tool_override_takes_effect(tmp_path):
 
 def test_tool_append_new_name(tmp_path):
     path = tmp_path / "add.toml"
-    path.write_text(
-        """
+    path.write_text("""
         [[tools]]
         name = "Ceramic"
         cutting_speed_factor = 4.0
         feed_factor = 1.0
-        """
-    )
+        """)
     names = list_tools(config_path=str(path))
     assert "Ceramic" in names
     assert "HSS" in names
@@ -82,14 +78,12 @@ def test_tool_append_new_name(tmp_path):
 
 def test_tool_unaffected_built_ins_untouched(tmp_path):
     path = tmp_path / "override.toml"
-    path.write_text(
-        """
+    path.write_text("""
         [[tools]]
         name = "Carbide"
         cutting_speed_factor = 3.0
         feed_factor = 1.1
-        """
-    )
+        """)
     hss = get_tool("HSS", str(path))
     assert hss is not None
     assert math.isclose(hss.cutting_speed_factor, 1.0, rel_tol=1e-9)
@@ -118,15 +112,13 @@ def test_tool_display_name_falls_back_to_english_when_no_translations():
 
 def test_tool_imperial_unit_system_accepted_but_no_conversion(tmp_path):
     path = tmp_path / "imperial.toml"
-    path.write_text(
-        """
+    path.write_text("""
         [[tools]]
         name = "Imperial Tool"
         cutting_speed_factor = 2.0
         feed_factor = 1.0
         unit_system = "imperial"
-        """
-    )
+        """)
     tool = get_tool("Imperial Tool", str(path))
     assert tool is not None
     assert tool.unit_system == "imperial"
@@ -137,12 +129,10 @@ def test_tool_imperial_unit_system_accepted_but_no_conversion(tmp_path):
 
 def test_tool_invalid_entry_raises_registry_config_error(tmp_path):
     path = tmp_path / "missing_field.toml"
-    path.write_text(
-        """
+    path.write_text("""
         [[tools]]
         name = "Incomplete"
         cutting_speed_factor = 2.0
-        """
-    )
+        """)
     with pytest.raises(RegistryConfigError):
         get_tool("Incomplete", str(path))
