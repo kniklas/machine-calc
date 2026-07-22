@@ -15,6 +15,15 @@ on:
 env:
   PYTHON_VERSION: "3.11"
 
+# Least-privilege default GITHUB_TOKEN scope for every job below that does
+# not define its own `permissions:` block (CodeQL actions/missing-workflow-
+# permissions). Only `quality-summary` (needs pull-requests: write to post
+# its comment) and `deploy-docs` (needs pages: write / id-token: write)
+# require broader scopes and already declare their own job-level
+# `permissions:`, which takes precedence over this default.
+permissions:
+  contents: read
+
 jobs:
   lint:
     name: lint
