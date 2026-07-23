@@ -127,6 +127,25 @@ jobs:
     outputs:
       coverage_pct: ${{ steps.coverage.outputs.coverage_pct }}
 
+  # Informational-only legacy-hardware time/memory budget signal
+  # (specs/006-legacy-hardware-performance-tests). Separate from `test`;
+  # never blocks merges (`continue-on-error: true` below) and is
+  # deliberately excluded from `quality-summary`'s `needs:` list and from
+  # any `outputs:` it would otherwise surface, per
+  # contracts/ci-performance-job-contract.md.
+  performance:
+    name: performance
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -e ".[dev]"
+      - run: MACHINE_CALC_RUN_PERFORMANCE_TESTS=1 pytest tests/performance/ -m performance -p no:cacheprovider --no-cov
+        continue-on-error: true
+
   build:
     name: build
     runs-on: ubuntu-latest
