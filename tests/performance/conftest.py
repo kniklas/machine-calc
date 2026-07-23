@@ -17,6 +17,8 @@ import os
 
 import pytest
 
+from . import results
+
 _TRUTHY_VALUES = {"1", "true", "yes", "on"}
 
 
@@ -38,3 +40,22 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     for item in items:
         if "tests/performance/" in str(item.fspath).replace(os.sep, "/"):
             item.add_marker(skip_marker)
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    """Write the run's Suite Run Summary JSON (T028/T028b), so a subsequent
+    CI step (outside this pytest process) can compute the `status_label`/
+    `metric` outputs surfaced to `quality-summary`, without depending on
+    `continue-on-error`'s always-`success` job result
+    (contracts/ci-performance-job-contract.md Non-goals).
+
+    Only writes when the opt-in suite actually ran and recorded at least one
+    report — a bare/default `pytest` invocation (opt-in disabled) never
+    touches this file, so it has no effect on the existing gated suite.
+    """
+
+    if not _opt_in_enabled():
+        return
+    if not results.all_reports():
+        return
+    results.write_summary()

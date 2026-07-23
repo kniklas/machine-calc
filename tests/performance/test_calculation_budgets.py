@@ -28,7 +28,7 @@ from machine_calc.operations.drilling.formulas import (
 from machine_calc.operations.drilling.tools import get_tool
 from machine_calc.registry import get_material
 
-from . import budgets, harness
+from . import budgets, harness, results
 
 _MATERIAL = get_material("Mild Steel")
 _TOOL = get_tool("Carbide")
@@ -86,6 +86,7 @@ def test_calculation_meets_legacy_hardware_budget(case: harness.PerformanceTestC
     """
 
     report = harness.run_case(case)
+    results.record(report)
 
     print(
         f"[performance] {report.case_name}: "
