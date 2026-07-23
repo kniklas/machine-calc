@@ -309,3 +309,24 @@ With multiple contributors, after Foundational (Phase 2) is merged:
   (plan.md Testing section)
 - Commit after each task or logical group
 - Stop at any checkpoint to validate a story independently
+
+---
+
+## Follow-up: Performance check integration (FR-010/FR-011)
+
+- [ ] T013 [depends: specs/006-legacy-hardware-performance-tests T028-T032] Once the `performance`
+  job (specs/006-legacy-hardware-performance-tests) exposes its `status_label`/`metric` outputs
+  and is added to this job's `needs:` list, verify the `quality-summary` comment's new
+  `performance` row is consistent with FR-010's Clarifications (2026-07-23): (1) the metric
+  column shows a single worst-case-time/worst-case-memory string with both budgets, e.g.
+  `0.42s / 58MB (budgets: 1.0s/128MB)`, never a per-case breakdown; (2) that string falls back to
+  the standard `—` "no metric available" placeholder (FR-005) only when the row is skipped,
+  cancelled, or degraded before any measurement was produced — never on a genuine measured
+  failure; (3) the status column can render a distinct `⚠️ degraded` label, separate from
+  pass/fail/skipped/cancelled; (4) `⚠️ degraded` is triggered by a simple boolean check of
+  whether either the single-core or memory-ceiling enforcement flag was inactive for that run,
+  independent of the measured pass/fail outcome; and (5) the row's status — including
+  `⚠️ degraded` — is excluded from the overall pass/fail computation exactly like a `skipped`
+  check would be (FR-011) — this task is tracked here for spec-004-side traceability; the actual
+  `.github/workflows/ci.yml` edits are performed once, under specs/006's tasks T028-T032, not
+  duplicated in both feature branches' implementation work.

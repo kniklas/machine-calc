@@ -38,6 +38,35 @@ a distinct, separately-run performance test suite; it does not modify the existi
 behavior, thresholds, or gating status, and it does not change any calculation logic, public API,
 or CLI behavior.
 
+## Clarifications
+
+### Session 2026-07-23
+
+- Q: What exactly should the "achieved key metric" string in the summary-comment row (FR-013)
+  contain? → A: A single worst-case value across all performance cases for both time and memory,
+  plus their budgets, e.g. `0.42s / 58MB (budgets: 1.0s/128MB)`.
+- Q: When the CI performance job is skipped, cancelled, or fully degraded (errors before
+  producing any per-case measurements), what should the achieved key metric string show? → A: The
+  standard `—` "no metric available" placeholder already defined for other checks (FR-005 of
+  specs/004-pr-quality-check-summary), not a bespoke text or a stale prior-run value.
+- Q: FR-013 enumerates the performance row's possible results as pass, fail, degraded/best-effort,
+  skipped, or cancelled — one more state than every other row. Should the summary comment render
+  a distinct "degraded" status label, or fold degraded runs into pass/fail? → A: Render a distinct
+  `⚠️ degraded` status label, separate from pass/fail/skipped/cancelled, so a within-budget-but-
+  unenforced run is visibly different from a fully-enforced pass.
+- Q: When the job produces real measurements but at least one case exceeds its budget (a genuine
+  fail, not skip/cancel/degraded), should the metric string show the actual worst-case time/memory
+  values, or fall back to the `—` placeholder (as `complexity` does on failure)? → A: Always show
+  the real measured worst-case values whenever measurements were actually produced — on pass,
+  fail, and enforced-but-failing runs; only skipped/cancelled/no-measurement cases fall back to
+  `—`.
+- Q: The suite tracks single-core enforcement and memory-ceiling enforcement as two independent
+  flags (FR-010). Should the `⚠️ degraded` label trigger whenever *either* mechanism was inactive
+  for that run, or only when the inactive mechanism could plausibly have hidden a failure? → A:
+  Trigger `⚠️ degraded` whenever either single-core or memory-ceiling enforcement was inactive for
+  that run, regardless of the measured pass/fail outcome — a simple boolean AND of the two
+  enforcement flags, with no speculative reasoning about what it might have hidden.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Developer verifies a calculation meets the legacy-hardware time/memory budget before opening a PR (Priority: P1)
@@ -219,6 +248,29 @@ calculation) and confirm the failure output names the calculation, the failed di
   `src/machine_calc/operations/` can be added to the suite's coverage without redesigning the
   suite, though adding coverage for any specific not-yet-existing operation is out of scope for
   this feature.
+- **FR-013**: The CI performance job's outcome and achieved key metric MUST be surfaced as a
+  distinct row in the pull-request quality-check summary comment defined by
+  specs/004-pr-quality-check-summary, in addition to (not instead of) the job's own visible
+  log/step output — consistent with FR-008, this row's result MUST NOT be counted when that
+  comment computes its overall pass/fail status. Per Clarifications (2026-07-23), the achieved
+  key metric MUST be a single string reporting the worst-case (highest) measured wall-clock time
+  and the worst-case (highest) measured peak memory across all of the suite's calculation cases,
+  together with the time and memory budgets they were checked against, e.g.
+  `0.42s / 58MB (budgets: 1.0s/128MB)` — not a per-case breakdown. When the job is skipped,
+  cancelled, or fully degraded before any per-case measurements are produced, the metric MUST show
+  the standard `—` "no metric available" placeholder used by other checks (FR-005 of
+  specs/004-pr-quality-check-summary) rather than a bespoke string or a stale prior-run value.
+  This row's status label MUST render a distinct `⚠️ degraded` state — separate from the
+  pass/fail/skipped/cancelled labels used elsewhere in the comment — when the run completed
+  without full single-core/memory enforcement (per FR-009/FR-010), so a within-budget-but-
+  unenforced result is not visually indistinguishable from a fully-enforced pass. Whenever the
+  run actually produces per-case measurements — whether the overall outcome is pass, fail
+  (budget exceeded), or degraded — the metric string MUST show the real measured worst-case
+  time/memory values; only a skipped, cancelled, or no-measurement run falls back to the `—`
+  placeholder. The `⚠️ degraded` label MUST trigger whenever *either* the single-core enforcement
+  flag or the memory-ceiling enforcement flag (FR-010) was inactive for that run — a simple
+  boolean condition evaluated independently of the measured pass/fail outcome — rather than any
+  attempt to infer whether the missing enforcement could plausibly have hidden a failure.
 
 ### Key Entities
 

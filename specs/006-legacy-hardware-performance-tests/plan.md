@@ -18,7 +18,11 @@ best-effort, clearly-labeled mode elsewhere (e.g. macOS/Windows dev machines). T
 entirely outside the existing default/blocking `pytest` invocation (via a dedicated directory plus
 a registered `performance` marker with default auto-skip) so it adds zero overhead or behavior
 change to the existing gated test suite, and is wired into CI as a new, separate,
-`continue-on-error: true` job that never affects required/blocking status checks. No existing
+`continue-on-error: true` job that never affects required/blocking status checks. Per FR-013's
+Clarifications (2026-07-23), that job's result is also surfaced to `quality-summary`
+(specs/004-pr-quality-check-summary) as a single worst-case time/memory metric string plus a
+distinct `⚠️ degraded` status label — see `contracts/ci-performance-job-contract.md` and
+`data-model.md`'s Suite Run Summary for the exact format and trigger condition. No existing
 calculation logic, public API, CLI behavior, or existing test file is modified.
 
 ## Technical Context

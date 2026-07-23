@@ -8,6 +8,34 @@
 
 **Input**: User description: "As part of the CI build process for each pull request, generate a summary of the results of each quality check (e.g., lint, code complexity/maintainability, type checking, security/bandit, test coverage) and post/update this summary as a single comment on the pull request. The comment should be updated in place on re-runs (not duplicated), should clearly show pass/fail status per check, and should include key metrics where available (e.g., test coverage percentage, maintainability index / complexity results). This applies only to pull_request-triggered CI runs, not push-to-main or scheduled runs."
 
+## Clarifications
+
+### Session 2026-07-23
+
+- Q: What exactly should the "achieved key metric" string in the performance row (FR-010) contain?
+  → A: A single worst-case value across all performance cases for both time and memory, plus
+  their budgets, e.g. `0.42s / 58MB (budgets: 1.0s/128MB)` — matching
+  specs/006-legacy-hardware-performance-tests FR-013's Clarifications.
+- Q: When the performance job is skipped, cancelled, or fully degraded, what should the
+  performance row's metric show? → A: The standard `—` "no metric available" placeholder already
+  used by other checks per FR-005, not a bespoke text or a stale prior-run value.
+- Q: FR-010 enumerates the performance row's possible results as pass, fail, degraded/best-effort,
+  skipped, or cancelled — one more state than every other row (which only ever show pass, fail,
+  skipped, or cancelled). Should the summary comment render a distinct "degraded" status label, or
+  fold degraded runs into pass/fail? → A: Render a distinct `⚠️ degraded` status label, separate
+  from pass/fail/skipped/cancelled, so a within-budget-but-unenforced run is visibly different
+  from a fully-enforced pass.
+- Q: When the job produces real measurements but at least one case exceeds its budget (a genuine
+  fail), should the metric string show the actual worst-case values, or fall back to the `—`
+  placeholder (as `complexity` does on failure)? → A: Always show the real measured worst-case
+  values whenever measurements were actually produced — on pass, fail, and enforced-but-failing
+  runs; only skipped/cancelled/no-measurement cases fall back to `—`.
+- Q: Should the `⚠️ degraded` label trigger whenever *either* single-core or memory-ceiling
+  enforcement was inactive for that run, or only when the inactive mechanism could plausibly have
+  hidden a failure? → A: Trigger `⚠️ degraded` whenever either enforcement mechanism was inactive
+  for that run, regardless of the measured pass/fail outcome — a simple boolean AND of the two
+  enforcement flags, with no speculative reasoning about what it might have hidden.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - See consolidated check results on a pull request (Priority: P1)
@@ -136,12 +164,46 @@ just pass/fail labels, for the checks that produce such metrics.
 - **FR-009**: The summary comment MUST be identifiable by the system as belonging to this feature
   (e.g., via a stable marker) so that it can be reliably located and updated across runs,
   distinguishing it from other comments on the pull request.
+- **FR-010**: The summary comment MUST also include a row for the informational legacy-hardware
+  performance test suite (specs/006-legacy-hardware-performance-tests), reporting its result
+  (pass, fail, degraded/best-effort, skipped, or cancelled) and its achieved key metric, following
+  the same metric-or-placeholder convention as the other checks (FR-005). Per Clarifications
+  (2026-07-23), the achieved key metric MUST be a single string reporting the worst-case (highest)
+  measured wall-clock time and the worst-case (highest) measured peak memory across all of the
+  suite's calculation cases, together with the time and memory budgets they were checked against,
+  e.g. `0.42s / 58MB (budgets: 1.0s/128MB)` — not a per-case breakdown. When the job is skipped,
+  cancelled, or fully degraded before any per-case measurements are produced, this row's metric
+  MUST show the same `—` "no metric available" placeholder used by other checks (FR-005), not a
+  bespoke string or a stale prior-run value. This row's status label MUST render a distinct
+  `⚠️ degraded` state — separate from the pass/fail/skipped/cancelled labels used elsewhere in the
+  comment — when the underlying run completed without full single-core/memory enforcement (per
+  specs/006-legacy-hardware-performance-tests FR-009/FR-010), so a within-budget-but-unenforced
+  result is not visually indistinguishable from a fully-enforced pass; per FR-011, this
+  `⚠️ degraded` label is still excluded from the overall pass/fail computation, the same as
+  `skipped`. Whenever the underlying run actually produces per-case measurements — whether the
+  outcome is pass, fail (budget exceeded), or degraded — this row's metric MUST show the real
+  measured worst-case time/memory values; only a skipped, cancelled, or no-measurement run falls
+  back to the `—` placeholder. The `⚠️ degraded` label MUST trigger whenever *either* the
+  single-core enforcement flag or the memory-ceiling enforcement flag (spec 006's FR-010) was
+  inactive for that run — a simple boolean condition evaluated independently of the measured
+  pass/fail outcome — rather than any attempt to infer whether the missing enforcement could
+  plausibly have hidden a failure.
+- **FR-011**: Because the performance check is explicitly non-blocking (it MUST NOT affect
+  whether a pull request is allowed to merge, per specs/006-legacy-hardware-performance-tests
+  FR-008), its result MUST be displayed in the summary comment per FR-010 but MUST NOT be
+  included in computing the comment's overall pass/fail status (FR-004) — a failing or degraded
+  performance result never flips the overall status to FAIL by itself, the same way a `skipped`
+  check does not.
 
 ### Key Entities
 
 - **Quality Check Result**: Represents the outcome of a single CI check (e.g., lint, complexity,
-  typecheck, security, test coverage) for one CI run. Key attributes: check name, pass/fail/
-  skipped/cancelled status, and an optional key metric value (e.g., percentage, grade, or index).
+  typecheck, security, test coverage, performance) for one CI run. Key attributes: check name,
+  pass/fail/skipped/cancelled status (the `performance` check's row additionally supports a
+  distinct `degraded` status per Clarifications (2026-07-23), representing a completed run without
+  full single-core/memory enforcement), an optional key metric value (e.g., percentage, grade,
+  index, or measured time/memory), and whether the check is blocking (affects overall status) or
+  informational-only (reported but excluded from the overall-status computation, per FR-011).
 - **PR Summary Comment**: Represents the single consolidated comment posted on a pull request.
   Key attributes: the pull request it belongs to, the overall status, the list of Quality Check
   Results it summarizes, and the identifying marker used to locate it for updates on subsequent
@@ -165,19 +227,23 @@ just pass/fail labels, for the checks that produce such metrics.
 ## Assumptions
 
 - The existing CI workflow (`.github/workflows/ci.yml`) with jobs `lint`, `complexity`,
-  `typecheck`, `security`, `dependency-scan`, `test`, `build`, and `docs` remains the source of
-  the check results summarized; this feature aggregates and reports on those jobs' outcomes
-  rather than replacing them.
+  `typecheck`, `security`, `dependency-scan`, `test`, `build`, `docs`, and `performance`
+  (specs/006-legacy-hardware-performance-tests) remains the source of the check results
+  summarized; this feature aggregates and reports on those jobs' outcomes rather than replacing
+  them.
 - Of the existing jobs, `lint`, `complexity`, `typecheck`, `security`, and `test` (coverage) are
   the "quality checks" summarized per the feature description; `dependency-scan`, `build`, and
   `docs` are supporting/gating jobs and are included in the summary only if they run as part of
   the same pull-request-triggered workflow, following the same pass/fail/skipped/cancelled
-  reporting rules as the named quality checks.
+  reporting rules as the named quality checks. `performance` is a distinct, non-blocking,
+  informational-only check (FR-010/FR-011): it is included as a row with its own metric, but
+  unlike every other listed job it is deliberately excluded from the overall-status computation.
 - The comment is posted using the repository's existing CI/GitHub Actions identity and standard
   pull-request comment permissions; no new external service or bot account is introduced.
-- "Key metrics where available" means: test coverage percentage from the `test` job, and
-  maintainability index/grade from the `complexity` job; other checks (lint, typecheck, security)
-  are reported via pass/fail status only, as they do not currently produce a single headline
+- "Key metrics where available" means: test coverage percentage from the `test` job,
+  maintainability index/grade from the `complexity` job, and the achieved time/memory figures
+  from the `performance` job; other checks (lint, typecheck, security) are reported via pass/fail
+  status only, as they do not currently produce a single headline
   metric.
 - Only one summary comment is maintained per pull request; historical run results are not
   preserved as separate comments, though standard GitHub audit/history mechanisms (e.g., comment

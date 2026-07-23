@@ -82,8 +82,21 @@ Open (or inspect an existing) pull request after the CI workflow change lands:
   (`lint`, `complexity`, `typecheck`, `security`, `dependency-scan`, `test`, `build`, `docs`) are
   unaffected, and the PR remains mergeable subject to those checks alone
   (`contracts/ci-performance-job-contract.md`'s `continue-on-error: true` mechanism).
-- The `performance` job does not appear as a row in the `quality-summary` PR comment (by design —
-  see that contract's Non-goals section).
+- The `performance` job now DOES appear as a row in the `quality-summary` PR comment, per FR-013
+  and specs/004-pr-quality-check-summary's FR-010/FR-011 (Clarifications, 2026-07-23):
+  - Its metric column shows a single string with the worst-case (highest) measured time and
+    memory across all cases plus their budgets, e.g. `0.42s / 58MB (budgets: 1.0s/128MB)` —
+    never a per-case breakdown.
+  - That real measured value is shown whenever the run actually produced measurements — on pass,
+    on a genuine budget failure, and on a degraded-but-measured run alike; the standard `—` "no
+    metric available" placeholder (used by other checks) only appears when the job was skipped,
+    cancelled, or degraded before any measurement was produced.
+  - Its status column can show a distinct `⚠️ degraded` label (separate from pass/fail/skipped/
+    cancelled) whenever either the single-core pin or the memory-ceiling enforcement was inactive
+    for that run, regardless of the measured pass/fail outcome.
+  - Regardless of whether the row shows `pass`, `fail`, or `⚠️ degraded`, that row is excluded
+    from the comment's overall pass/fail status computation (FR-011), so a failing/degraded
+    performance result never flips the overall status or blocks the merge.
 
 ## Reference
 

@@ -59,3 +59,38 @@ is distinguishable from one recorded with it, per FR-010.
 (1:1 for a given run); pytest's own per-test pass/fail status (asserted from `time_passed` and
 `memory_passed`) and captured stdout/assertion message serve as the delivery mechanism for this
 report — no separate file/DB artifact is introduced by this feature.
+
+## Suite Run Summary (CI/quality-summary projection)
+
+Derived, run-level aggregate over every Performance Report produced by one suite invocation.
+This is *not* a new persisted entity — it is the specific reduction of the per-case Performance
+Reports that the CI `performance` job's `$GITHUB_OUTPUT` step (contracts/ci-performance-job-
+contract.md) computes and that `quality-summary` (specs/004-pr-quality-check-summary FR-010)
+consumes as its single `performance` row. Introduced here because FR-013's Clarifications
+(2026-07-23) pin down its exact shape.
+
+**Fields**:
+
+| Field | Type | Description |
+|---|---|---|
+| `status_label` | `Literal["pass", "fail", "⚠️ degraded", "skipped", "cancelled"]` | The run's outcome label surfaced to `quality-summary`. `⚠️ degraded` is a distinct label — never folded into `pass`/`fail` — computed as `not (cpu_pin_enforced_overall and memory_ceiling_enforced_overall)` (a simple boolean condition over the two run-level enforcement flags below), evaluated independently of whether every case's `time_passed`/`memory_passed` was `True` (FR-013 Clarifications #3/#5; specs/004 FR-010). `skipped`/`cancelled` are set only when the job itself did not execute or was cancelled before producing any per-case measurements. |
+| `worst_case_time_seconds` | `float \| None` | `max(report.measured_time_seconds for report in run)` — the single highest measured wall-clock time across every Performance Report in the run. `None` only when no report was produced (skipped/cancelled/fully-degraded-before-measurement). |
+| `worst_case_memory_bytes` | `int \| None` | `max(report.measured_memory_bytes for report in run)` — the single highest measured peak memory across every Performance Report in the run. `None` only when no report was produced. |
+| `cpu_pin_enforced_overall` | `bool` | `all(report.cpu_pin_enforced for report in run)` — whether the single-core pin was active for *every* case in the run. |
+| `memory_ceiling_enforced_overall` | `bool` | `all(report.memory_ceiling_enforced for report in run)` — whether the memory ceiling was active for *every* case in the run. |
+| `metric_string` | `str \| None` | The exact text surfaced in the `quality-summary` row's metric column. When `worst_case_time_seconds`/`worst_case_memory_bytes` are not `None` (i.e. at least one real measurement was produced — on pass, fail, *and* degraded-but-measured runs alike, FR-013 Clarifications #4), this is `f"{worst_case_time_seconds:.2f}s / {worst_case_memory_bytes_in_mb}MB (budgets: {time_budget_seconds}s/{memory_budget_bytes_in_mb}MB)"`, e.g. `"0.42s / 58MB (budgets: 1.0s/128MB)"`. When no measurement was produced (`status_label` is `skipped` or `cancelled`, or the job degraded before any case ran), this is the standard `—` "no metric available" placeholder shared with every other check (FR-013 Clarifications #2; specs/004 FR-005) — never a bespoke string and never a stale prior-run value. |
+
+**Validation rules**: `metric_string` MUST show real measured worst-case values whenever
+`worst_case_time_seconds`/`worst_case_memory_bytes` are populated, even when `status_label` is
+`fail` or `⚠️ degraded` — the `—` placeholder is reserved exclusively for skipped/cancelled/no-
+measurement rows and MUST NOT be used to hide a genuine measured failure (contrast with the
+`complexity` job's convention of falling back to a placeholder on failure). `status_label` MUST be
+computed as `⚠️ degraded` whenever `cpu_pin_enforced_overall` is `False` OR
+`memory_ceiling_enforced_overall` is `False`, regardless of the measured pass/fail outcome of any
+individual case — a direct boolean check, not a judgment call about whether the missing
+enforcement could plausibly have hidden a failure.
+
+**Relationships**: Computed once per CI `performance` job run from that run's full set of
+Performance Reports; consumed 1:1 by `quality-summary`'s `performance` row (specs/004-pr-quality-
+check-summary FR-010/FR-011). Excluded from `quality-summary`'s overall-status computation
+regardless of `status_label`'s value (including `⚠️ degraded` and `fail`), per FR-011.
