@@ -17,7 +17,7 @@ from __future__ import annotations
 
 #: Wall-clock time budget, in seconds, per measured calculation call
 #: (research.md #4: the upper bound of the constitution's 0.5-1.0s range).
-TIME_BUDGET_SECONDS: float = 0.0000001
+TIME_BUDGET_SECONDS: float = 1.0
 
 #: Peak memory budget, in bytes, per measured calculation call
 #: (research.md #4: the upper bound of the constitution's 64-128 MB range).
