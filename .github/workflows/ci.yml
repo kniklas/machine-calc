@@ -147,7 +147,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: pip install -e ".[dev]"
-      - run: MACHINE_CALC_RUN_PERFORMANCE_TESTS_TYPO=1 pytest tests/performance/ -m performance -p no:cacheprovider --no-cov
+      - run: MACHINE_CALC_RUN_PERFORMANCE_TESTS=1 pytest tests/performance/ -m performance -p no:cacheprovider --no-cov
         continue-on-error: true
       # Computes the Suite Run Summary (data-model.md) from the JSON file
       # the test step above wrote (tests/performance/conftest.py's
