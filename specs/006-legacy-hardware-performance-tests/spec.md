@@ -278,9 +278,13 @@ calculation) and confirm the failure output names the calculation, the failed di
 - CPU-core pinning (single-core simulation) is assumed to be reliably available only on Linux
   (including the `ubuntu-latest` GitHub Actions runner already used by CI per
   `.github/workflows/ci.yml`), via OS-level CPU affinity, and is assumed to be unavailable on
-  macOS and Windows developer machines. Memory-ceiling enforcement, by contrast, is assumed to be
-  reliably available on both Linux and macOS via the POSIX `resource` module
-  (`resource.setrlimit(RLIMIT_AS, ...)`), and unavailable only on Windows. This asymmetric
+  macOS and Windows developer machines. Memory-ceiling enforcement via the POSIX `resource`
+  module (`resource.setrlimit(RLIMIT_AS, ...)`) is technically available on both Linux and macOS
+  and unavailable only on Windows, but in practice it is verified to reliably succeed on Linux
+  while commonly failing/degrading on macOS (the interpreter's own address space typically already
+  exceeds the 128 MB ceiling before the call, raising `ValueError`/`OSError`), so macOS
+  memory-ceiling enforcement should be treated as best-effort rather than guaranteed. This
+  asymmetric
   degradation (full enforcement on Linux, partial enforcement on macOS, best-effort measurement
   only on Windows) is why graceful degradation (FR-009) is required rather than treated as an
   edge case that can be ignored.

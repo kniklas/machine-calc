@@ -22,7 +22,7 @@ contract instead, per plan.md's "Define interface contracts... appropriate for t
 | Platform | `cpu_pin_enforced` | `memory_ceiling_enforced` | Behavior |
 |---|---|---|---|
 | Linux (CI `ubuntu-latest`, Linux dev machines) | `True` (via `os.sched_setaffinity`) | `True` (via `resource.setrlimit(RLIMIT_AS, ...)`) | Fully-enforced run; both constraints simulated per FR-002/FR-003. |
-| macOS dev machine | `False` (no `os.sched_setaffinity`) | `True` (via `resource.setrlimit`, POSIX-supported on macOS) | Best-effort run; still measures and reports time/memory; single-core enforcement clearly marked unenforced per FR-009/FR-010. |
+| macOS dev machine | `False` (no `os.sched_setaffinity`) | Best-effort, commonly `False` in practice (`resource.setrlimit(RLIMIT_AS, ...)` is POSIX-supported on macOS, but the 128 MB ceiling typically fails with `ValueError`/`OSError` because the interpreter's own address space already exceeds it before the call) | Best-effort run; still measures and reports time/memory; both enforcements typically marked unenforced per FR-009/FR-010. |
 | Windows dev machine | `False` (no `os.sched_setaffinity`) | `False` (no `resource` module) | Best-effort run; still measures and reports time/memory; both enforcements clearly marked unenforced per FR-009/FR-010; suite MUST NOT error/crash (FR-009). |
 
 No platform causes the suite itself to fail to run or to silently report a false "fully enforced"

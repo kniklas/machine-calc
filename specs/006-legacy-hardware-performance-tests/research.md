@@ -86,10 +86,15 @@ False` in that test case's result, per FR-009/FR-010.
 for the duration of each measured call, and read peak memory via
 `resource.getrusage(resource.RUSAGE_SELF).ru_maxrss` (peak resident set size) before and after each
 call, using the delta (or the post-call absolute value, whichever `harness.py` documents) as the
-measured figure. On Windows (`resource` module does not exist there) or if `setrlimit` raises
+measured figure. On Windows (`resource` module does not exist there), or if `setrlimit` raises
 `ValueError`/`OSError` for the chosen limit on a given platform, skip ceiling enforcement and
 record `memory_ceiling_enforced = False`, still reporting the measured `ru_maxrss` value per
-FR-009/FR-010.
+FR-009/FR-010. **Verified in practice**: on macOS, `setrlimit(RLIMIT_AS, ...)` at the 128 MB
+ceiling reliably raises `ValueError`/`OSError` even before the measured call runs, because the
+Python interpreter's own address space typically already exceeds 128 MB by the time the test
+suite starts. So while `resource` is technically available on macOS, memory-ceiling enforcement
+there is in practice commonly degraded (`memory_ceiling_enforced = False`) rather than guaranteed
+— it should be treated as best-effort on macOS, not as a reliable second enforced platform.
 
 **Rationale**:
 - `resource` is stdlib and already POSIX-portable across Linux and macOS (the two Unix-like dev

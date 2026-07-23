@@ -53,9 +53,10 @@ MACHINE_CALC_RUN_PERFORMANCE_TESTS=1 pytest tests/performance/ -m performance -p
 
 **Expected outcome**:
 - The run completes (does not error/crash) and still reports measured time/memory per case.
-- Output clearly marks `cpu_pin_enforced=False` (macOS and Windows) and, on Windows,
-  `memory_ceiling_enforced=False` as well (per the platform-capability contract), so the result is
-  legible as a degraded/best-effort signal rather than a silent false pass.
+- Output clearly marks `cpu_pin_enforced=False` (macOS and Windows) and, on Windows and
+  (typically, in practice) on macOS, `memory_ceiling_enforced=False` as well (per the
+  platform-capability contract), so the result is legible as a degraded/best-effort signal rather
+  than a silent false pass.
 
 ## Scenario 4 — Actionable failure report (User Story 3, SC-003)
 

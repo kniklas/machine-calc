@@ -42,9 +42,11 @@ registered `performance` pytest marker
 **Target Platform**: Per-platform enforcement (asymmetric, not a single "Linux vs. rest" split):
 Linux (CI runner `ubuntu-latest`, and Linux developer machines) — full enforcement of both the
 single-core pin (`os.sched_setaffinity`) and the memory ceiling (`resource.setrlimit(RLIMIT_AS,
-...)`). macOS developer machines — partial enforcement: the memory ceiling is enforced (POSIX
-`resource` module is available), but the single-core pin is not (`sched_setaffinity` is
-Linux-only), so CPU pinning is skipped/best-effort. Windows developer machines — best-effort only:
+...)`). macOS developer machines — technically has the POSIX `resource` module available, but
+verified in practice to commonly fail/degrade the memory ceiling (the interpreter's own address
+space typically already exceeds the 128 MB ceiling before the call), so macOS should be treated as
+best-effort for both dimensions; the single-core pin is never enforced on macOS
+(`sched_setaffinity` is Linux-only). Windows developer machines — best-effort only:
 neither mechanism is enforced (`resource` and `sched_setaffinity` are both unavailable); the
 suite still runs and measures time/memory, reporting both dimensions as skipped/best-effort per
 FR-009/FR-010. See `contracts/performance-suite-contract.md`'s platform-capability table for the
