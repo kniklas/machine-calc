@@ -155,6 +155,13 @@ jobs:
       # `metric` as job outputs for `quality-summary` to consume (T028/T028b).
       - id: summary
         if: always()
+        env:
+          # `job.status` reflects the job's own accumulated conclusion so
+          # far (success/failure/cancelled) and, unlike the `cancelled()`
+          # expression function, is usable outside `if:` conditions,
+          # letting this step distinguish a genuinely cancelled run from a
+          # normal skip-before-measurement (T034).
+          JOB_STATUS: ${{ job.status }}
         run: |
           python - <<'PYEOF' >> "$GITHUB_OUTPUT"
           import json
@@ -168,7 +175,8 @@ jobs:
               data = {"has_measurements": False}
 
           if not data.get("has_measurements"):
-              status_label = "skipped"
+              is_cancelled = os.environ.get("JOB_STATUS", "") == "cancelled"
+              status_label = "cancelled" if is_cancelled else "skipped"
               metric = "—"
           else:
               cpu_ok = data["cpu_pin_enforced_overall"]
