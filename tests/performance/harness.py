@@ -92,7 +92,7 @@ def pin_to_single_core(core_id: int = 0):
         ``True`` if the pin was applied, ``False`` if skipped/best-effort.
     """
 
-    if not hasattr(os, "sched_setaffinity") or os.environ.get("MC_SCRATCH_FORCE_DEGRADED"):
+    if not hasattr(os, "sched_setaffinity"):
         yield False
         return
 
@@ -123,7 +123,7 @@ def enforce_memory_ceiling(ceiling_bytes: int):
         ``True`` if the ceiling was applied, ``False`` if skipped/best-effort.
     """
 
-    if resource is None or os.environ.get("MC_SCRATCH_FORCE_DEGRADED"):
+    if resource is None:
         yield False
         return
 
