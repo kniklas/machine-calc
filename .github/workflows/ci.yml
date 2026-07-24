@@ -168,14 +168,19 @@ jobs:
           import os
 
           path = os.environ["MACHINE_CALC_PERFORMANCE_SUMMARY_PATH"]
+          summary_load_error = False
           try:
               with open(path, encoding="utf-8") as handle:
                   data = json.load(handle)
           except (FileNotFoundError, json.JSONDecodeError):
-              data = {"has_measurements": False}
+              data = None
+              summary_load_error = True
 
-          if not data.get("has_measurements"):
-              is_cancelled = os.environ.get("JOB_STATUS", "") == "cancelled"
+          is_cancelled = os.environ.get("JOB_STATUS", "") == "cancelled"
+          if summary_load_error:
+              status_label = "cancelled" if is_cancelled else "fail"
+              metric = "—"
+          elif not data.get("has_measurements"):
               status_label = "cancelled" if is_cancelled else "skipped"
               metric = "—"
           else:
@@ -331,7 +336,7 @@ jobs:
             # deliberately excluded from the `results=...` overall-status
             # computation below, the same way `⚠️ degraded` is never folded
             # into pass/fail.
-            echo "| performance | $(performance_status_label "$PERFORMANCE_STATUS") | $PERFORMANCE_METRIC |"
+            echo "| performance | $(performance_status_label "$PERFORMANCE_STATUS") | $(metric_or_placeholder "$PERFORMANCE_METRIC") |"
             echo
             # Overall status (data-model.md PR Summary Comment.overall_status):
             # FAIL if any check failed; else cancelled/incomplete if any

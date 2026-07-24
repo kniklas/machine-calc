@@ -49,13 +49,11 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     `continue-on-error`'s always-`success` job result
     (contracts/ci-performance-job-contract.md Non-goals).
 
-    Only writes when the opt-in suite actually ran and recorded at least one
-    report — a bare/default `pytest` invocation (opt-in disabled) never
-    touches this file, so it has no effect on the existing gated suite.
+    Only writes when the opt-in suite actually ran — a bare/default `pytest`
+    invocation (opt-in disabled) never touches this file, so it has no effect
+    on the existing gated suite.
     """
 
     if not _opt_in_enabled():
-        return
-    if not results.all_reports():
         return
     results.write_summary()
