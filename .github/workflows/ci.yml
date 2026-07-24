@@ -147,7 +147,8 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: pip install -e ".[dev]"
-      - run: MACHINE_CALC_RUN_PERFORMANCE_TESTS=1 pytest tests/performance/ -m performance -p no:cacheprovider --no-cov
+      - id: run_performance_tests
+        run: MACHINE_CALC_RUN_PERFORMANCE_TESTS=1 pytest tests/performance/ -m performance -p no:cacheprovider --no-cov -s
         continue-on-error: true
       # Computes the Suite Run Summary (data-model.md) from the JSON file
       # the test step above wrote (tests/performance/conftest.py's
@@ -162,6 +163,13 @@ jobs:
           # letting this step distinguish a genuinely cancelled run from a
           # normal skip-before-measurement (T034).
           JOB_STATUS: ${{ job.status }}
+          # The pytest step's own outcome (independent of its `continue-
+          # on-error: true`, which always leaves the job's overall status
+          # "success" regardless). Needed because a collection/import/setup
+          # failure still triggers `pytest_sessionfinish` and writes
+          # `has_measurements: False` — indistinguishable from a genuine
+          # skip unless this step's actual pass/fail outcome is inspected.
+          TEST_OUTCOME: ${{ steps.run_performance_tests.outcome }}
         run: |
           python - <<'PYEOF' >> "$GITHUB_OUTPUT"
           import json
@@ -177,11 +185,20 @@ jobs:
               summary_load_error = True
 
           is_cancelled = os.environ.get("JOB_STATUS", "") == "cancelled"
+          test_failed = os.environ.get("TEST_OUTCOME", "") == "failure"
           if summary_load_error:
               status_label = "cancelled" if is_cancelled else "fail"
               metric = "—"
           elif not data.get("has_measurements"):
-              status_label = "cancelled" if is_cancelled else "skipped"
+              if is_cancelled:
+                  status_label = "cancelled"
+              elif test_failed:
+                  # pytest itself failed (e.g. a collection/import/setup
+                  # error) before any case could record a measurement - a
+                  # real failure, not a normal opt-in skip.
+                  status_label = "fail"
+              else:
+                  status_label = "skipped"
               metric = "—"
           else:
               cpu_ok = data["cpu_pin_enforced_overall"]

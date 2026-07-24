@@ -18,7 +18,7 @@ blocking/required check (FR-008, SC-006), and without modifying any existing job
   row from `performance-suite-contract.md`).
 - **Steps**: `actions/checkout@v4`, `actions/setup-python@v5` (same `PYTHON_VERSION` env var as
   every other job), `pip install -e ".[dev]"`, then the documented opt-in invocation:
-  `MACHINE_CALC_RUN_PERFORMANCE_TESTS=1 pytest tests/performance/ -m performance -p no:cacheprovider --no-cov`.
+  `MACHINE_CALC_RUN_PERFORMANCE_TESTS=1 pytest tests/performance/ -m performance -p no:cacheprovider --no-cov -s`.
 - **Non-blocking mechanism**: The job step(s) running the performance suite MUST set
   `continue-on-error: true` (GitHub Actions' documented mechanism for "this step/job may fail
   without failing the workflow or affecting required status checks"), so a failing/flagged
