@@ -127,6 +127,90 @@ jobs:
     outputs:
       coverage_pct: ${{ steps.coverage.outputs.coverage_pct }}
 
+  # Informational-only legacy-hardware time/memory budget signal
+  # (specs/006-legacy-hardware-performance-tests). Separate from `test`;
+  # never blocks merges (`continue-on-error: true` below). Its result and
+  # achieved metric ARE surfaced to `quality-summary` as a distinct,
+  # non-blocking row (FR-013; contracts/ci-performance-job-contract.md) via
+  # the `status_label`/`metric` outputs computed below, not via
+  # `needs.performance.result` (which `continue-on-error` always reports as
+  # `success` regardless of the suite's actual outcome).
+  performance:
+    name: performance
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
+    env:
+      MACHINE_CALC_PERFORMANCE_SUMMARY_PATH: /tmp/machine_calc_perf_summary.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -e ".[dev]"
+      - run: MACHINE_CALC_RUN_PERFORMANCE_TESTS=1 pytest tests/performance/ -m performance -p no:cacheprovider --no-cov
+        continue-on-error: true
+      # Computes the Suite Run Summary (data-model.md) from the JSON file
+      # the test step above wrote (tests/performance/conftest.py's
+      # pytest_sessionfinish + results.py), and surfaces `status_label`/
+      # `metric` as job outputs for `quality-summary` to consume (T028/T028b).
+      - id: summary
+        if: always()
+        env:
+          # `job.status` reflects the job's own accumulated conclusion so
+          # far (success/failure/cancelled) and, unlike the `cancelled()`
+          # expression function, is usable outside `if:` conditions,
+          # letting this step distinguish a genuinely cancelled run from a
+          # normal skip-before-measurement (T034).
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          python - <<'PYEOF' >> "$GITHUB_OUTPUT"
+          import json
+          import os
+
+          path = os.environ["MACHINE_CALC_PERFORMANCE_SUMMARY_PATH"]
+          summary_load_error = False
+          try:
+              with open(path, encoding="utf-8") as handle:
+                  data = json.load(handle)
+          except (FileNotFoundError, json.JSONDecodeError):
+              data = {}
+              summary_load_error = True
+
+          is_cancelled = os.environ.get("JOB_STATUS", "") == "cancelled"
+          if summary_load_error:
+              status_label = "cancelled" if is_cancelled else "fail"
+              metric = "—"
+          elif not data.get("has_measurements"):
+              status_label = "cancelled" if is_cancelled else "skipped"
+              metric = "—"
+          else:
+              cpu_ok = data["cpu_pin_enforced_overall"]
+              memory_ok = data["memory_ceiling_enforced_overall"]
+              degraded = not (cpu_ok and memory_ok)
+              if degraded:
+                  status_label = "⚠️ degraded"
+              elif data["overall_pass"]:
+                  status_label = "pass"
+              else:
+                  status_label = "fail"
+
+              worst_time = data["worst_case_time_seconds"]
+              worst_memory_mb = round(data["worst_case_memory_bytes"] / (1024 * 1024))
+              time_budget = data["time_budget_seconds"]
+              memory_budget_mb = round(data["memory_budget_bytes"] / (1024 * 1024))
+              metric = (
+                  f"{worst_time:.2f}s / {worst_memory_mb}MB "
+                  f"(budgets: {time_budget}s/{memory_budget_mb}MB)"
+              )
+
+          print(f"status_label={status_label}")
+          print(f"metric={metric}")
+          PYEOF
+        continue-on-error: true
+    outputs:
+      status_label: ${{ steps.summary.outputs.status_label }}
+      metric: ${{ steps.summary.outputs.metric }}
+
   build:
     name: build
     runs-on: ubuntu-latest
@@ -165,7 +249,7 @@ jobs:
   # `workflow_dispatch` runs.
   quality-summary:
     name: quality-summary
-    needs: [lint, complexity, typecheck, security, dependency-scan, test, build, docs]
+    needs: [lint, complexity, typecheck, security, dependency-scan, test, build, docs, performance]
     if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
@@ -189,6 +273,8 @@ jobs:
           TEST_METRIC: ${{ needs.test.outputs.coverage_pct }}
           BUILD_RESULT: ${{ needs.build.result }}
           DOCS_RESULT: ${{ needs.docs.result }}
+          PERFORMANCE_STATUS: ${{ needs.performance.outputs.status_label }}
+          PERFORMANCE_METRIC: ${{ needs.performance.outputs.metric }}
         run: |
           set -euo pipefail
 
@@ -213,6 +299,24 @@ jobs:
             if [ -n "$1" ]; then echo "$1"; else echo "—"; fi
           }
 
+          # performance_status_label STATUS -> renders the performance job's
+          # own status vocabulary (pass/fail/⚠️ degraded/skipped/cancelled -
+          # data-model.md's Suite Run Summary.status_label), distinct from
+          # the success/failure/cancelled/skipped vocabulary every other
+          # `needs.<job>.result` uses, since `⚠️ degraded` is not one of
+          # GitHub Actions' own job-result values (FR-013 Clarifications #3;
+          # specs/004-pr-quality-check-summary FR-010).
+          performance_status_label() {
+            case "$1" in
+              pass) echo "✅ pass" ;;
+              fail) echo "❌ fail" ;;
+              "⚠️ degraded") echo "⚠️ degraded" ;;
+              skipped) echo "⏭️ skipped" ;;
+              cancelled) echo "🚫 cancelled" ;;
+              *) echo "❓ unknown" ;;
+            esac
+          }
+
           {
             echo "<!-- quality-check-summary -->"
             echo "### Quality Check Summary"
@@ -227,6 +331,12 @@ jobs:
             echo "| test | $(status_label "$TEST_RESULT") | $(metric_or_placeholder "$TEST_METRIC") |"
             echo "| build | $(status_label "$BUILD_RESULT") | $(metric_or_placeholder "") |"
             echo "| docs | $(status_label "$DOCS_RESULT") | $(metric_or_placeholder "") |"
+            # `performance` is informational-only (specs/006-legacy-hardware-
+            # performance-tests FR-013): shown here with its own metric, but
+            # deliberately excluded from the `results=...` overall-status
+            # computation below, the same way `⚠️ degraded` is never folded
+            # into pass/fail.
+            echo "| performance | $(performance_status_label "$PERFORMANCE_STATUS") | $(metric_or_placeholder "$PERFORMANCE_METRIC") |"
             echo
             # Overall status (data-model.md PR Summary Comment.overall_status):
             # FAIL if any check failed; else cancelled/incomplete if any

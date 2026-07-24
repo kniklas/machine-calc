@@ -135,6 +135,23 @@ for ≥90% test coverage on calculation modules (Principle II).
 See `specs/001-metal-drilling-calc/` for the full spec, plan, and task
 breakdown driving this implementation.
 
+### Legacy-hardware performance suite (opt-in)
+
+A separate, opt-in `tests/performance/` suite checks that every public
+calculation function stays within the resource budget of
+Constitution Principle V's legacy/low-power hardware target (single-core
+CPU, ~64-128 MB RAM, 0.5-1.0s per calculation). It is skipped automatically
+by the `pytest` command above and does not affect its duration, outcome, or
+coverage. Run it explicitly with:
+
+```bash
+MACHINE_CALC_RUN_PERFORMANCE_TESTS=1 pytest tests/performance/ -m performance -p no:cacheprovider --no-cov -v
+```
+
+See `specs/006-legacy-hardware-performance-tests/quickstart.md` for the full
+set of validation scenarios (including graceful degradation on macOS/Windows
+and actionable failure reporting).
+
 ## Quality & Security Gates (CI)
 
 Every pull request runs the following required checks (`.github/workflows/ci.yml`),

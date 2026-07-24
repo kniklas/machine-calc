@@ -52,6 +52,9 @@ machine_calc = ["data/*.toml", "operations/drilling/data/*.toml"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--cov=machine_calc --cov-report=term-missing --cov-fail-under=90"
+markers = [
+    "performance: opt-in legacy-hardware time/memory budget checks (see tests/performance/)",
+]
 
 [tool.coverage.run]
 source = ["machine_calc"]
