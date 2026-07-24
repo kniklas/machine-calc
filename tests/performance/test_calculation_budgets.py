@@ -12,7 +12,7 @@ Skipped by default (see ``tests/performance/conftest.py``); run explicitly
 via::
 
     MACHINE_CALC_RUN_PERFORMANCE_TESTS=1 pytest tests/performance/ \\
-        -m performance -p no:cacheprovider --no-cov -v
+        -m performance -p no:cacheprovider --no-cov -v -s
 """
 
 from __future__ import annotations

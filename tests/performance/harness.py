@@ -144,8 +144,15 @@ def enforce_memory_ceiling(ceiling_bytes: int):
         yield False
         return
 
+    # Only lower the *soft* limit, keeping the process's existing hard limit
+    # untouched. Setting the hard limit to `ceiling_bytes` too would make the
+    # cap effectively permanent for an unprivileged process: raising a hard
+    # limit back up requires privilege, so the `finally` block's restore
+    # below would silently fail (caught by `contextlib.suppress`) and leave
+    # every subsequent test in the process capped at 128 MB.
+    _previous_soft, previous_hard = previous_limit
     try:
-        resource.setrlimit(resource.RLIMIT_AS, (ceiling_bytes, ceiling_bytes))
+        resource.setrlimit(resource.RLIMIT_AS, (ceiling_bytes, previous_hard))
     except (ValueError, OSError):
         yield False
         return
@@ -157,17 +164,22 @@ def enforce_memory_ceiling(ceiling_bytes: int):
             resource.setrlimit(resource.RLIMIT_AS, previous_limit)
 
 
-def _ru_maxrss_bytes() -> int:
+def _ru_maxrss_bytes() -> int | None:
     """Read the current process's peak RSS (``ru_maxrss``), normalized to
     bytes.
 
     Linux reports ``ru_maxrss`` in kilobytes; macOS/BSD report it in bytes
     (research.md #3) — this normalizes the platform difference so callers
     always receive a byte count.
+
+    Returns ``None`` on Windows, where the ``resource`` module does not
+    exist and peak RSS cannot be measured at all. Callers MUST NOT treat
+    ``None`` as "0 bytes used" — that would silently report a passing
+    memory check for a measurement that never happened (FR-009/FR-010).
     """
 
     if resource is None:  # pragma: no cover - Windows has no `resource`.
-        return 0
+        return None
 
     raw = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     if platform.system() == "Linux":
@@ -302,29 +314,23 @@ def run_case(case: PerformanceTestCase) -> PerformanceReport:
     actionable ``overage_detail`` message when either check fails.
     """
 
+    error: Exception | None = None
     with pin_to_single_core(0) as cpu_pin_enforced:
         with enforce_memory_ceiling(case.memory_budget_bytes) as memory_ceiling_enforced:
             memory_before = _ru_maxrss_bytes()
+            start = time.perf_counter()
             try:
-                _result, elapsed_seconds = time_call(
-                    case.target, *case.call_args, **case.call_kwargs
-                )
+                case.target(*case.call_args, **case.call_kwargs)
             except Exception as exc:  # noqa: BLE001 — MemoryError/OSError/etc. → failing report
                 # KeyboardInterrupt and SystemExit are BaseException subclasses,
                 # not Exception subclasses, so they propagate naturally here.
-                error_detail = (
-                    f"{case.name}: ERROR during measurement — {type(exc).__name__}: {exc}"
-                )
-                return PerformanceReport(
-                    case_name=case.name,
-                    measured_time_seconds=0.0,
-                    measured_memory_bytes=0,
-                    time_passed=False,
-                    memory_passed=False,
-                    cpu_pin_enforced=cpu_pin_enforced,
-                    memory_ceiling_enforced=memory_ceiling_enforced,
-                    overage_detail=error_detail,
-                )
+                error = exc
+            # Measured even on error: elapsed time and peak RSS observed up
+            # to the failure are real data (e.g. the enforced ceiling's
+            # `MemoryError` fires right around the peak), not fabricated
+            # zeroes — a crash is reported as an actionable failure using
+            # whatever was actually observed, never a false "0s/0B" reading.
+            elapsed_seconds = time.perf_counter() - start
             memory_after = _ru_maxrss_bytes()
 
     # Reported figure: the before/after delta (clamped at 0), not the raw
@@ -332,20 +338,52 @@ def run_case(case: PerformanceTestCase) -> PerformanceReport:
     # the incremental cost of this call rather than pytest's/the
     # interpreter's entire baseline footprint (research.md #5's documented
     # isolation approach; module docstring above details the limitation).
-    measured_memory_bytes = max(memory_after - memory_before, 0)
+    #
+    # `memory_measured` is `False` only on Windows (no `resource` module) —
+    # in that case the memory check is reported as failing rather than a
+    # false pass on a fabricated 0-byte reading (FR-009/FR-010).
+    memory_measured = memory_before is not None and memory_after is not None
+    measured_memory_bytes = (
+        max(memory_after - memory_before, 0)
+        if memory_before is not None and memory_after is not None
+        else 0
+    )
 
     time_passed = elapsed_seconds <= case.time_budget_seconds
-    memory_passed = measured_memory_bytes <= case.memory_budget_bytes
+    memory_passed = memory_measured and measured_memory_bytes <= case.memory_budget_bytes
 
-    overage_detail = build_overage_detail(
-        case.name,
-        time_passed=time_passed,
-        measured_time_seconds=elapsed_seconds,
-        time_budget_seconds=case.time_budget_seconds,
-        memory_passed=memory_passed,
-        measured_memory_bytes=measured_memory_bytes,
-        memory_budget_bytes=case.memory_budget_bytes,
-    )
+    overage_detail: str | None
+    if error is not None:
+        time_passed = False
+        memory_passed = False
+        overage_bytes = measured_memory_bytes - case.memory_budget_bytes
+        overage_detail = (
+            f"{case.name}: ERROR during measurement — {type(error).__name__}: {error} "
+            f"(observed {elapsed_seconds:.4f}s / {measured_memory_bytes} bytes before "
+            f"the error; memory budget {case.memory_budget_bytes} bytes, "
+            f"over by {overage_bytes} bytes)"
+        )
+    else:
+        # Suppress build_overage_detail's own memory message when memory
+        # simply wasn't measurable (Windows) — that already-generic message
+        # would otherwise misleadingly claim "measured 0 bytes > budget",
+        # so a distinct, explicit note is appended instead.
+        overage_detail = build_overage_detail(
+            case.name,
+            time_passed=time_passed,
+            measured_time_seconds=elapsed_seconds,
+            time_budget_seconds=case.time_budget_seconds,
+            memory_passed=memory_passed or not memory_measured,
+            measured_memory_bytes=measured_memory_bytes,
+            memory_budget_bytes=case.memory_budget_bytes,
+        )
+        if not memory_measured:
+            unmeasured_note = (
+                f"{case.name}: MEMORY not measured — the `resource` module is "
+                "unavailable on this platform (e.g. Windows); reported as failing "
+                "rather than a false pass (FR-009/FR-010)."
+            )
+            overage_detail = "; ".join(filter(None, [overage_detail, unmeasured_note]))
 
     return PerformanceReport(
         case_name=case.name,

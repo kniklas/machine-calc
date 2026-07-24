@@ -10,7 +10,7 @@ contract instead, per plan.md's "Define interface contracts... appropriate for t
 
 | Aspect | Contract |
 |---|---|
-| Local opt-in command | `MACHINE_CALC_RUN_PERFORMANCE_TESTS=1 pytest tests/performance/ -m performance -p no:cacheprovider --no-cov` (documented verbatim in quickstart.md) |
+| Local opt-in command | `MACHINE_CALC_RUN_PERFORMANCE_TESTS=1 pytest tests/performance/ -m performance -p no:cacheprovider --no-cov -s` (documented verbatim in quickstart.md) |
 | Default/blocking command (`pytest`, or CI's `test` job's exact `pytest --cov=machine_calc --cov-report=term-missing --cov-report=xml --cov-fail-under=90`) | MUST NOT execute any measurement logic in `tests/performance/` and MUST NOT change its own duration, pass/fail outcome, or coverage percentage versus before this feature existed (FR-006, SC-004). |
 | Exit code (opt-in run) | Standard pytest semantics: `0` if every Performance Test Case's `time_passed` and `memory_passed` are both `True`; non-zero if any case fails either check. Degraded/best-effort enforcement (`cpu_pin_enforced=False` and/or `memory_ceiling_enforced=False`) does NOT by itself cause a non-zero exit — a case run in degraded mode can still "pass" on its measured values, per FR-009 (must not error/crash on unsupported platforms) and FR-010 (must clearly label the weaker signal, not force a failure). |
 | Per-case report | For every Performance Test Case, output (via pytest's normal per-test result plus an explicit printed/logged line, so it is visible with `-s`/on failure without extra flags) states: case name, measured time, time budget, time pass/fail, measured memory, memory budget, memory pass/fail, and enforcement status for both dimensions (FR-005, FR-010, SC-003). |

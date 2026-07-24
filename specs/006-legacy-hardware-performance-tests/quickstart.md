@@ -19,7 +19,7 @@ code — see `data-model.md` and `contracts/` for the structures/behavior to bui
 ## Scenario 1 — Local opt-in run reports pass/fail per calculation (User Story 1, SC-001, SC-002)
 
 ```bash
-MACHINE_CALC_RUN_PERFORMANCE_TESTS=1 pytest tests/performance/ -m performance -p no:cacheprovider --no-cov -v
+MACHINE_CALC_RUN_PERFORMANCE_TESTS=1 pytest tests/performance/ -m performance -p no:cacheprovider --no-cov -v -s
 ```
 
 **Expected outcome**:
@@ -48,7 +48,7 @@ pytest
 On a macOS or Windows developer machine:
 
 ```bash
-MACHINE_CALC_RUN_PERFORMANCE_TESTS=1 pytest tests/performance/ -m performance -p no:cacheprovider --no-cov -v
+MACHINE_CALC_RUN_PERFORMANCE_TESTS=1 pytest tests/performance/ -m performance -p no:cacheprovider --no-cov -v -s
 ```
 
 **Expected outcome**:
