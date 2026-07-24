@@ -173,7 +173,7 @@ jobs:
               with open(path, encoding="utf-8") as handle:
                   data = json.load(handle)
           except (FileNotFoundError, json.JSONDecodeError):
-              data = None
+              data = {}
               summary_load_error = True
 
           is_cancelled = os.environ.get("JOB_STATUS", "") == "cancelled"
