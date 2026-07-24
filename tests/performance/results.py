@@ -86,6 +86,8 @@ def write_summary(path: str | None = None) -> None:
     """Write the current session's Suite Run Summary to ``path`` (JSON)."""
 
     target_path = path or summary_path()
+    parent_dir = os.path.dirname(os.path.abspath(target_path))
+    os.makedirs(parent_dir, exist_ok=True)
     summary = build_suite_run_summary(all_reports())
     with open(target_path, "w", encoding="utf-8") as handle:
         json.dump(summary, handle)

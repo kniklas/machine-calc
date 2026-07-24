@@ -96,12 +96,23 @@ def pin_to_single_core(core_id: int = 0):
         yield False
         return
 
-    previous_affinity = os.sched_getaffinity(0)  # type: ignore[attr-defined]
+    try:
+        previous_affinity = os.sched_getaffinity(0)  # type: ignore[attr-defined]
+    except (OSError, ValueError):
+        yield False
+        return
+
     try:
         os.sched_setaffinity(0, {core_id})  # type: ignore[attr-defined]
+    except (OSError, ValueError):
+        yield False
+        return
+
+    try:
         yield True
     finally:
-        os.sched_setaffinity(0, previous_affinity)  # type: ignore[attr-defined]
+        with contextlib.suppress(OSError, ValueError):
+            os.sched_setaffinity(0, previous_affinity)  # type: ignore[attr-defined]
 
 
 # ---------------------------------------------------------------------------
@@ -294,7 +305,25 @@ def run_case(case: PerformanceTestCase) -> PerformanceReport:
     with pin_to_single_core(0) as cpu_pin_enforced:
         with enforce_memory_ceiling(case.memory_budget_bytes) as memory_ceiling_enforced:
             memory_before = _ru_maxrss_bytes()
-            _result, elapsed_seconds = time_call(case.target, *case.call_args, **case.call_kwargs)
+            try:
+                _result, elapsed_seconds = time_call(
+                    case.target, *case.call_args, **case.call_kwargs
+                )
+            except Exception as exc:  # noqa: BLE001
+                error_detail = (
+                    f"{case.name}: ERROR during measurement — "
+                    f"{type(exc).__name__}: {exc}"
+                )
+                return PerformanceReport(
+                    case_name=case.name,
+                    measured_time_seconds=0.0,
+                    measured_memory_bytes=0,
+                    time_passed=False,
+                    memory_passed=False,
+                    cpu_pin_enforced=cpu_pin_enforced,
+                    memory_ceiling_enforced=memory_ceiling_enforced,
+                    overage_detail=error_detail,
+                )
             memory_after = _ru_maxrss_bytes()
 
     # Reported figure: the before/after delta (clamped at 0), not the raw
