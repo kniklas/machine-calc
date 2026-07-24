@@ -313,7 +313,7 @@ def run_case(case: PerformanceTestCase) -> PerformanceReport:
                 # KeyboardInterrupt and SystemExit are BaseException subclasses,
                 # not Exception subclasses, so they propagate naturally here.
                 error_detail = (
-                    f"{case.name}: ERROR during measurement — " f"{type(exc).__name__}: {exc}"
+                    f"{case.name}: ERROR during measurement — {type(exc).__name__}: {exc}"
                 )
                 return PerformanceReport(
                     case_name=case.name,
