@@ -309,7 +309,9 @@ def run_case(case: PerformanceTestCase) -> PerformanceReport:
                 _result, elapsed_seconds = time_call(
                     case.target, *case.call_args, **case.call_kwargs
                 )
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001 — MemoryError/OSError/etc. → failing report
+                # KeyboardInterrupt and SystemExit are BaseException subclasses,
+                # not Exception subclasses, so they propagate naturally here.
                 error_detail = (
                     f"{case.name}: ERROR during measurement — "
                     f"{type(exc).__name__}: {exc}"
