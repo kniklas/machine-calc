@@ -39,8 +39,8 @@ tests/
 - PyPI distribution name: lowercase with hyphens, e.g. `machine-calc`.
 - Python import name: underscores, e.g. `machine_calc`.
 - Include an empty `py.typed` marker file if the package ships type hints
-  (per PEP 561) — required since `python.instructions.md` mandates type
-  hints on public APIs.
+  (per PEP 561) — required since `.github/instructions/python.instructions.md`
+  mandates type hints on public APIs.
 
 ## 3. Build backend
 
@@ -67,7 +67,7 @@ version = "0.1.0"
 description = "TODO: one-line summary"
 readme = "README.md"
 requires-python = ">=3.10"
-license = "MIT"
+license = { text = "MIT" }
 authors = [{ name = "TODO" }]
 classifiers = [
   "Programming Language :: Python :: 3",
@@ -77,7 +77,7 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest", "mypy", "ruff"]
+dev = ["pytest", "mypy", "ruff", "black"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/machine_calc"]
@@ -121,7 +121,7 @@ python -m pip install --upgrade build twine
 python -m build                 # produces dist/*.whl and dist/*.tar.gz
 python -m twine check dist/*    # validates metadata/README rendering
 pytest                          # tests pass
-mypy src/                       # type checks pass (per python.instructions.md)
+mypy src/                       # type checks pass (per .github/instructions/python.instructions.md)
 ruff check .                    # lint passes
 ```
 
