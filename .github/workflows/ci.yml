@@ -211,13 +211,17 @@ jobs:
               else:
                   status_label = "fail"
 
-              worst_time = data["worst_case_time_seconds"]
+              # Reported in milliseconds (not seconds) with 2-decimal
+              # precision: these calculations complete in well under a
+              # second, so a seconds-based ".2f" format rounds every real
+              # measurement down to a misleading "0.00s".
+              worst_time_ms = data["worst_case_time_seconds"] * 1000
               worst_memory_mb = round(data["worst_case_memory_bytes"] / (1024 * 1024))
-              time_budget = data["time_budget_seconds"]
+              time_budget_ms = data["time_budget_seconds"] * 1000
               memory_budget_mb = round(data["memory_budget_bytes"] / (1024 * 1024))
               metric = (
-                  f"{worst_time:.2f}s / {worst_memory_mb}MB "
-                  f"(budgets: {time_budget}s/{memory_budget_mb}MB)"
+                  f"{worst_time_ms:.2f}ms / {worst_memory_mb}MB "
+                  f"(budgets: {time_budget_ms:.2f}ms/{memory_budget_mb}MB)"
               )
 
           print(f"status_label={status_label}")

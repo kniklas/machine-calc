@@ -39,8 +39,11 @@ blocking/required check (FR-008, SC-006), and without modifying any existing job
   be a single string reporting the worst-case (highest) measured wall-clock time and the
   worst-case (highest) measured peak memory across *all* of the run's Performance Reports,
   together with the time and memory budgets they were checked against — never a per-case
-  breakdown. Format: `f"{worst_time:.2f}s / {worst_memory_mb}MB (budgets: {time_budget}s/
-  {memory_budget_mb}MB)"`, e.g. `0.42s / 58MB (budgets: 1.0s/128MB)`. This value MUST be shown
+  breakdown. Time is reported in **milliseconds** with 2-decimal precision (not seconds), since
+  these calculations complete in well under a second and a seconds-based format rounds every real
+  measurement down to a misleading `0.00s`. Format: `f"{worst_time_ms:.2f}ms / {worst_memory_mb}MB
+  (budgets: {time_budget_ms:.2f}ms/{memory_budget_mb}MB)"`, e.g. `0.42ms / 58MB (budgets:
+  1000.00ms/128MB)`. This value MUST be shown
   whenever the run actually produced per-case measurements — on a clean pass, on a genuine budget
   failure, and on a degraded-but-measured run alike (FR-013 Clarifications #4) — real measured
   values are never hidden behind a placeholder to mask a failure, unlike the `complexity` job's

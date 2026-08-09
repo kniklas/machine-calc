@@ -85,8 +85,9 @@ Open (or inspect an existing) pull request after the CI workflow change lands:
 - The `performance` job now DOES appear as a row in the `quality-summary` PR comment, per FR-013
   and specs/004-pr-quality-check-summary's FR-010/FR-011 (Clarifications, 2026-07-23):
   - Its metric column shows a single string with the worst-case (highest) measured time and
-    memory across all cases plus their budgets, e.g. `0.42s / 58MB (budgets: 1.0s/128MB)` —
-    never a per-case breakdown.
+    memory across all cases plus their budgets, e.g. `0.42ms / 58MB (budgets: 1000.00ms/128MB)` —
+    time is reported in milliseconds with 2-decimal precision (not seconds), since these
+    calculations complete in well under a second — never a per-case breakdown.
   - That real measured value is shown whenever the run actually produced measurements — on pass,
     on a genuine budget failure, and on a degraded-but-measured run alike; the standard `—` "no
     metric available" placeholder (used by other checks) only appears when the job was skipped,
