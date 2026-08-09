@@ -145,7 +145,7 @@ by the `pytest` command above and does not affect its duration, outcome, or
 coverage. Run it explicitly with:
 
 ```bash
-MACHINE_CALC_RUN_PERFORMANCE_TESTS=1 pytest tests/performance/ -m performance -p no:cacheprovider --no-cov -v
+MACHINE_CALC_RUN_PERFORMANCE_TESTS=1 pytest tests/performance/ -m performance -p no:cacheprovider --no-cov -v -s
 ```
 
 See `specs/006-legacy-hardware-performance-tests/quickstart.md` for the full

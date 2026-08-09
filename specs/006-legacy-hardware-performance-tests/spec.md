@@ -44,7 +44,9 @@ or CLI behavior.
 
 - Q: What exactly should the "achieved key metric" string in the summary-comment row (FR-013)
   contain? → A: A single worst-case value across all performance cases for both time and memory,
-  plus their budgets, e.g. `0.42s / 58MB (budgets: 1.0s/128MB)`.
+  plus their budgets, e.g. `0.42ms / 58MB (budgets: 1000.00ms/128MB)` — time is reported in
+  milliseconds with 2-decimal precision, since these calculations complete in well under a
+  second and a seconds-based format rounds every real measurement down to a misleading `0.00s`.
 - Q: When the CI performance job is skipped, cancelled, or fully degraded (errors before
   producing any per-case measurements), what should the achieved key metric string show? → A: The
   standard `—` "no metric available" placeholder already defined for other checks (FR-005 of
@@ -256,7 +258,9 @@ calculation) and confirm the failure output names the calculation, the failed di
   key metric MUST be a single string reporting the worst-case (highest) measured wall-clock time
   and the worst-case (highest) measured peak memory across all of the suite's calculation cases,
   together with the time and memory budgets they were checked against, e.g.
-  `0.42s / 58MB (budgets: 1.0s/128MB)` — not a per-case breakdown. When the job is skipped,
+  `0.42ms / 58MB (budgets: 1000.00ms/128MB)` — time is reported in milliseconds with 2-decimal
+  precision (not seconds) since these calculations complete in well under a second — not a
+  per-case breakdown. When the job is skipped,
   cancelled, or fully degraded before any per-case measurements are produced, the metric MUST show
   the standard `—` "no metric available" placeholder used by other checks (FR-005 of
   specs/004-pr-quality-check-summary) rather than a bespoke string or a stale prior-run value.
