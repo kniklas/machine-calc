@@ -420,7 +420,23 @@ def _run_case_in_child(case: PerformanceTestCase) -> dict[str, Any]:
         target=_child_worker,
         args=(case.target, case.call_args, case.call_kwargs, case.memory_budget_bytes, child_conn),
     )
-    process.start()
+    try:
+        process.start()
+    except Exception as exc:  # noqa: BLE001 - convert ANY startup failure to a well-formed result
+        # `start()` can raise for an unpicklable target/args or an OS-level
+        # spawn failure (e.g. resource exhaustion). Must not escape this
+        # function (it would defeat this function's "always returns a
+        # well-formed result" guarantee) nor leak either pipe endpoint.
+        parent_conn.close()
+        child_conn.close()
+        return {
+            "elapsed_seconds": 0.0,
+            "memory_bytes": None,
+            "error_type": type(exc).__name__,
+            "error_message": f"failed to start measurement child process: {exc}",
+            "cpu_pin_enforced": False,
+            "memory_ceiling_enforced": False,
+        }
     child_conn.close()
 
     payload: dict[str, Any] | None = None
@@ -442,8 +458,16 @@ def _run_case_in_child(case: PerformanceTestCase) -> dict[str, Any]:
         # timeout (up to 4x across this suite's 4 cases).
         process.join(0)
     if process.is_alive():  # pragma: no cover - only on a genuinely hung child
+        # `terminate()` sends SIGTERM (POSIX) which a truly stuck target can
+        # catch/ignore, so the reaping join must itself be bounded — an
+        # unbounded join here could hang the harness forever, defeating the
+        # timeout this whole function exists to enforce. Escalate to
+        # `kill()` (SIGKILL, uncatchable) if still alive afterwards.
         process.terminate()
-        process.join()
+        process.join(_CHILD_TIMEOUT_SECONDS)
+        if process.is_alive():
+            process.kill()
+            process.join()
 
     if payload is not None:
         return payload

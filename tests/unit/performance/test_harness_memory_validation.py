@@ -1,15 +1,25 @@
 """Unit tests proving invalid memory measurements always fail (issue #23).
 
-These exercise ``tests.performance.harness``'s pure validation/report-building
-helpers directly with hand-built child-process result payloads, so they run
-as part of the normal (non-opt-in) test suite — unlike
-``tests/performance/test_calculation_budgets.py``, which lives under the
-auto-skipped ``tests/performance/`` directory (see
+Most of these exercise ``tests.performance.harness``'s pure validation/
+report-building helpers directly with hand-built child-process result
+payloads, so they run as part of the normal (non-opt-in) test suite —
+unlike ``tests/performance/test_calculation_budgets.py``, which lives under
+the auto-skipped ``tests/performance/`` directory (see
 ``tests/performance/conftest.py``) and only runs when
-``MACHINE_CALC_RUN_PERFORMANCE_TESTS=1`` is set. No subprocess is spawned
-here; :func:`tests.performance.harness._build_report` is deterministic given
-a result dict, which is exactly what makes it unit-testable without paying
-for/depending on real process isolation.
+``MACHINE_CALC_RUN_PERFORMANCE_TESTS=1`` is set. Most of these tests spawn
+no subprocess at all — :func:`tests.performance.harness._build_report` is
+deterministic given a result dict, which is what makes them unit-testable
+without paying for/depending on real process isolation.
+
+A few tests below (named ``test_run_case_in_child_*``) are the exception:
+they deliberately DO exercise the real subprocess boundary via
+:func:`tests.performance.harness._run_case_in_child` (a real spawned child,
+a real target exception, and a real (shortened) timeout/hang/reap case),
+since this is the only way to cover the pipe/serialization/process-lifecycle
+code that hand-built payloads for ``_build_report`` cannot reach. These
+still run in the default (non-opt-in) suite — unlike
+``tests/performance/test_calculation_budgets.py`` — but pay the (small, sub-
+second) cost of real process spawns.
 """
 
 from __future__ import annotations
@@ -27,7 +37,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from tests.performance import harness  # noqa: E402 — must follow the sys.path fix-up above
+from tests.performance import harness, results  # noqa: E402 — must follow the sys.path fix-up above
 
 
 def _case(**overrides: object) -> harness.PerformanceTestCase:
@@ -289,3 +299,37 @@ def _hang_forever() -> None:
     import time
 
     time.sleep(3600)
+
+
+def test_build_suite_run_summary_flags_any_invalid_memory_measurement():
+    """Covers the aggregation step Copilot's review flagged as untested:
+    a suite containing one invalid-measurement report must still surface
+    ``any_invalid_memory_measurement=True`` in the Suite Run Summary, even
+    when every other report in the run is perfectly valid — this is the
+    signal ``ci.yml`` relies on to give a hard "fail" precedence over the
+    weaker "⚠️ degraded" label (issue #23)."""
+
+    valid_case = _case(name="valid-case")
+    valid_report = harness._build_report(valid_case, _child_result(memory_bytes=1024))
+    assert valid_report.memory_measurement_valid is True
+
+    invalid_case = _case(name="invalid-case")
+    invalid_report = harness._build_report(invalid_case, _child_result(memory_bytes=None))
+    assert invalid_report.memory_measurement_valid is False
+
+    summary = results.build_suite_run_summary([valid_report, invalid_report])
+
+    assert summary["any_invalid_memory_measurement"] is True
+    # A single invalid case must not be washed out by an otherwise-valid run.
+    assert summary["has_measurements"] is True
+
+
+def test_build_suite_run_summary_reports_no_invalid_measurement_when_all_valid():
+    case_a = _case(name="case-a")
+    case_b = _case(name="case-b")
+    report_a = harness._build_report(case_a, _child_result(memory_bytes=1024))
+    report_b = harness._build_report(case_b, _child_result(memory_bytes=2048))
+
+    summary = results.build_suite_run_summary([report_a, report_b])
+
+    assert summary["any_invalid_memory_measurement"] is False
