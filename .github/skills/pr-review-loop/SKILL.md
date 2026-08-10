@@ -17,12 +17,17 @@ all PR/CI/review operations below.
 ## 1. Setup — identify the PR and gather state
 
 ```bash
-gh pr view <number-or-branch> --json number,title,url,headRefName,baseRefName,state,mergeable,reviewDecision,commits
+gh pr view <number-or-branch> --json number,title,url,headRefName,baseRefName,state,mergeable,reviewDecision,commits,body
 gh pr checks <number-or-branch>
 ```
 
 If no PR number/branch is given, infer it from the current branch
 (`git branch --show-current`) and confirm with the user if ambiguous.
+
+Keep the fetched `body` (the PR description) on hand — §2's suppression
+check depends on cross-referencing it against the "Quality & Security Gate
+Exceptions" table, and it can go stale if the description is edited
+mid-loop, so re-fetch it whenever re-checking suppression status.
 
 Initialize (mentally or in a scratch note) two counters for this session:
 - **review-fix commit count** — commits made *specifically* to address a
