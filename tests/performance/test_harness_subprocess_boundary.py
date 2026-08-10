@@ -127,7 +127,10 @@ def test_run_case_in_child_times_out_and_is_reaped_promptly():
         # Generous upper bound: should be roughly 1x the (shortened) timeout,
         # never ~2x it (the double-timeout bug this test guards against).
         assert elapsed < harness._CHILD_TIMEOUT_SECONDS * 3
-        assert child_result["error_type"] is not None
+        # A hung/reaped child must be reported as an explicit timeout, not
+        # conflated with the "exited without reporting" crash/EOF message
+        # (review follow-up: these are distinguishable failure modes).
+        assert child_result["error_type"] == "TimeoutError"
         assert child_result["memory_bytes"] is None
 
         report = harness._build_report(case, child_result)
@@ -135,3 +138,25 @@ def test_run_case_in_child_times_out_and_is_reaped_promptly():
         assert report.memory_passed is False
     finally:
         harness._CHILD_TIMEOUT_SECONDS = original_timeout
+
+
+@pytest.mark.performance
+def test_run_case_in_child_reports_unpicklable_target_startup_failure():
+    """``multiprocessing.Process.start()`` (spawn context) requires the
+    target to be picklable — a lambda/local closure fails at ``start()``
+    time, before any child process is even created. This must be converted
+    into a well-formed, failing invalid-measurement report rather than
+    propagating the pickling exception out of :func:`_run_case_in_child`."""
+
+    case = _case(target=lambda: None)
+
+    child_result = harness._run_case_in_child(case)
+
+    assert child_result["memory_bytes"] is None
+    assert child_result["error_type"] is not None
+    assert "failed to start measurement child process" in (child_result["error_message"] or "")
+
+    report = harness._build_report(case, child_result)
+    assert report.memory_measurement_valid is False
+    assert report.memory_passed is False
+    assert report.time_passed is False

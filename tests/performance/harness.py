@@ -488,6 +488,24 @@ def _run_case_in_child(case: PerformanceTestCase) -> dict[str, Any]:
     if payload is not None:
         return payload
 
+    if not got_result:
+        # Polling timed out (the child never sent anything within the
+        # budget), which is distinct from a crash/EOF after the timeout
+        # window closed — surface an explicit timeout diagnostic so a hung
+        # target is never misreported as a plain "exited without
+        # reporting" crash.
+        return {
+            "elapsed_seconds": 0.0,
+            "memory_bytes": None,
+            "error_type": "TimeoutError",
+            "error_message": (
+                "measurement child process did not report a result within "
+                f"the {_CHILD_TIMEOUT_SECONDS}s timeout and was terminated"
+            ),
+            "cpu_pin_enforced": False,
+            "memory_ceiling_enforced": False,
+        }
+
     return {
         "elapsed_seconds": 0.0,
         "memory_bytes": None,
