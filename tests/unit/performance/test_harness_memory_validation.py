@@ -14,7 +14,20 @@ for/depending on real process isolation.
 
 from __future__ import annotations
 
-from tests.performance import harness
+import sys
+from pathlib import Path
+
+# `tests/` has no `__init__.py` (it is not a regular package, and pytest's
+# default "prepend" import mode does not add the repository root to
+# `sys.path` on its own — only the nearest package-free ancestor of each
+# collected file, per file). Insert the repository root explicitly so
+# `tests.performance` resolves as an (implicit namespace) package regardless
+# of which test file pytest collects first or how it is invoked in CI.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from tests.performance import harness  # noqa: E402 — must follow the sys.path fix-up above
 
 
 def _case(**overrides: object) -> harness.PerformanceTestCase:
