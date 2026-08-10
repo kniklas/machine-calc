@@ -252,3 +252,41 @@ With multiple contributors, after Setup + Foundational are complete:
 
 - [X] T034 In `.github/workflows/ci.yml`'s `performance` job's `summary` step, distinguish an actually-cancelled job run from a normal skip-before-measurement: when `has_measurements` is false, use the step's/job's cancellation signal (e.g. the `cancelled()` function or the `job.status` context surfaced via an env var to the step) to set `status_label="cancelled"` instead of unconditionally emitting `"skipped"`, so the output can genuinely take the `cancelled` value the `status_label` field's documented type (data-model.md's Suite Run Summary) and `contracts/ci-performance-job-contract.md`'s "Distinct `⚠️ degraded` status label" section both enumerate alongside `pass`/`fail`/`⚠️ degraded`/`skipped` (FR-013) (partial)
 - [X] T035 Substantiate T033's real-PR validation claim for the non-pass states: on the real pull request (or an equivalent scratch/temporary commit reverted afterward, per the T026/T023 pattern already used elsewhere in this feature), actually exercise and observe (not just locally simulate) a genuine budget-exceeding failure, a degraded (single-core or memory-ceiling enforcement disabled) run, and a skipped/cancelled run, confirming the `quality-summary` comment's `performance` row renders the real measured values on failure, the `⚠️ degraded` label on a degraded run, and the `—` placeholder on skip/cancel — CI run history for this branch (`gh run list`) currently shows only successful/`pass` runs, so FR-013's fail/degraded/skipped/cancelled row-rendering behavior remains unverified end-to-end against a real PR comment despite T033 being marked complete (FR-013; spec.md SC criteria) (partial)
+
+---
+
+## Phase 10: Isolated child-process memory measurement (issue #23)
+
+The in-process before/after `ru_maxrss` delta from Phase 6/research.md #5 could silently report
+`0 MB` / `pass=True` whenever the process-wide peak RSS did not advance between readings, even
+though the target function genuinely ran and could have used significant memory. This phase
+replaces that approach per research.md #5's "Update (issue #23)" note.
+
+- [X] T036 Rework `tests/performance/harness.py` so each case's `target` call runs in its own
+  `multiprocessing` **spawn**-context child process (`_run_case_in_child`/`_child_worker`), with
+  the child reporting its own absolute `resource.getrusage(RUSAGE_SELF).ru_maxrss` peak back to
+  the parent via a pipe, instead of taking two whole-pytest-process before/after readings —
+  bounds the post-`terminate()` `join()` with an escalation to `process.kill()`, and converts
+  `process.start()` failures (unpicklable target, OS spawn errors) into a well-formed
+  `ChildProcessError`-shaped result rather than letting the exception escape
+- [X] T037 Add `_is_valid_memory_measurement()` to `tests/performance/harness.py`: a missing,
+  non-`int` (explicitly rejecting `bool`, which is an `int` subclass), or non-positive reading is
+  always an invalid measurement, never silently reported as a passing "0 bytes used" result;
+  `_build_report()` normalizes `measured_memory_bytes` to `0` for *any* invalid reading so a
+  malformed value never propagates to downstream numeric consumers
+- [X] T038 Add `memory_measurement_valid: bool` to `PerformanceReport` (data-model.md) and
+  `any_invalid_memory_measurement` to the Suite Run Summary (`tests/performance/results.py`);
+  update `.github/workflows/ci.yml`'s `performance` job summary step so an invalid measurement
+  takes `status_label` precedence over `⚠️ degraded` (FR-013)
+- [X] T039 Update `spec.md`, `data-model.md`, `contracts/performance-suite-contract.md`, and
+  `contracts/ci-performance-job-contract.md` to distinguish "enforcement unavailable" (macOS
+  memory-ceiling `setrlimit` best-effort, still degrades gracefully per T026) from "measurement
+  invalid" (Windows always fails since the `resource` module is entirely unavailable there —
+  `memory_measurement_valid` can never be `True` on Windows by design)
+- [X] T040 Add regression coverage in `tests/unit/performance/test_harness_memory_validation.py`
+  for zero/`None`/negative/non-int (`bool`/`float`/malformed-`str`) memory readings, the
+  crashed-target-with-valid-within-budget-memory no-negative-overage case, and
+  `results.build_suite_run_summary`'s `any_invalid_memory_measurement` aggregation; add opt-in
+  real-subprocess-boundary coverage (successful run, target exception, timeout/hang/reap) in a
+  new `tests/performance/test_harness_subprocess_boundary.py` file so it is auto-skipped by
+  `conftest.py`'s default-suite hook per FR-006/SC-004 rather than living under `tests/unit/`

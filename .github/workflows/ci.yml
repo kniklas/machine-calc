@@ -214,7 +214,16 @@ jobs:
               # there, no measurement is ever taken, so it is always
               # invalid rather than valid-but-unenforced).
               invalid_measurement = data.get("any_invalid_memory_measurement", False)
-              if invalid_measurement:
+              # pytest can fail even when has_measurements is true: the
+              # opt-in subprocess-boundary tests
+              # (tests/performance/test_harness_subprocess_boundary.py)
+              # run in this same pytest step but never call
+              # results.record(), so a failure there wouldn't otherwise be
+              # reflected in the recorded Suite Run Summary at all. Give
+              # the pytest outcome failure the same top precedence as an
+              # invalid measurement rather than letting a "pass"/"⚠️
+              # degraded" label from the recorded cases mask it.
+              if test_failed or invalid_measurement:
                   status_label = "fail"
               elif degraded:
                   status_label = "⚠️ degraded"
