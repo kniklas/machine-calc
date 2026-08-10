@@ -122,6 +122,26 @@ def test_negative_memory_reading_fails_the_case():
     assert "invalid memory measurement" in report.overage_detail
 
 
+def test_malformed_string_memory_reading_fails_without_propagating_the_string():
+    """A malformed non-int payload (e.g. a stray string from a corrupted
+    pipe read) must be classified as invalid AND must not be stored
+    verbatim in `measured_memory_bytes` — downstream numeric consumers
+    (`build_suite_run_summary`'s `max()`, the CI workflow's byte/MB
+    division) would otherwise raise `TypeError` instead of reporting the
+    intended explicit failure."""
+
+    case = _case()
+    child_result = _child_result(memory_bytes="1024")
+
+    report = harness._build_report(case, child_result)
+
+    assert report.memory_measurement_valid is False
+    assert report.memory_passed is False
+    assert isinstance(report.measured_memory_bytes, int)
+    assert report.measured_memory_bytes == 0
+    assert "invalid memory measurement" in report.overage_detail
+
+
 def test_positive_memory_reading_within_budget_passes():
     case = _case(memory_budget_bytes=1000)
     child_result = _child_result(memory_bytes=500)

@@ -534,13 +534,16 @@ def _build_report(case: PerformanceTestCase, child_result: dict[str, Any]) -> Pe
     memory_ceiling_enforced: bool = child_result["memory_ceiling_enforced"]
 
     memory_valid = _is_valid_memory_measurement(measured_memory_bytes_raw)
-    # Reported figure is always an int for the report/summary/CI consumers,
-    # even when invalid — the `memory_passed=False` below (never bypassed by
-    # this substitution) is what actually blocks the run, not this display
-    # value.
-    measured_memory_bytes = (
-        measured_memory_bytes_raw if measured_memory_bytes_raw is not None else 0
-    )
+    # Reported figure is always a real int for the report/summary/CI
+    # consumers, even when invalid — the `memory_passed=False` below (never
+    # bypassed by this substitution) is what actually blocks the run, not
+    # this display value. Any invalid reading (not just `None`) is
+    # substituted with `0`: a malformed non-int payload (e.g. a stray
+    # string) must not be stored verbatim in `measured_memory_bytes`, or
+    # downstream numeric consumers (`build_suite_run_summary`'s `max()`,
+    # the CI workflow's `/ (1024 * 1024)` division) would raise a `TypeError`
+    # instead of reporting the intended explicit failure.
+    measured_memory_bytes = measured_memory_bytes_raw if memory_valid else 0
 
     time_passed = elapsed_seconds <= case.time_budget_seconds
     memory_passed = memory_valid and measured_memory_bytes <= case.memory_budget_bytes
