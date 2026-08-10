@@ -157,23 +157,42 @@ section, the convention must be well-defined, not ambiguous).
 
 ## 5. Isolating calculation cost from harness/pytest overhead
 
-**Decision**: `harness.py` measures wall-clock time with `time.perf_counter()` immediately
-wrapping *only* the call to the target calculation function (not fixture setup, not pytest's own
-collection/reporting), and takes the `ru_maxrss` baseline reading immediately before entering that
-timed block, comparing it to the reading taken immediately after — documenting in the module
-docstring that `ru_maxrss` is a whole-process, monotonically-non-decreasing peak, so it can only
-approximate the *incremental* cost of one call amid pytest's own baseline footprint, and that
-running each measured test in relative isolation (avoiding accumulating many measurements in one
-process where practical) reduces but does not eliminate that shared baseline.
+**Original decision (superseded, see update below)**: `harness.py` measured wall-clock time with
+`time.perf_counter()` immediately wrapping *only* the call to the target calculation function (not
+fixture setup, not pytest's own collection/reporting), and took the `ru_maxrss` baseline reading
+immediately before entering that timed block, comparing it to the reading taken immediately after
+— documenting in the module docstring that `ru_maxrss` is a whole-process,
+monotonically-non-decreasing peak, so it can only approximate the *incremental* cost of one call
+amid pytest's own baseline footprint, and that running each measured test in relative isolation
+(avoiding accumulating many measurements in one process where practical) reduces but does not
+eliminate that shared baseline.
 
-**Rationale**: Directly answers the spec's Edge Cases item about isolating calculation cost from
-harness overhead; stdlib-only, minimal-overhead instrumentation keeps the measurement itself from
-materially affecting the results it reports.
+**Rationale (original)**: Directly answers the spec's Edge Cases item about isolating calculation
+cost from harness overhead; stdlib-only, minimal-overhead instrumentation keeps the measurement
+itself from materially affecting the results it reports.
 
-**Alternatives considered**:
+**Alternatives considered (original)**:
 - *Running each performance test in its own subprocess for true isolation*: considered as a
   stronger isolation technique, but rejected as the default given added complexity/runtime cost
   for a suite whose own runtime is not a hard requirement here; noted in `quickstart.md` as a
   documented limitation rather than solved with subprocess-per-case machinery, consistent with
   the spec's edge case wording ("this approach's known limitations should be documented alongside
   the suite rather than silently ignored").
+
+**Update (issue #23)**: the before/after in-process `ru_maxrss` delta above was found to silently
+report `0 MB` / `pass=True` whenever the process-wide peak RSS did not advance between the two
+readings (e.g. because an earlier case had already pushed the peak higher, or the OS reused
+already-resident pages) — the delta collapses to zero (or goes negative) despite the target
+function genuinely running, and the harness treated that as a *passing* measurement instead of an
+invalid one. This directly reopened the isolation limitation flagged above as merely
+"documented"; the fix upgrades that alternative from "documented limitation" to the adopted
+approach: `_run_case_in_child` now runs each case's `target` call in its own
+`multiprocessing` **spawn**-context child process (fork was tried first but rejected — it inherits
+the parent's resident memory via copy-on-write, defeating isolation), and reports the *absolute*
+peak RSS (`resource.getrusage(resource.RUSAGE_SELF).ru_maxrss`) observed by that child, rather than
+subtracting two whole-pytest-process high-water marks. A missing, non-`int`, or non-positive
+reading (including `bool`, which is technically an `int` subclass, and malformed non-numeric
+payloads) is now always treated as an **invalid measurement** (`memory_measurement_valid=False`)
+that fails the case, never as a passing "0 bytes used" result — see
+`contracts/performance-suite-contract.md` and `data-model.md` for the updated contract, and
+`tasks.md`'s follow-up tasks for the isolated-child implementation.

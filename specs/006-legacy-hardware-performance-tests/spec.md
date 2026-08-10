@@ -174,7 +174,15 @@ calculation) and confirm the failure output names the calculation, the failed di
   the memory-ceiling enforcement mechanism used? The suite MUST degrade gracefully — running in a
   reduced-guarantee "best-effort" mode (still measuring time/memory and reporting results) or
   skipping the affected check with a clear message — rather than erroring out or silently
-  reporting a false pass.
+  reporting a false pass. **This graceful-degradation rule applies only to the *enforcement*
+  mechanisms (single-core pin, memory ceiling) being unavailable — it does not extend to the
+  memory *measurement* itself.** If the measurement mechanism is unavailable/unusable (e.g. the
+  isolated measurement subprocess crashes before reporting, or yields a missing/zero/negative
+  `ru_maxrss` reading), the case MUST always be reported as a hard failure with an explicit
+  "invalid memory measurement" diagnostic (issue #23) — never silently passed off as a
+  `0`/`None` "measurement" nor folded into the `⚠️ degraded` label, since that would mask the very
+  defect (a monotonically non-decreasing whole-process `ru_maxrss` producing `0 MB` deltas) this
+  suite exists to catch.
 - What happens when a new calculation module/operation (e.g. a future turning or milling
   operation) is added to `src/machine_calc/operations/`? The suite's coverage of "each
   calculation" should be discoverable/extendable to new public calculation functions without
@@ -237,11 +245,20 @@ calculation) and confirm the failure output names the calculation, the failed di
   gracefully: it MUST either run in a best-effort mode that still measures and reports time and
   memory without the unsupported enforcement, or skip the affected check(s) with a clear message
   explaining why — it MUST NOT error out, crash, or silently report a false pass as though the
-  constraint had been enforced.
+  constraint had been enforced. **This rule governs *enforcement* mechanisms only.** If instead the
+  memory *measurement* itself is invalid — missing, zero, or negative (e.g. because `resource` is
+  unavailable, or the isolated measurement subprocess crashed/timed out before reporting a reading)
+  — the suite MUST always report a hard failure for that case with an explicit "invalid memory
+  measurement" diagnostic (FR-005), rather than degrading gracefully or silently treating the
+  invalid reading as a passing measurement (issue #23).
 - **FR-010**: The suite MUST clearly indicate, per run and per platform, whether the single-core
   constraint and the memory ceiling were actually enforced or were run in degraded/best-effort/skipped
   mode, so results can be correctly interpreted (e.g. a "pass" recorded without the memory ceiling
-  enforced is a weaker signal than one recorded with it enforced).
+  enforced is a weaker signal than one recorded with it enforced). It MUST separately and
+  distinctly indicate whether each case's memory *measurement* was valid at all (FR-009) — this is
+  a distinct signal from enforcement status: a case with a valid measurement can still legitimately
+  "pass" while unenforced (best-effort mode), but a case with an invalid measurement can never pass,
+  regardless of enforcement status.
 - **FR-011**: This feature MUST NOT change any existing calculation formula, public API signature
   or behavior, CLI behavior, or existing test suite's behavior, thresholds, or gating status. It
   adds only new, separate test tooling.

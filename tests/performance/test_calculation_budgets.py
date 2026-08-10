@@ -95,7 +95,8 @@ def test_calculation_meets_legacy_hardware_budget(case: harness.PerformanceTestC
         f"memory={report.measured_memory_bytes}B/{case.memory_budget_bytes}B "
         f"(pass={report.memory_passed}), "
         f"cpu_pin_enforced={report.cpu_pin_enforced}, "
-        f"memory_ceiling_enforced={report.memory_ceiling_enforced}"
+        f"memory_ceiling_enforced={report.memory_ceiling_enforced}, "
+        f"memory_measurement_valid={report.memory_measurement_valid}"
     )
 
     assert report.time_passed and report.memory_passed, report.overage_detail

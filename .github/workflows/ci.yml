@@ -204,7 +204,28 @@ jobs:
               cpu_ok = data["cpu_pin_enforced_overall"]
               memory_ok = data["memory_ceiling_enforced_overall"]
               degraded = not (cpu_ok and memory_ok)
-              if degraded:
+              # An invalid memory *measurement* (issue #23: a missing/zero/
+              # negative reading) always takes failure precedence over the
+              # weaker "⚠️ degraded" label. Degraded only describes
+              # unenforced-but-still-measured best-effort mode (e.g. macOS
+              # lacking the pin/ceiling mechanisms, FR-009/FR-010), which is
+              # allowed to still "pass" — an invalid reading never is (this
+              # can't happen on Windows: without the `resource` module
+              # there, no measurement is ever taken, so it is always
+              # invalid rather than valid-but-unenforced).
+              invalid_measurement = data.get("any_invalid_memory_measurement", False)
+              # pytest can fail even when has_measurements is true: the
+              # opt-in subprocess-boundary tests
+              # (tests/performance/test_harness_subprocess_boundary.py)
+              # run in this same pytest step but never call
+              # results.record(), so a failure there wouldn't otherwise be
+              # reflected in the recorded Suite Run Summary at all. Give
+              # the pytest outcome failure the same top precedence as an
+              # invalid measurement rather than letting a "pass"/"⚠️
+              # degraded" label from the recorded cases mask it.
+              if test_failed or invalid_measurement:
+                  status_label = "fail"
+              elif degraded:
                   status_label = "⚠️ degraded"
               elif data["overall_pass"]:
                   status_label = "pass"

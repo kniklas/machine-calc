@@ -69,6 +69,18 @@ def build_suite_run_summary(reports: list[PerformanceReport]) -> dict[str, Any]:
     overall_pass = all(report.time_passed and report.memory_passed for report in reports)
     cpu_pin_enforced_overall = all(report.cpu_pin_enforced for report in reports)
     memory_ceiling_enforced_overall = all(report.memory_ceiling_enforced for report in reports)
+    # Distinct from `cpu_pin_enforced_overall`/`memory_ceiling_enforced_overall`
+    # (which describe *enforcement* — i.e. best-effort mode on a platform
+    # like macOS, which is allowed to still "pass" per FR-009/FR-010; this
+    # can't happen on Windows, where the lack of the `resource` module
+    # means no measurement is ever taken and the reading is always invalid
+    # rather than valid-but-unenforced): this instead reports whether every
+    # case's memory *reading* itself was usable at all (issue #23). An
+    # invalid reading always means `overall_pass=False` too, but the CI
+    # summary needs this as a separate signal so it reports a real "fail"
+    # for an invalid measurement instead of being masked by the
+    # (also-true, but weaker) "⚠️ degraded" case.
+    any_invalid_memory_measurement = any(not report.memory_measurement_valid for report in reports)
 
     return {
         "has_measurements": True,
@@ -77,6 +89,7 @@ def build_suite_run_summary(reports: list[PerformanceReport]) -> dict[str, Any]:
         "overall_pass": overall_pass,
         "cpu_pin_enforced_overall": cpu_pin_enforced_overall,
         "memory_ceiling_enforced_overall": memory_ceiling_enforced_overall,
+        "any_invalid_memory_measurement": any_invalid_memory_measurement,
         "time_budget_seconds": budgets.TIME_BUDGET_SECONDS,
         "memory_budget_bytes": budgets.MEMORY_BUDGET_BYTES,
     }

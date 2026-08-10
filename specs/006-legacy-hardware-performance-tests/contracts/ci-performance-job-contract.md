@@ -66,7 +66,18 @@ blocking/required check (FR-008, SC-006), and without modifying any existing job
   boolean condition (`not (cpu_pin_enforced_overall and memory_ceiling_enforced_overall)`)
   evaluated independently of whether the measurements themselves were within budget — there is no
   speculative reasoning about whether the missing enforcement could plausibly have hidden a
-  failure.
+  failure. **Precedence exception (issue #23)**: this `⚠️ degraded` computation is checked only
+  *after* both `any_invalid_memory_measurement` (data-model.md's Suite Run Summary) and the raw
+  pytest step outcome for this run are confirmed to indicate no failure. If any case's memory
+  measurement itself was invalid (missing/zero/negative reading) *or* the pytest step outcome
+  itself was a failure, `status_label` MUST be `fail`, even if the enforcement flags would
+  otherwise have triggered `⚠️ degraded` — both are strictly stronger, always-failing signals
+  that must never be softened to "degraded". The raw pytest outcome matters here because the
+  opt-in real-subprocess-boundary tests (`tests/performance/test_harness_subprocess_boundary.py`)
+  run in the same pytest invocation as the calculation-budget cases but do not call
+  `results.record()`, so a failure in one of them would otherwise be invisible to the recorded
+  Suite Run Summary (`has_measurements` would still be `True` from the calculation-budget cases
+  alone) and could be masked as `pass` or `⚠️ degraded`.
 - **Degraded-run signaling in CI**: Because the runner is always `ubuntu-latest` (Linux), CI runs
   are expected to be in the fully-enforced row of the platform-capability contract; if a future
   runner image ever lacks a mechanism, the job still completes (per FR-009) and its output/log
