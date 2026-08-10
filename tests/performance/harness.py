@@ -253,9 +253,12 @@ class PerformanceReport:
     #: missing/zero/negative artifact of a crashed or unmeasurable child
     #: (issue #23). Distinct from ``memory_ceiling_enforced``: a case can
     #: have a perfectly valid measurement with the ceiling *unenforced*
-    #: (e.g. macOS/Windows best-effort mode per FR-009/FR-010), and that
-    #: combination must NOT be conflated with an invalid measurement, which
-    #: always fails the case regardless of enforcement status.
+    #: (e.g. macOS best-effort mode per FR-009/FR-010 — note this can't
+    #: happen on Windows: without the ``resource`` module there, no
+    #: measurement is ever taken at all, so it is always invalid rather
+    #: than valid-but-unenforced), and that combination must NOT be
+    #: conflated with an invalid measurement, which always fails the case
+    #: regardless of enforcement status.
     memory_measurement_valid: bool = True
     overage_detail: str | None = None
 
