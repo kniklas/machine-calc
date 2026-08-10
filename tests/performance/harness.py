@@ -7,23 +7,32 @@ enforcement, memory-ceiling enforcement, peak-memory measurement, wall-clock
 timing, the ``PerformanceTestCase``/``PerformanceReport`` data structures, and
 an ``overage_detail`` message builder for actionable failure reporting.
 
-**Known measurement-isolation limitations** (research.md #5, spec.md Edge
-Cases): ``resource.getrusage(...).ru_maxrss`` reports a **whole-process**,
-monotonically-non-decreasing peak resident-set size. It is not scoped to a
-single function call, so it can only *approximate* the incremental cost of
-one measured call amid pytest's own baseline footprint (interpreter startup,
-plugin loading, fixture setup, etc.) — it can never be lower than that
-baseline, and repeated calls within the same process cannot show memory
-being "freed" between them. Running each performance test case in relative
-process isolation (i.e. not accumulating many heavy measurements in a single
-long-lived process) reduces, but does not eliminate, this shared-baseline
-effect. This is a documented, accepted limitation of the approach, not a
-defect to be silently ignored.
+**Isolated child-process memory measurement** (issue #23): each case's
+``target`` call now runs in its own isolated child process
+(:func:`run_case`/:func:`_run_case_in_child`), and the *absolute* peak RSS
+(``resource.getrusage(...).ru_maxrss``) observed by that child is reported,
+rather than subtracting two whole-pytest-process high-water marks. A
+before/after delta within the long-lived pytest process is unreliable:
+``ru_maxrss`` is monotonically non-decreasing for the process's entire
+lifetime, so small calculations that don't exceed pytest's own already-high
+baseline peak produce a ``0`` delta — a measurement that looks like a
+passing "0 MB used" result but is actually not a real measurement at all.
+Measuring the child's own absolute peak means interpreter/import overhead is
+consistently included and the reported number is a genuine, meaningful
+figure rather than an artifact of measurement order.
+
+**Fail-safe validation**: any missing, non-positive, or otherwise
+uninterpretable memory reading (e.g. the child crashed before reporting, or
+``resource`` is unavailable on this platform) is treated as an invalid
+measurement, not a passing "0 bytes used" result — it always fails the
+case's memory check and produces an explicit ``invalid memory measurement``
+diagnostic (FR-009/FR-010).
 """
 
 from __future__ import annotations
 
 import contextlib
+import multiprocessing
 import os
 import platform
 import time
@@ -34,6 +43,12 @@ try:
     import resource
 except ImportError:  # pragma: no cover - Windows has no `resource` module.
     resource = None  # type: ignore[assignment]
+
+#: Generous ceiling on how long we wait for a child measurement process to
+#: report back before treating it as hung/crashed. Deliberately much larger
+#: than any real case's time budget so it never causes a false failure by
+#: itself — it only guards against a truly stuck child process.
+_CHILD_TIMEOUT_SECONDS = 30.0
 
 
 # ---------------------------------------------------------------------------
@@ -298,92 +313,197 @@ def build_overage_detail(
     return "; ".join(messages)
 
 
+def _is_valid_memory_measurement(memory_bytes: int | None) -> bool:
+    """Return whether ``memory_bytes`` is a real, usable RSS reading.
+
+    A valid measurement is a positive integer. ``None`` (measurement never
+    taken — e.g. no ``resource`` module, or the child crashed before
+    reporting) and non-positive values (``0`` or negative — never a
+    meaningful RSS reading; a live process always occupies some resident
+    memory) are both invalid (issue #23): a zero-byte reading is an artifact
+    of a broken measurement, not a real "0 bytes used" result, and must never
+    be treated as a passing memory check.
+    """
+
+    return memory_bytes is not None and memory_bytes > 0
+
+
+# ---------------------------------------------------------------------------
+# Child-process worker (isolated measurement, issue #23)
+# ---------------------------------------------------------------------------
+
+
+def _child_worker(
+    target: Callable[..., Any],
+    call_args: tuple[Any, ...],
+    call_kwargs: dict[str, Any],
+    memory_budget_bytes: int,
+    conn: Any,
+) -> None:
+    """Run inside the isolated child process spawned by :func:`run_case`.
+
+    Applies the single-core pin and memory ceiling *inside the child* (they
+    must be scoped to the process actually performing the measured call),
+    times only the call to ``target``, and reports the child's own absolute
+    peak RSS — not a delta against some other process's baseline — back to
+    the parent over ``conn``. Any exception raised by ``target`` is caught
+    and reported (by type name + message) rather than propagated, so the
+    parent always receives a result instead of a silently-dead pipe.
+    """
+
+    error_type: str | None = None
+    error_message: str | None = None
+    with pin_to_single_core(0) as cpu_pin_enforced:
+        with enforce_memory_ceiling(memory_budget_bytes) as memory_ceiling_enforced:
+            start = time.perf_counter()
+            try:
+                target(*call_args, **call_kwargs)
+            except Exception as exc:  # noqa: BLE001 — MemoryError/OSError/etc. → failing report
+                # KeyboardInterrupt and SystemExit are BaseException
+                # subclasses, not Exception subclasses, so they propagate
+                # naturally here (and terminate the child process, which the
+                # parent detects via a closed connection/exit code).
+                error_type = type(exc).__name__
+                error_message = str(exc)
+            elapsed_seconds = time.perf_counter() - start
+            # The child's own absolute peak RSS, observed even on error:
+            # e.g. the enforced ceiling's `MemoryError` fires right around
+            # the peak, so a crash is reported using whatever was actually
+            # observed, never a fabricated "0 bytes" reading.
+            memory_bytes = _ru_maxrss_bytes()
+
+    conn.send(
+        {
+            "elapsed_seconds": elapsed_seconds,
+            "memory_bytes": memory_bytes,
+            "error_type": error_type,
+            "error_message": error_message,
+            "cpu_pin_enforced": cpu_pin_enforced,
+            "memory_ceiling_enforced": memory_ceiling_enforced,
+        }
+    )
+    conn.close()
+
+
+def _run_case_in_child(case: PerformanceTestCase) -> dict[str, Any]:
+    """Run ``case.target`` in an isolated child process and return its
+    reported result dict (see :func:`_child_worker`).
+
+    If the child dies before reporting anything (crash, OS-level kill,
+    timeout), returns a result dict with ``memory_bytes=None`` and an
+    explicit ``error_type``/``error_message`` describing the failure, so the
+    caller always has a well-formed result to build a
+    :class:`PerformanceReport` from — never a bare exception or a fabricated
+    zero.
+    """
+
+    # "fork" (Linux/macOS) starts a fresh child fast; where unavailable
+    # (Windows — which also has no `resource` module, so memory is already
+    # reported invalid there) fall back to the platform default.
+    start_methods = multiprocessing.get_all_start_methods()
+    context = multiprocessing.get_context("fork" if "fork" in start_methods else None)
+
+    parent_conn, child_conn = context.Pipe(duplex=False)
+    process = context.Process(
+        target=_child_worker,
+        args=(case.target, case.call_args, case.call_kwargs, case.memory_budget_bytes, child_conn),
+    )
+    process.start()
+    child_conn.close()
+
+    payload: dict[str, Any] | None = None
+    if parent_conn.poll(_CHILD_TIMEOUT_SECONDS):
+        with contextlib.suppress(EOFError, OSError):
+            payload = parent_conn.recv()
+    parent_conn.close()
+
+    process.join(_CHILD_TIMEOUT_SECONDS)
+    if process.is_alive():  # pragma: no cover - only on a genuinely hung child
+        process.terminate()
+        process.join()
+
+    if payload is not None:
+        return payload
+
+    return {
+        "elapsed_seconds": 0.0,
+        "memory_bytes": None,
+        "error_type": "ChildProcessError",
+        "error_message": (
+            "measurement child process exited without reporting a result "
+            f"(exit code {process.exitcode})"
+        ),
+        "cpu_pin_enforced": False,
+        "memory_ceiling_enforced": False,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Orchestration (composes the helpers above)
 # ---------------------------------------------------------------------------
 
 
-def run_case(case: PerformanceTestCase) -> PerformanceReport:
-    """Run one :class:`PerformanceTestCase` and produce its
-    :class:`PerformanceReport`.
+def _build_report(case: PerformanceTestCase, child_result: dict[str, Any]) -> PerformanceReport:
+    """Turn one child-process result dict into a :class:`PerformanceReport`.
 
-    Applies the single-core pin and memory ceiling (best-effort, per
-    platform capability), measures wall-clock time and peak memory for the
-    single call to ``case.target``, compares both against the case's
-    budgets (inclusive-pass: ``measured <= budget``), and builds an
-    actionable ``overage_detail`` message when either check fails.
+    Pure/deterministic given ``child_result`` (no subprocess involved), so
+    it is unit-testable directly with hand-built payloads (see
+    ``tests/unit/performance/test_harness_memory_validation.py``) — in
+    particular to prove that a ``0`` or ``None`` memory reading always
+    fails the case rather than reporting a false pass (issue #23).
     """
 
-    error: Exception | None = None
-    with pin_to_single_core(0) as cpu_pin_enforced:
-        with enforce_memory_ceiling(case.memory_budget_bytes) as memory_ceiling_enforced:
-            memory_before = _ru_maxrss_bytes()
-            start = time.perf_counter()
-            try:
-                case.target(*case.call_args, **case.call_kwargs)
-            except Exception as exc:  # noqa: BLE001 — MemoryError/OSError/etc. → failing report
-                # KeyboardInterrupt and SystemExit are BaseException subclasses,
-                # not Exception subclasses, so they propagate naturally here.
-                error = exc
-            # Measured even on error: elapsed time and peak RSS observed up
-            # to the failure are real data (e.g. the enforced ceiling's
-            # `MemoryError` fires right around the peak), not fabricated
-            # zeroes — a crash is reported as an actionable failure using
-            # whatever was actually observed, never a false "0s/0B" reading.
-            elapsed_seconds = time.perf_counter() - start
-            memory_after = _ru_maxrss_bytes()
+    elapsed_seconds: float = child_result["elapsed_seconds"]
+    measured_memory_bytes_raw: int | None = child_result["memory_bytes"]
+    error_type: str | None = child_result["error_type"]
+    error_message: str | None = child_result["error_message"]
+    cpu_pin_enforced: bool = child_result["cpu_pin_enforced"]
+    memory_ceiling_enforced: bool = child_result["memory_ceiling_enforced"]
 
-    # Reported figure: the before/after delta (clamped at 0), not the raw
-    # absolute ru_maxrss value, so the case's measured memory approximates
-    # the incremental cost of this call rather than pytest's/the
-    # interpreter's entire baseline footprint (research.md #5's documented
-    # isolation approach; module docstring above details the limitation).
-    #
-    # `memory_measured` is `False` only on Windows (no `resource` module) —
-    # in that case the memory check is reported as failing rather than a
-    # false pass on a fabricated 0-byte reading (FR-009/FR-010).
-    memory_measured = memory_before is not None and memory_after is not None
+    memory_valid = _is_valid_memory_measurement(measured_memory_bytes_raw)
+    # Reported figure is always an int for the report/summary/CI consumers,
+    # even when invalid — the `memory_passed=False` below (never bypassed by
+    # this substitution) is what actually blocks the run, not this display
+    # value.
     measured_memory_bytes = (
-        max(memory_after - memory_before, 0)
-        if memory_before is not None and memory_after is not None
-        else 0
+        measured_memory_bytes_raw if measured_memory_bytes_raw is not None else 0
     )
 
     time_passed = elapsed_seconds <= case.time_budget_seconds
-    memory_passed = memory_measured and measured_memory_bytes <= case.memory_budget_bytes
+    memory_passed = memory_valid and measured_memory_bytes <= case.memory_budget_bytes
 
     overage_detail: str | None
-    if error is not None:
+    if error_type is not None:
         time_passed = False
         memory_passed = False
         overage_bytes = measured_memory_bytes - case.memory_budget_bytes
         overage_detail = (
-            f"{case.name}: ERROR during measurement — {type(error).__name__}: {error} "
+            f"{case.name}: ERROR during measurement — {error_type}: {error_message} "
             f"(observed {elapsed_seconds:.4f}s / {measured_memory_bytes} bytes before "
             f"the error; memory budget {case.memory_budget_bytes} bytes, "
             f"over by {overage_bytes} bytes)"
         )
     else:
-        # Suppress build_overage_detail's own memory message when memory
-        # simply wasn't measurable (Windows) — that already-generic message
-        # would otherwise misleadingly claim "measured 0 bytes > budget",
-        # so a distinct, explicit note is appended instead.
+        # Suppress build_overage_detail's own memory message when the
+        # reading is invalid — that already-generic message would otherwise
+        # misleadingly claim "measured 0 bytes > budget" instead of
+        # explaining that no real measurement was taken at all.
         overage_detail = build_overage_detail(
             case.name,
             time_passed=time_passed,
             measured_time_seconds=elapsed_seconds,
             time_budget_seconds=case.time_budget_seconds,
-            memory_passed=memory_passed or not memory_measured,
+            memory_passed=memory_passed or not memory_valid,
             measured_memory_bytes=measured_memory_bytes,
             memory_budget_bytes=case.memory_budget_bytes,
         )
-        if not memory_measured:
-            unmeasured_note = (
-                f"{case.name}: MEMORY not measured — the `resource` module is "
-                "unavailable on this platform (e.g. Windows); reported as failing "
-                "rather than a false pass (FR-009/FR-010)."
+        if not memory_valid:
+            invalid_note = (
+                f"{case.name}: invalid memory measurement — reading was "
+                f"{measured_memory_bytes_raw!r} bytes (must be a positive integer); "
+                "reported as failing rather than a false pass (FR-009/FR-010)."
             )
-            overage_detail = "; ".join(filter(None, [overage_detail, unmeasured_note]))
+            overage_detail = "; ".join(filter(None, [overage_detail, invalid_note]))
 
     return PerformanceReport(
         case_name=case.name,
@@ -395,3 +515,21 @@ def run_case(case: PerformanceTestCase) -> PerformanceReport:
         memory_ceiling_enforced=memory_ceiling_enforced,
         overage_detail=overage_detail,
     )
+
+
+def run_case(case: PerformanceTestCase) -> PerformanceReport:
+    """Run one :class:`PerformanceTestCase` and produce its
+    :class:`PerformanceReport`.
+
+    Runs ``case.target`` in an isolated child process (:func:`_run_case_in_child`)
+    and reports that child's absolute peak RSS rather than a delta between
+    two whole-pytest-process readings, comparing both time and memory
+    against the case's budgets (inclusive-pass: ``measured <= budget``). Any
+    missing, zero, or negative memory reading is always treated as an
+    invalid measurement — never a passing "0 bytes used" result
+    (issue #23) — and builds an actionable ``overage_detail`` message when
+    either check fails.
+    """
+
+    child_result = _run_case_in_child(case)
+    return _build_report(case, child_result)

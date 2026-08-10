@@ -1,0 +1,125 @@
+"""Unit tests proving invalid memory measurements always fail (issue #23).
+
+These exercise ``tests.performance.harness``'s pure validation/report-building
+helpers directly with hand-built child-process result payloads, so they run
+as part of the normal (non-opt-in) test suite — unlike
+``tests/performance/test_calculation_budgets.py``, which lives under the
+auto-skipped ``tests/performance/`` directory (see
+``tests/performance/conftest.py``) and only runs when
+``MACHINE_CALC_RUN_PERFORMANCE_TESTS=1`` is set. No subprocess is spawned
+here; :func:`tests.performance.harness._build_report` is deterministic given
+a result dict, which is exactly what makes it unit-testable without paying
+for/depending on real process isolation.
+"""
+
+from __future__ import annotations
+
+from tests.performance import harness
+
+
+def _case(**overrides: object) -> harness.PerformanceTestCase:
+    defaults: dict[str, object] = {
+        "name": "dummy-case",
+        "target": lambda: None,
+        "time_budget_seconds": 1.0,
+        "memory_budget_bytes": 128 * 1024 * 1024,
+    }
+    defaults.update(overrides)
+    return harness.PerformanceTestCase(**defaults)  # type: ignore[arg-type]
+
+
+def _child_result(**overrides: object) -> dict:
+    defaults: dict[str, object] = {
+        "elapsed_seconds": 0.01,
+        "memory_bytes": 1024,
+        "error_type": None,
+        "error_message": None,
+        "cpu_pin_enforced": True,
+        "memory_ceiling_enforced": True,
+    }
+    defaults.update(overrides)
+    return defaults
+
+
+def test_is_valid_memory_measurement_rejects_zero_and_none_and_negative():
+    assert harness._is_valid_memory_measurement(1) is True
+    assert harness._is_valid_memory_measurement(0) is False
+    assert harness._is_valid_memory_measurement(None) is False
+    assert harness._is_valid_memory_measurement(-1) is False
+
+
+def test_zero_byte_memory_reading_fails_the_case():
+    """A `0 B` reading (this issue's original symptom) must never pass."""
+
+    case = _case()
+    child_result = _child_result(memory_bytes=0)
+
+    report = harness._build_report(case, child_result)
+
+    assert report.memory_passed is False
+    assert report.measured_memory_bytes == 0
+    assert "invalid memory measurement" in report.overage_detail
+
+
+def test_none_memory_reading_fails_the_case():
+    """An unavailable/never-taken reading (e.g. no `resource` module, or a
+    crashed child) must also never pass."""
+
+    case = _case()
+    child_result = _child_result(memory_bytes=None)
+
+    report = harness._build_report(case, child_result)
+
+    assert report.memory_passed is False
+    assert report.measured_memory_bytes == 0
+    assert "invalid memory measurement" in report.overage_detail
+
+
+def test_negative_memory_reading_fails_the_case():
+    case = _case()
+    child_result = _child_result(memory_bytes=-5)
+
+    report = harness._build_report(case, child_result)
+
+    assert report.memory_passed is False
+    assert "invalid memory measurement" in report.overage_detail
+
+
+def test_positive_memory_reading_within_budget_passes():
+    case = _case(memory_budget_bytes=1000)
+    child_result = _child_result(memory_bytes=500)
+
+    report = harness._build_report(case, child_result)
+
+    assert report.memory_passed is True
+    assert report.measured_memory_bytes == 500
+    assert report.overage_detail is None
+
+
+def test_positive_memory_reading_over_budget_fails_without_invalid_note():
+    """A real (valid) over-budget reading fails for being over budget, not
+    for being "invalid" — the two failure modes must stay distinguishable."""
+
+    case = _case(memory_budget_bytes=100)
+    child_result = _child_result(memory_bytes=500)
+
+    report = harness._build_report(case, child_result)
+
+    assert report.memory_passed is False
+    assert "budget exceeded" in report.overage_detail
+    assert "invalid memory measurement" not in report.overage_detail
+
+
+def test_child_process_error_fails_both_dimensions():
+    case = _case()
+    child_result = _child_result(
+        memory_bytes=None,
+        error_type="ChildProcessError",
+        error_message="measurement child process exited without reporting a result (exit code -9)",
+    )
+
+    report = harness._build_report(case, child_result)
+
+    assert report.time_passed is False
+    assert report.memory_passed is False
+    assert "ChildProcessError" in report.overage_detail
