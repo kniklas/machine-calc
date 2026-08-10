@@ -69,6 +69,19 @@ def test_is_valid_memory_measurement_rejects_zero_and_none_and_negative():
     assert harness._is_valid_memory_measurement(-1) is False
 
 
+def test_is_valid_memory_measurement_rejects_non_int_types():
+    """The child-process payload is only loosely typed (``Any``, off a
+    pipe) — a malformed reading of the wrong type must be classified as
+    invalid rather than silently passing (`bool` is a subtype of `int` in
+    Python, so `True`/`False` need an explicit check) or crashing report
+    generation deep inside `_build_report`."""
+
+    assert harness._is_valid_memory_measurement(True) is False  # type: ignore[arg-type]
+    assert harness._is_valid_memory_measurement(False) is False  # type: ignore[arg-type]
+    assert harness._is_valid_memory_measurement(1.5) is False  # type: ignore[arg-type]
+    assert harness._is_valid_memory_measurement("1024") is False  # type: ignore[arg-type]
+
+
 def test_zero_byte_memory_reading_fails_the_case():
     """A `0 B` reading (this issue's original symptom) must never pass."""
 

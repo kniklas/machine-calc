@@ -335,9 +335,22 @@ def _is_valid_memory_measurement(memory_bytes: int | None) -> bool:
     memory) are both invalid (issue #23): a zero-byte reading is an artifact
     of a broken measurement, not a real "0 bytes used" result, and must never
     be treated as a passing memory check.
+
+    The child-process payload this is fed from is only loosely typed
+    (``Any``, deserialized off a pipe), so this also explicitly rejects any
+    non-``int`` value — including ``bool`` (a ``bool`` is a subclass of
+    ``int`` in Python, so ``True``/``False`` would otherwise silently pass
+    the ``> 0`` check as ``1``/``0``) and any float/string/other malformed
+    reading — rather than letting it slip through as a false positive or
+    raise deep inside :func:`_build_report`.
     """
 
-    return memory_bytes is not None and memory_bytes > 0
+    return (
+        memory_bytes is not None
+        and not isinstance(memory_bytes, bool)
+        and isinstance(memory_bytes, int)
+        and memory_bytes > 0
+    )
 
 
 # ---------------------------------------------------------------------------
