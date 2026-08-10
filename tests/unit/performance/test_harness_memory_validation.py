@@ -1,25 +1,23 @@
 """Unit tests proving invalid memory measurements always fail (issue #23).
 
-Most of these exercise ``tests.performance.harness``'s pure validation/
-report-building helpers directly with hand-built child-process result
-payloads, so they run as part of the normal (non-opt-in) test suite —
-unlike ``tests/performance/test_calculation_budgets.py``, which lives under
-the auto-skipped ``tests/performance/`` directory (see
+These exercise ``tests.performance.harness``'s pure validation/report-
+building helpers directly with hand-built child-process result payloads, so
+they run as part of the normal (non-opt-in) test suite — unlike
+``tests/performance/test_calculation_budgets.py``, which lives under the
+auto-skipped ``tests/performance/`` directory (see
 ``tests/performance/conftest.py``) and only runs when
-``MACHINE_CALC_RUN_PERFORMANCE_TESTS=1`` is set. Most of these tests spawn
-no subprocess at all — :func:`tests.performance.harness._build_report` is
-deterministic given a result dict, which is what makes them unit-testable
-without paying for/depending on real process isolation.
+``MACHINE_CALC_RUN_PERFORMANCE_TESTS=1`` is set. No subprocess is spawned
+here; :func:`tests.performance.harness._build_report` is deterministic given
+a result dict, which is exactly what makes it unit-testable without paying
+for/depending on real process isolation.
 
-A few tests below (named ``test_run_case_in_child_*``) are the exception:
-they deliberately DO exercise the real subprocess boundary via
-:func:`tests.performance.harness._run_case_in_child` (a real spawned child,
-a real target exception, and a real (shortened) timeout/hang/reap case),
-since this is the only way to cover the pipe/serialization/process-lifecycle
-code that hand-built payloads for ``_build_report`` cannot reach. These
-still run in the default (non-opt-in) suite — unlike
-``tests/performance/test_calculation_budgets.py`` — but pay the (small, sub-
-second) cost of real process spawns.
+Tests that exercise the real ``_run_case_in_child`` subprocess boundary (a
+real spawned child, a real target exception, a real timeout/hang/reap case)
+live in ``tests/performance/test_harness_subprocess_boundary.py`` instead —
+that measurement-adjacent, subprocess-spawning logic belongs under the
+opt-in ``tests/performance/`` directory (FR-006, SC-004: the default suite
+must not execute measurement logic or have its duration affected), not
+here.
 """
 
 from __future__ import annotations
@@ -213,92 +211,6 @@ def test_crashed_target_with_valid_within_budget_memory_reports_no_negative_over
     assert "over by" not in report.overage_detail
     assert "within the" in report.overage_detail
     assert "byte memory budget" in report.overage_detail
-
-
-def _sum_small_range() -> int:
-    return sum(range(1000))
-
-
-def test_run_case_in_child_measures_a_real_subprocess():
-    """Exercises the actual subprocess boundary (:func:`_run_case_in_child`),
-    not just :func:`_build_report` with a synthetic payload — proves a real
-    spawned child reports a genuine positive RSS reading and a valid
-    measurement, end-to-end through the pipe/serialization boundary.
-
-    Uses a module-level (picklable) target: the ``spawn`` context requires
-    the target be importable by name in the fresh child interpreter, unlike
-    a lambda/closure.
-    """
-
-    case = _case(target=_sum_small_range)
-
-    child_result = harness._run_case_in_child(case)
-
-    assert child_result["error_type"] is None
-    assert child_result["memory_bytes"] is not None
-    assert harness._is_valid_memory_measurement(child_result["memory_bytes"]) is True
-    assert child_result["elapsed_seconds"] >= 0.0
-
-    report = harness._build_report(case, child_result)
-    assert report.memory_measurement_valid is True
-    assert report.time_passed is True
-
-
-def _raise_value_error() -> None:
-    raise ValueError("boom")
-
-
-def test_run_case_in_child_reports_target_exception_without_crashing_harness():
-    """A target that raises inside the child process must be reported as an
-    error result (not propagate/crash the parent), through the real
-    subprocess boundary."""
-
-    case = _case(target=_raise_value_error)
-
-    child_result = harness._run_case_in_child(case)
-
-    assert child_result["error_type"] == "ValueError"
-    assert "boom" in (child_result["error_message"] or "")
-
-    report = harness._build_report(case, child_result)
-    assert report.time_passed is False
-    assert report.memory_passed is False
-
-
-def test_run_case_in_child_times_out_and_is_reaped_promptly():
-    """A hung child (never returns) must be terminated and reported as an
-    invalid/failed measurement, and must not block for materially longer
-    than one timeout window (regression test for the double-timeout bug
-    fixed in an earlier review round)."""
-
-    import time as _time
-
-    original_timeout = harness._CHILD_TIMEOUT_SECONDS
-    harness._CHILD_TIMEOUT_SECONDS = 0.5
-    try:
-        case = _case(target=_hang_forever)
-
-        start = _time.perf_counter()
-        child_result = harness._run_case_in_child(case)
-        elapsed = _time.perf_counter() - start
-
-        # Generous upper bound: should be roughly 1x the (shortened) timeout,
-        # never ~2x it (the double-timeout bug this test guards against).
-        assert elapsed < harness._CHILD_TIMEOUT_SECONDS * 3
-        assert child_result["error_type"] is not None
-        assert child_result["memory_bytes"] is None
-
-        report = harness._build_report(case, child_result)
-        assert report.memory_measurement_valid is False
-        assert report.memory_passed is False
-    finally:
-        harness._CHILD_TIMEOUT_SECONDS = original_timeout
-
-
-def _hang_forever() -> None:
-    import time
-
-    time.sleep(3600)
 
 
 def test_build_suite_run_summary_flags_any_invalid_memory_measurement():
