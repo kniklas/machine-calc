@@ -136,3 +136,39 @@ def test_child_process_error_fails_both_dimensions():
     assert report.time_passed is False
     assert report.memory_passed is False
     assert "ChildProcessError" in report.overage_detail
+
+
+def test_crashed_child_with_invalid_memory_includes_invalid_note_not_fabricated_overage():
+    """A crashed child with no usable memory reading must state the reading
+    is invalid, not compute a bogus overage against a `0`/`None` value."""
+
+    case = _case()
+    child_result = _child_result(
+        memory_bytes=None,
+        error_type="ChildProcessError",
+        error_message="measurement child process exited without reporting a result (exit code -9)",
+    )
+
+    report = harness._build_report(case, child_result)
+
+    assert "invalid memory measurement" in report.overage_detail
+    assert "over by -" not in report.overage_detail
+
+
+def test_crashed_target_with_valid_memory_reports_real_overage():
+    """A target exception with a real memory reading captured beforehand
+    (e.g. hit the enforced ceiling) should still report a genuine overage,
+    not an invalid-measurement note."""
+
+    case = _case(memory_budget_bytes=100)
+    child_result = _child_result(
+        memory_bytes=500,
+        error_type="MemoryError",
+        error_message="",
+    )
+
+    report = harness._build_report(case, child_result)
+
+    assert report.memory_passed is False
+    assert "invalid memory measurement" not in report.overage_detail
+    assert "over by 400 bytes" in report.overage_detail

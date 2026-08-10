@@ -412,12 +412,23 @@ def _run_case_in_child(case: PerformanceTestCase) -> dict[str, Any]:
     child_conn.close()
 
     payload: dict[str, Any] | None = None
-    if parent_conn.poll(_CHILD_TIMEOUT_SECONDS):
+    got_result = parent_conn.poll(_CHILD_TIMEOUT_SECONDS)
+    if got_result:
         with contextlib.suppress(EOFError, OSError):
             payload = parent_conn.recv()
     parent_conn.close()
 
-    process.join(_CHILD_TIMEOUT_SECONDS)
+    if got_result:
+        # The child already sent its result within the timeout, so it
+        # should exit almost immediately — a short bounded wait to reap it
+        # is enough and doesn't need to re-apply the full timeout budget.
+        process.join(_CHILD_TIMEOUT_SECONDS)
+    else:
+        # Polling already consumed the full timeout waiting for a hung/dead
+        # child — do not wait a second full timeout before reaping it, or a
+        # single stuck case could block the suite for 2x the documented
+        # timeout (up to 4x across this suite's 4 cases).
+        process.join(0)
     if process.is_alive():  # pragma: no cover - only on a genuinely hung child
         process.terminate()
         process.join()
@@ -476,13 +487,31 @@ def _build_report(case: PerformanceTestCase, child_result: dict[str, Any]) -> Pe
     if error_type is not None:
         time_passed = False
         memory_passed = False
-        overage_bytes = measured_memory_bytes - case.memory_budget_bytes
-        overage_detail = (
+        error_note = (
             f"{case.name}: ERROR during measurement — {error_type}: {error_message} "
-            f"(observed {elapsed_seconds:.4f}s / {measured_memory_bytes} bytes before "
-            f"the error; memory budget {case.memory_budget_bytes} bytes, "
-            f"over by {overage_bytes} bytes)"
+            f"(observed {elapsed_seconds:.4f}s before the error)"
         )
+        if memory_valid:
+            # A real (valid) memory reading was still captured before the
+            # crash (e.g. the enforced ceiling's `MemoryError` fires right
+            # around the peak) — report how far over budget it was.
+            overage_bytes = measured_memory_bytes - case.memory_budget_bytes
+            error_note += (
+                f"; measured {measured_memory_bytes} bytes before the error "
+                f"(memory budget {case.memory_budget_bytes} bytes, over by {overage_bytes} bytes)"
+            )
+            overage_detail = error_note
+        else:
+            # No usable memory reading was captured at all (e.g. the child
+            # died before reporting) — never compute a fabricated overage
+            # against a `0`/`None` reading; state plainly that the
+            # measurement itself is invalid (FR-009/FR-010, issue #23).
+            invalid_note = (
+                f"{case.name}: invalid memory measurement — reading was "
+                f"{measured_memory_bytes_raw!r} bytes (must be a positive integer); "
+                "reported as failing rather than a false pass (FR-009/FR-010)."
+            )
+            overage_detail = "; ".join([error_note, invalid_note])
     else:
         # Suppress build_overage_detail's own memory message when the
         # reading is invalid — that already-generic message would otherwise
