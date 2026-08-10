@@ -66,7 +66,12 @@ blocking/required check (FR-008, SC-006), and without modifying any existing job
   boolean condition (`not (cpu_pin_enforced_overall and memory_ceiling_enforced_overall)`)
   evaluated independently of whether the measurements themselves were within budget — there is no
   speculative reasoning about whether the missing enforcement could plausibly have hidden a
-  failure.
+  failure. **Precedence exception (issue #23)**: this `⚠️ degraded` computation is checked only
+  *after* `any_invalid_memory_measurement` (data-model.md's Suite Run Summary) is confirmed
+  `False`. If any case's memory measurement itself was invalid (missing/zero/negative reading),
+  `status_label` MUST be `fail`, even if the enforcement flags would otherwise have triggered
+  `⚠️ degraded` — an invalid measurement is a strictly stronger, always-failing signal that must
+  never be softened to "degraded".
 - **Degraded-run signaling in CI**: Because the runner is always `ubuntu-latest` (Linux), CI runs
   are expected to be in the fully-enforced row of the platform-capability contract; if a future
   runner image ever lacks a mechanism, the job still completes (per FR-009) and its output/log

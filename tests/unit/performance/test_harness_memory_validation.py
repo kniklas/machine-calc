@@ -71,6 +71,7 @@ def test_zero_byte_memory_reading_fails_the_case():
 
     assert report.memory_passed is False
     assert report.measured_memory_bytes == 0
+    assert report.memory_measurement_valid is False
     assert "invalid memory measurement" in report.overage_detail
 
 
@@ -85,6 +86,7 @@ def test_none_memory_reading_fails_the_case():
 
     assert report.memory_passed is False
     assert report.measured_memory_bytes == 0
+    assert report.memory_measurement_valid is False
     assert "invalid memory measurement" in report.overage_detail
 
 
@@ -95,6 +97,7 @@ def test_negative_memory_reading_fails_the_case():
     report = harness._build_report(case, child_result)
 
     assert report.memory_passed is False
+    assert report.memory_measurement_valid is False
     assert "invalid memory measurement" in report.overage_detail
 
 
@@ -106,6 +109,7 @@ def test_positive_memory_reading_within_budget_passes():
 
     assert report.memory_passed is True
     assert report.measured_memory_bytes == 500
+    assert report.memory_measurement_valid is True
     assert report.overage_detail is None
 
 
@@ -119,6 +123,7 @@ def test_positive_memory_reading_over_budget_fails_without_invalid_note():
     report = harness._build_report(case, child_result)
 
     assert report.memory_passed is False
+    assert report.memory_measurement_valid is True
     assert "budget exceeded" in report.overage_detail
     assert "invalid memory measurement" not in report.overage_detail
 
@@ -135,6 +140,7 @@ def test_child_process_error_fails_both_dimensions():
 
     assert report.time_passed is False
     assert report.memory_passed is False
+    assert report.memory_measurement_valid is False
     assert "ChildProcessError" in report.overage_detail
 
 
@@ -151,6 +157,7 @@ def test_crashed_child_with_invalid_memory_includes_invalid_note_not_fabricated_
 
     report = harness._build_report(case, child_result)
 
+    assert report.memory_measurement_valid is False
     assert "invalid memory measurement" in report.overage_detail
     assert "over by -" not in report.overage_detail
 
@@ -170,5 +177,115 @@ def test_crashed_target_with_valid_memory_reports_real_overage():
     report = harness._build_report(case, child_result)
 
     assert report.memory_passed is False
+    assert report.memory_measurement_valid is True
     assert "invalid memory measurement" not in report.overage_detail
     assert "over by 400 bytes" in report.overage_detail
+
+
+def test_crashed_target_with_valid_within_budget_memory_reports_no_negative_overage():
+    """A target exception with a real, *within-budget* memory reading (e.g.
+    a `MemoryError` triggered by something other than the tracked resource,
+    with only 500 bytes measured against a 128MB budget) must never report
+    a fabricated negative "over by" figure — it should instead say the
+    reading was within budget."""
+
+    case = _case(memory_budget_bytes=128 * 1024 * 1024)
+    child_result = _child_result(
+        memory_bytes=500,
+        error_type="MemoryError",
+        error_message="",
+    )
+
+    report = harness._build_report(case, child_result)
+
+    assert report.memory_measurement_valid is True
+    assert "invalid memory measurement" not in report.overage_detail
+    assert "over by" not in report.overage_detail
+    assert "within the" in report.overage_detail
+    assert "byte memory budget" in report.overage_detail
+
+
+def _sum_small_range() -> int:
+    return sum(range(1000))
+
+
+def test_run_case_in_child_measures_a_real_subprocess():
+    """Exercises the actual subprocess boundary (:func:`_run_case_in_child`),
+    not just :func:`_build_report` with a synthetic payload — proves a real
+    spawned child reports a genuine positive RSS reading and a valid
+    measurement, end-to-end through the pipe/serialization boundary.
+
+    Uses a module-level (picklable) target: the ``spawn`` context requires
+    the target be importable by name in the fresh child interpreter, unlike
+    a lambda/closure.
+    """
+
+    case = _case(target=_sum_small_range)
+
+    child_result = harness._run_case_in_child(case)
+
+    assert child_result["error_type"] is None
+    assert child_result["memory_bytes"] is not None
+    assert harness._is_valid_memory_measurement(child_result["memory_bytes"]) is True
+    assert child_result["elapsed_seconds"] >= 0.0
+
+    report = harness._build_report(case, child_result)
+    assert report.memory_measurement_valid is True
+    assert report.time_passed is True
+
+
+def _raise_value_error() -> None:
+    raise ValueError("boom")
+
+
+def test_run_case_in_child_reports_target_exception_without_crashing_harness():
+    """A target that raises inside the child process must be reported as an
+    error result (not propagate/crash the parent), through the real
+    subprocess boundary."""
+
+    case = _case(target=_raise_value_error)
+
+    child_result = harness._run_case_in_child(case)
+
+    assert child_result["error_type"] == "ValueError"
+    assert "boom" in (child_result["error_message"] or "")
+
+    report = harness._build_report(case, child_result)
+    assert report.time_passed is False
+    assert report.memory_passed is False
+
+
+def test_run_case_in_child_times_out_and_is_reaped_promptly():
+    """A hung child (never returns) must be terminated and reported as an
+    invalid/failed measurement, and must not block for materially longer
+    than one timeout window (regression test for the double-timeout bug
+    fixed in an earlier review round)."""
+
+    import time as _time
+
+    original_timeout = harness._CHILD_TIMEOUT_SECONDS
+    harness._CHILD_TIMEOUT_SECONDS = 0.5
+    try:
+        case = _case(target=_hang_forever)
+
+        start = _time.perf_counter()
+        child_result = harness._run_case_in_child(case)
+        elapsed = _time.perf_counter() - start
+
+        # Generous upper bound: should be roughly 1x the (shortened) timeout,
+        # never ~2x it (the double-timeout bug this test guards against).
+        assert elapsed < harness._CHILD_TIMEOUT_SECONDS * 3
+        assert child_result["error_type"] is not None
+        assert child_result["memory_bytes"] is None
+
+        report = harness._build_report(case, child_result)
+        assert report.memory_measurement_valid is False
+        assert report.memory_passed is False
+    finally:
+        harness._CHILD_TIMEOUT_SECONDS = original_timeout
+
+
+def _hang_forever() -> None:
+    import time
+
+    time.sleep(3600)

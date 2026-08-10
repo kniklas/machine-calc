@@ -248,6 +248,15 @@ class PerformanceReport:
     memory_passed: bool
     cpu_pin_enforced: bool
     memory_ceiling_enforced: bool
+    #: Whether the reported ``measured_memory_bytes`` is a real, usable RSS
+    #: reading (see :func:`_is_valid_memory_measurement`) rather than a
+    #: missing/zero/negative artifact of a crashed or unmeasurable child
+    #: (issue #23). Distinct from ``memory_ceiling_enforced``: a case can
+    #: have a perfectly valid measurement with the ceiling *unenforced*
+    #: (e.g. macOS/Windows best-effort mode per FR-009/FR-010), and that
+    #: combination must NOT be conflated with an invalid measurement, which
+    #: always fails the case regardless of enforcement status.
+    memory_measurement_valid: bool = True
     overage_detail: str | None = None
 
 
@@ -457,6 +466,16 @@ def _run_case_in_child(case: PerformanceTestCase) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+def _invalid_memory_note(case_name: str, measured_memory_bytes_raw: int | None) -> str:
+    """Build the shared "invalid memory measurement" diagnostic text."""
+
+    return (
+        f"{case_name}: invalid memory measurement — reading was "
+        f"{measured_memory_bytes_raw!r} bytes (must be a positive integer); "
+        "reported as failing rather than a false pass (FR-009/FR-010)."
+    )
+
+
 def _build_report(case: PerformanceTestCase, child_result: dict[str, Any]) -> PerformanceReport:
     """Turn one child-process result dict into a :class:`PerformanceReport`.
 
@@ -496,24 +515,30 @@ def _build_report(case: PerformanceTestCase, child_result: dict[str, Any]) -> Pe
         )
         if memory_valid:
             # A real (valid) memory reading was still captured before the
-            # crash (e.g. the enforced ceiling's `MemoryError` fires right
-            # around the peak) — report how far over budget it was.
-            overage_bytes = measured_memory_bytes - case.memory_budget_bytes
-            error_note += (
-                f"; measured {measured_memory_bytes} bytes before the error "
-                f"(memory budget {case.memory_budget_bytes} bytes, over by {overage_bytes} bytes)"
-            )
+            # crash. Only describe it as an "overage" when it actually
+            # exceeded the budget (e.g. the enforced ceiling's `MemoryError`
+            # fired right around the peak) — a valid, within-budget reading
+            # observed before an unrelated error must not be misreported as
+            # having exceeded a limit it didn't.
+            if measured_memory_bytes > case.memory_budget_bytes:
+                overage_bytes = measured_memory_bytes - case.memory_budget_bytes
+                error_note += (
+                    f"; measured {measured_memory_bytes} bytes before the error "
+                    f"(memory budget {case.memory_budget_bytes} bytes, "
+                    f"over by {overage_bytes} bytes)"
+                )
+            else:
+                error_note += (
+                    f"; measured {measured_memory_bytes} bytes before the error "
+                    f"(within the {case.memory_budget_bytes} byte memory budget)"
+                )
             overage_detail = error_note
         else:
             # No usable memory reading was captured at all (e.g. the child
             # died before reporting) — never compute a fabricated overage
             # against a `0`/`None` reading; state plainly that the
             # measurement itself is invalid (FR-009/FR-010, issue #23).
-            invalid_note = (
-                f"{case.name}: invalid memory measurement — reading was "
-                f"{measured_memory_bytes_raw!r} bytes (must be a positive integer); "
-                "reported as failing rather than a false pass (FR-009/FR-010)."
-            )
+            invalid_note = _invalid_memory_note(case.name, measured_memory_bytes_raw)
             overage_detail = "; ".join([error_note, invalid_note])
     else:
         # Suppress build_overage_detail's own memory message when the
@@ -530,11 +555,7 @@ def _build_report(case: PerformanceTestCase, child_result: dict[str, Any]) -> Pe
             memory_budget_bytes=case.memory_budget_bytes,
         )
         if not memory_valid:
-            invalid_note = (
-                f"{case.name}: invalid memory measurement — reading was "
-                f"{measured_memory_bytes_raw!r} bytes (must be a positive integer); "
-                "reported as failing rather than a false pass (FR-009/FR-010)."
-            )
+            invalid_note = _invalid_memory_note(case.name, measured_memory_bytes_raw)
             overage_detail = "; ".join(filter(None, [overage_detail, invalid_note]))
 
     return PerformanceReport(
@@ -545,6 +566,7 @@ def _build_report(case: PerformanceTestCase, child_result: dict[str, Any]) -> Pe
         memory_passed=memory_passed,
         cpu_pin_enforced=cpu_pin_enforced,
         memory_ceiling_enforced=memory_ceiling_enforced,
+        memory_measurement_valid=memory_valid,
         overage_detail=overage_detail,
     )
 

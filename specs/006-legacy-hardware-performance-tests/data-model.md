@@ -41,12 +41,13 @@ within budget, whether enforcement was active or degraded, and overage detail on
 |---|---|---|
 | `case_name` | `str` | The `Performance Test Case.name` this result belongs to. |
 | `measured_time_seconds` | `float` | Wall-clock time measured for the single call (research.md #5). |
-| `measured_memory_bytes` | `int` | Peak memory (`ru_maxrss`, normalized to bytes per research.md #3) associated with the call. |
+| `measured_memory_bytes` | `int` | Peak memory (`ru_maxrss`, normalized to bytes per research.md #3) associated with the call. When `memory_measurement_valid` is `False`, this is a display-only substitute value (`0` for a missing reading), never treated as a real "0 bytes used" result. |
 | `time_passed` | `bool` | `measured_time_seconds <= time_budget_seconds` (inclusive-pass, research.md #4). |
-| `memory_passed` | `bool` | `measured_memory_bytes <= memory_budget_bytes` (inclusive-pass, research.md #4). |
+| `memory_passed` | `bool` | `memory_measurement_valid and measured_memory_bytes <= memory_budget_bytes` (inclusive-pass, research.md #4) — an invalid measurement (see below) always fails this check, regardless of the (substitute) `measured_memory_bytes` value (issue #23). |
 | `cpu_pin_enforced` | `bool` | Whether the single-core pin (FR-002) was actually applied for this run (`True` on Linux where `os.sched_setaffinity` succeeded; `False` in degraded/best-effort mode per FR-009/FR-010). |
 | `memory_ceiling_enforced` | `bool` | Whether the memory-ceiling `setrlimit` (FR-003) was actually applied for this run (`False` in degraded/best-effort mode per FR-009/FR-010). |
-| `overage_detail` | `str \| None` | Human-readable overage message(s) when `time_passed` and/or `memory_passed` is `False` — states the calculation name, the failed dimension(s) (reported distinctly per spec's Edge Cases / US3 Acceptance Scenario 3), the measured value, the budget, and the amount/percentage exceeded (FR-005). `None` when both checks pass. |
+| `memory_measurement_valid` | `bool` | Whether `measured_memory_bytes` is a real, usable RSS reading — `True` only for a positive integer (issue #23); `False` for a missing (`None`, e.g. the isolated child process crashed before reporting, or `resource` is unavailable on this platform), zero, or negative reading. Distinct from `memory_ceiling_enforced`: a case can have a valid reading with the ceiling *unenforced* (best-effort mode), and that combination is still allowed to `pass`; an invalid reading, by contrast, always fails regardless of enforcement status. |
+| `overage_detail` | `str \| None` | Human-readable overage message(s) when `time_passed` and/or `memory_passed` is `False` — states the calculation name, the failed dimension(s) (reported distinctly per spec's Edge Cases / US3 Acceptance Scenario 3), the measured value, the budget, and the amount/percentage exceeded (FR-005). When `memory_measurement_valid` is `False`, an explicit `invalid memory measurement` diagnostic is included instead of/alongside a fabricated overage figure. `None` when both checks pass. |
 
 **Validation rules**: `overage_detail` MUST be populated whenever `time_passed` is `False` or
 `memory_passed` is `False`, and MUST name the calculation and each failed dimension separately
@@ -73,11 +74,12 @@ consumes as its single `performance` row. Introduced here because FR-013's Clari
 
 | Field | Type | Description |
 |---|---|---|
-| `status_label` | `Literal["pass", "fail", "⚠️ degraded", "skipped", "cancelled"]` | The run's outcome label surfaced to `quality-summary`. `⚠️ degraded` is a distinct label — never folded into `pass`/`fail` — computed as `not (cpu_pin_enforced_overall and memory_ceiling_enforced_overall)` (a simple boolean condition over the two run-level enforcement flags below), evaluated independently of whether every case's `time_passed`/`memory_passed` was `True` (FR-013 Clarifications #3/#5; specs/004 FR-010). `skipped`/`cancelled` are set only when the job itself did not execute or was cancelled before producing any per-case measurements. |
+| `status_label` | `Literal["pass", "fail", "⚠️ degraded", "skipped", "cancelled"]` | The run's outcome label surfaced to `quality-summary`. Computed with the following precedence: (1) if `any_invalid_memory_measurement` is `True`, `status_label` is always `fail` — an invalid (missing/zero/negative) memory *reading* (issue #23) is a broken measurement, never a merely-unenforced one, and must never be masked by the weaker `⚠️ degraded` label; (2) otherwise, `⚠️ degraded` is a distinct label — never folded into `pass`/`fail` — computed as `not (cpu_pin_enforced_overall and memory_ceiling_enforced_overall)` (a simple boolean condition over the two run-level enforcement flags below), evaluated independently of whether every case's `time_passed`/`memory_passed` was `True` (FR-013 Clarifications #3/#5; specs/004 FR-010); (3) otherwise `pass`/`fail` follows `overall_pass`. `skipped`/`cancelled` are set only when the job itself did not execute or was cancelled before producing any per-case measurements. |
 | `worst_case_time_seconds` | `float \| None` | `max(report.measured_time_seconds for report in run)` — the single highest measured wall-clock time across every Performance Report in the run. `None` only when no report was produced (skipped/cancelled/fully-degraded-before-measurement). |
 | `worst_case_memory_bytes` | `int \| None` | `max(report.measured_memory_bytes for report in run)` — the single highest measured peak memory across every Performance Report in the run. `None` only when no report was produced. |
 | `cpu_pin_enforced_overall` | `bool` | `all(report.cpu_pin_enforced for report in run)` — whether the single-core pin was active for *every* case in the run. |
 | `memory_ceiling_enforced_overall` | `bool` | `all(report.memory_ceiling_enforced for report in run)` — whether the memory ceiling was active for *every* case in the run. |
+| `any_invalid_memory_measurement` | `bool` | `any(not report.memory_measurement_valid for report in run)` (issue #23) — whether *any* case's memory reading was missing, zero, or negative (an unusable/broken measurement), as distinct from `cpu_pin_enforced_overall`/`memory_ceiling_enforced_overall` which describe *enforcement* (e.g. best-effort mode on macOS/Windows, which MAY still legitimately report a valid, passing reading per FR-009/FR-010). A `True` value always forces `status_label = "fail"` per the precedence rule above, regardless of `overall_pass` or the enforcement flags. |
 | `metric_string` | `str \| None` | The exact text surfaced in the `quality-summary` row's metric column. When `worst_case_time_seconds`/`worst_case_memory_bytes` are not `None` (i.e. at least one real measurement was produced — on pass, fail, *and* degraded-but-measured runs alike, FR-013 Clarifications #4), this is `f"{worst_case_time_ms:.2f}ms / {worst_case_memory_bytes_in_mb}MB (budgets: {time_budget_ms:.2f}ms/{memory_budget_bytes_in_mb}MB)"` — time in **milliseconds** with 2-decimal precision (not seconds), since these calculations complete in well under a second and a seconds-based format rounds every real measurement down to a misleading `0.00s` — e.g. `"0.42ms / 58MB (budgets: 1000.00ms/128MB)"`. When no measurement was produced (`status_label` is `skipped` or `cancelled`, or the job degraded before any case ran), this is the standard `—` "no metric available" placeholder shared with every other check (FR-013 Clarifications #2; specs/004 FR-005) — never a bespoke string and never a stale prior-run value. |
 
 **Validation rules**: `metric_string` MUST show real measured worst-case values whenever
@@ -85,10 +87,11 @@ consumes as its single `performance` row. Introduced here because FR-013's Clari
 `fail` or `⚠️ degraded` — the `—` placeholder is reserved exclusively for skipped/cancelled/no-
 measurement rows and MUST NOT be used to hide a genuine measured failure (contrast with the
 `complexity` job's convention of falling back to a placeholder on failure). `status_label` MUST be
-computed as `⚠️ degraded` whenever `cpu_pin_enforced_overall` is `False` OR
-`memory_ceiling_enforced_overall` is `False`, regardless of the measured pass/fail outcome of any
-individual case — a direct boolean check, not a judgment call about whether the missing
-enforcement could plausibly have hidden a failure.
+`fail` whenever `any_invalid_memory_measurement` is `True` (issue #23), taking precedence over the
+`⚠️ degraded` computation below. Otherwise, `status_label` MUST be computed as `⚠️ degraded`
+whenever `cpu_pin_enforced_overall` is `False` OR `memory_ceiling_enforced_overall` is `False`,
+regardless of the measured pass/fail outcome of any individual case — a direct boolean check, not
+a judgment call about whether the missing enforcement could plausibly have hidden a failure.
 
 **Relationships**: Computed once per CI `performance` job run from that run's full set of
 Performance Reports; consumed 1:1 by `quality-summary`'s `performance` row (specs/004-pr-quality-
