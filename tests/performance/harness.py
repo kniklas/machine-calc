@@ -397,11 +397,14 @@ def _run_case_in_child(case: PerformanceTestCase) -> dict[str, Any]:
     zero.
     """
 
-    # "fork" (Linux/macOS) starts a fresh child fast; where unavailable
-    # (Windows — which also has no `resource` module, so memory is already
-    # reported invalid there) fall back to the platform default.
-    start_methods = multiprocessing.get_all_start_methods()
-    context = multiprocessing.get_context("fork" if "fork" in start_methods else None)
+    # Use "spawn" (a fresh interpreter process), never "fork": forking
+    # inherits the parent pytest process's already-resident address space
+    # via copy-on-write, so a forked child's absolute `ru_maxrss` can start
+    # from — and reflect — the parent's own plugins/imports/test-order
+    # baseline rather than a clean process measuring only this one
+    # calculation. "spawn" is available on every platform this suite
+    # supports (Linux/macOS/Windows) and is already Windows'/macOS' default.
+    context = multiprocessing.get_context("spawn")
 
     parent_conn, child_conn = context.Pipe(duplex=False)
     process = context.Process(
