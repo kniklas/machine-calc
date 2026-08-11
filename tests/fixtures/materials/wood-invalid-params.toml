@@ -1,0 +1,16 @@
+[[materials]]
+name = "Oak"
+reference_cutting_speed = -1.0
+reference_feed_per_rev = 0.22
+specific_cutting_force = 1200.0
+
+[[materials]]
+name = "Pine"
+reference_feed_per_rev = 0.30
+specific_cutting_force = 650.0
+
+[[materials]]
+name = "Spruce"
+reference_cutting_speed = 65.0
+reference_feed_per_rev = "invalid"
+specific_cutting_force = 700.0

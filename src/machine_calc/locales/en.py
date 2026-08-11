@@ -62,6 +62,9 @@ MESSAGES: dict[str, str] = {
     "error.missing_tool": "A drilling tool must be selected.",
     "error.unknown_material": "Unknown workpiece material: {material!r}.",
     "error.unknown_tool": "Unknown drilling tool: {tool!r}.",
+    "error.unusable_material": (
+        "Workpiece material {material!r} is registered but unusable for calculation: {details}."
+    ),
     "error.invalid_target_rpm": "Target spindle speed must be a positive, finite number.",
     "error.mode_conflict": (
         "Power-constrained and fixed-RPM inputs cannot be combined in one "

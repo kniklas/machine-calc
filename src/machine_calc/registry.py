@@ -16,9 +16,12 @@ behavior is byte-for-byte identical to the pre-feature hard-coded registry
 
 from __future__ import annotations
 
+import functools
+import logging
+import math
 from dataclasses import dataclass, field
 
-from machine_calc.registry_config import RawRegistryEntry, RegistryConfigError, load_and_merge
+from machine_calc.registry_config import RawRegistryEntry, load_and_merge
 from machine_calc.units import ft_min_to_m_min, in_to_mm, psi_to_n_per_mm2
 
 _BUNDLED_PACKAGE = "machine_calc.data"
@@ -33,6 +36,10 @@ _FIELD_MAP = {
     "reference_feed_per_rev": "reference_feed_per_rev_mm",
     "specific_cutting_force": "specific_cutting_force_kc",
 }
+_REQUIRED_NUMERIC_FIELDS = tuple(_FIELD_MAP.keys())
+_CANONICAL_NUMERIC_FIELDS = tuple(_FIELD_MAP.values())
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -72,9 +79,56 @@ class WorkpieceMaterial:
 
         return self.translations.get(locale, self.name)
 
+    @property
+    def is_usable(self) -> bool:
+        """Return ``True`` when all numeric fields are finite and positive.
 
-def _validate(material: WorkpieceMaterial, source_path: str = _BUNDLED_RESOURCE) -> None:
-    """Validate ``material``'s numeric fields, raising ``RegistryConfigError`` if invalid.
+        Materials with invalid source data are still registered per FR-008
+        (warn-and-continue), with invalid fields stored as ``nan``. Check
+        this property (or :func:`get_material_validation`) before using the
+        numeric fields in a calculation — feeding a non-usable material into
+        a formula would silently propagate ``nan``.
+        """
+
+        return all(
+            math.isfinite(value) and value > 0
+            for value in (
+                self.reference_cutting_speed_m_min,
+                self.reference_feed_per_rev_mm,
+                self.specific_cutting_force_kc,
+            )
+        )
+
+
+@dataclass(frozen=True)
+class MaterialValidationRecord:
+    """Load-time validation status for one material entry (FR-008)."""
+
+    material_name: str
+    status: str
+    issues: tuple[str, ...]
+    source_path: str
+
+
+@dataclass(frozen=True)
+class _RegistrySnapshot:
+    materials: dict[str, WorkpieceMaterial]
+    validation: dict[str, MaterialValidationRecord]
+
+
+def _warn_validation(record: MaterialValidationRecord) -> None:
+    if record.status != "warning":
+        return
+    _LOGGER.warning(
+        "Material entry %r from %s has validation issue(s): %s",
+        record.material_name,
+        record.source_path,
+        "; ".join(record.issues),
+    )
+
+
+def _validate(material: WorkpieceMaterial, source_path: str = _BUNDLED_RESOURCE) -> tuple[str, ...]:
+    """Validate ``material``'s numeric fields and return issue details.
 
     Args:
         source_path: The bundled resource name or user-supplied path this
@@ -82,34 +136,17 @@ def _validate(material: WorkpieceMaterial, source_path: str = _BUNDLED_RESOURCE)
             used to report an accurate error location (FR-007) rather than
             always pointing at the bundled file.
     """
-
+    issues: list[str] = []
     if material.reference_cutting_speed_m_min <= 0:
-        raise RegistryConfigError(
-            "error.materials_config.invalid_entry",
-            path=source_path,
-            kind="material",
-            name=material.name,
-            details="reference_cutting_speed_m_min must be positive",
-        )
+        issues.append("reference_cutting_speed_m_min must be positive")
     if material.reference_feed_per_rev_mm <= 0:
-        raise RegistryConfigError(
-            "error.materials_config.invalid_entry",
-            path=source_path,
-            kind="material",
-            name=material.name,
-            details="reference_feed_per_rev_mm must be positive",
-        )
+        issues.append("reference_feed_per_rev_mm must be positive")
     if material.specific_cutting_force_kc <= 0:
-        raise RegistryConfigError(
-            "error.materials_config.invalid_entry",
-            path=source_path,
-            kind="material",
-            name=material.name,
-            details="specific_cutting_force_kc must be positive",
-        )
+        issues.append("specific_cutting_force_kc must be positive")
+    return tuple(issues)
 
 
-def _to_material(entry: RawRegistryEntry) -> WorkpieceMaterial:
+def _to_material(entry: RawRegistryEntry) -> tuple[WorkpieceMaterial, MaterialValidationRecord]:
     """Convert a merged :class:`RawRegistryEntry` into a `WorkpieceMaterial`.
 
     Applies imperial->metric conversion of the three numeric fields when
@@ -118,33 +155,38 @@ def _to_material(entry: RawRegistryEntry) -> WorkpieceMaterial:
     """
 
     values: dict[str, float] = {}
+    issues: list[str] = []
+    source_path = entry.source_path or _BUNDLED_RESOURCE
     for toml_key, dataclass_field in _FIELD_MAP.items():
+        if toml_key not in entry.fields:
+            issues.append(f"missing required field {toml_key!r}")
+            values[dataclass_field] = float("nan")
+            continue
+
+        raw = entry.fields[toml_key]
         try:
-            raw_value = float(entry.fields[toml_key])
-        except KeyError as exc:
-            raise RegistryConfigError(
-                "error.materials_config.invalid_entry",
-                path=entry.source_path or _BUNDLED_RESOURCE,
-                kind="material",
-                name=entry.name,
-                details=f"missing required field {toml_key!r}",
-            ) from exc
-        except (TypeError, ValueError) as exc:
-            raise RegistryConfigError(
-                "error.materials_config.invalid_entry",
-                path=entry.source_path or _BUNDLED_RESOURCE,
-                kind="material",
-                name=entry.name,
-                details=f"field {toml_key!r} must be a number, got {entry.fields[toml_key]!r}",
-            ) from exc
+            raw_value = float(raw)
+        except (TypeError, ValueError):
+            issues.append(f"field {toml_key!r} must be a number, got {raw!r}")
+            values[dataclass_field] = float("nan")
+            continue
+        if not math.isfinite(raw_value):
+            issues.append(f"field {toml_key!r} must be finite, got {raw!r}")
+            values[dataclass_field] = float("nan")
+            continue
         values[dataclass_field] = raw_value
 
     if entry.unit_system == "imperial":
-        values["reference_cutting_speed_m_min"] = ft_min_to_m_min(
-            values["reference_cutting_speed_m_min"]
+        speed = values["reference_cutting_speed_m_min"]
+        feed = values["reference_feed_per_rev_mm"]
+        force = values["specific_cutting_force_kc"]
+        values["reference_cutting_speed_m_min"] = (
+            ft_min_to_m_min(speed) if math.isfinite(speed) else speed
         )
-        values["reference_feed_per_rev_mm"] = in_to_mm(values["reference_feed_per_rev_mm"])
-        values["specific_cutting_force_kc"] = psi_to_n_per_mm2(values["specific_cutting_force_kc"])
+        values["reference_feed_per_rev_mm"] = in_to_mm(feed) if math.isfinite(feed) else feed
+        values["specific_cutting_force_kc"] = (
+            psi_to_n_per_mm2(force) if math.isfinite(force) else force
+        )
 
     material = WorkpieceMaterial(
         name=entry.name,
@@ -154,21 +196,45 @@ def _to_material(entry: RawRegistryEntry) -> WorkpieceMaterial:
         unit_system=entry.unit_system,
         translations=dict(entry.translations),
     )
-    _validate(material, entry.source_path or _BUNDLED_RESOURCE)
-    return material
+    for field_name in _CANONICAL_NUMERIC_FIELDS:
+        value = getattr(material, field_name)
+        if math.isfinite(value) and value <= 0:
+            issues.append(f"{field_name} must be positive")
+    record = MaterialValidationRecord(
+        material_name=material.name,
+        status="warning" if issues else "valid",
+        issues=tuple(issues),
+        source_path=source_path,
+    )
+    return material, record
 
 
-def _build_registry(config_path: str | None) -> dict[str, WorkpieceMaterial]:
+def _build_registry(config_path: str | None) -> _RegistrySnapshot:
     result = load_and_merge(_BUNDLED_PACKAGE, _BUNDLED_RESOURCE, config_path, _TABLE_KEY)
     registry: dict[str, WorkpieceMaterial] = {}
+    validation: dict[str, MaterialValidationRecord] = {}
     for entry in result.entries:
-        material = _to_material(entry)
+        material, record = _to_material(entry)
+        _warn_validation(record)
         registry[material.name] = material
-    return registry
+        validation[material.name] = record
+    return _RegistrySnapshot(materials=registry, validation=validation)
+
+
+@functools.cache
+def _build_registry_cached(config_path: str) -> _RegistrySnapshot:
+    return _build_registry(config_path)
 
 
 # Bundled-only registry, built at import time (zero-config default, FR-014).
-MATERIAL_REGISTRY: dict[str, WorkpieceMaterial] = _build_registry(None)
+_BUNDLED_SNAPSHOT = _build_registry(None)
+MATERIAL_REGISTRY: dict[str, WorkpieceMaterial] = _BUNDLED_SNAPSHOT.materials
+
+
+def _snapshot_for(config_path: str | None) -> _RegistrySnapshot:
+    if config_path is None:
+        return _BUNDLED_SNAPSHOT
+    return _build_registry_cached(config_path)
 
 
 def list_materials(config_path: str | None = None) -> list[str]:
@@ -184,7 +250,7 @@ def list_materials(config_path: str | None = None) -> list[str]:
 
     if config_path is None:
         return list(MATERIAL_REGISTRY.keys())
-    return list(_build_registry(config_path).keys())
+    return list(_snapshot_for(config_path).materials.keys())
 
 
 def get_material(name: str, config_path: str | None = None) -> WorkpieceMaterial | None:
@@ -194,8 +260,21 @@ def get_material(name: str, config_path: str | None = None) -> WorkpieceMaterial
         name: The material's canonical English ``name``.
         config_path: Optional path to a user-supplied materials/tools
             configuration file; see :func:`list_materials`.
+
+    Warning:
+        Entries with invalid source data are still registered per FR-008
+        (warn-and-continue) and may carry ``nan`` numeric fields. Check
+        :attr:`WorkpieceMaterial.is_usable` (or
+        :func:`get_material_validation`) before using the returned
+        material's numeric fields in a calculation.
     """
 
-    if config_path is None:
-        return MATERIAL_REGISTRY.get(name)
-    return _build_registry(config_path).get(name)
+    return _snapshot_for(config_path).materials.get(name)
+
+
+def get_material_validation(
+    name: str, config_path: str | None = None
+) -> MaterialValidationRecord | None:
+    """Return load-time validation record for ``name`` (FR-008)."""
+
+    return _snapshot_for(config_path).validation.get(name)

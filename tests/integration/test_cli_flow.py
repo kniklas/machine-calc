@@ -42,3 +42,22 @@ def test_repl_displays_values_matching_direct_calculate(monkeypatch, capsys):
     assert f"{expected.machining_time:.2f} min" in out
     assert f"{expected.torque:.1f} N\u00b7m" in out
     assert f"{expected.power_required:.2f} kW" in out
+
+
+def test_repl_softwood_selection_works(monkeypatch, capsys):
+    inputs = iter(
+        [
+            "metric",
+            "",
+            "Pine",
+            "Carbide",
+            "10",
+            "25",
+            "",
+            "n",
+        ]
+    )
+    monkeypatch.setattr(builtins, "input", lambda _prompt="": next(inputs))
+    run()
+    out = capsys.readouterr().out
+    assert "Spindle speed:" in out

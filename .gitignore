@@ -35,3 +35,7 @@ docs/_build/
 
 # OS
 .DS_Store
+Thumbs.db
+
+# Misc temp files
+*.tmp

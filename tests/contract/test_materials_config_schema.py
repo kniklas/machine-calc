@@ -11,7 +11,7 @@ import math
 import pytest
 
 from machine_calc.operations.drilling.tools import get_tool, list_tools
-from machine_calc.registry import get_material, list_materials
+from machine_calc.registry import get_material, get_material_validation, list_materials
 from machine_calc.registry_config import RegistryConfigError
 
 
@@ -33,9 +33,12 @@ def test_required_fields_and_positivity(tmp_path):
         specific_cutting_force = 1900.0
         """,
     )
-    with pytest.raises(RegistryConfigError) as exc_info:
-        list_materials(config_path=path)
-    assert exc_info.value.kwargs["path"] == path
+    names = list_materials(config_path=path)
+    assert "Bad" in names
+    record = get_material_validation("Bad", path)
+    assert record is not None
+    assert record.status == "warning"
+    assert record.source_path == path
 
 
 def test_missing_required_field_raises(tmp_path):
@@ -49,8 +52,11 @@ def test_missing_required_field_raises(tmp_path):
         specific_cutting_force = 1900.0
         """,
     )
-    with pytest.raises(RegistryConfigError):
-        list_materials(config_path=path)
+    names = list_materials(config_path=path)
+    assert "Bad" in names
+    record = get_material_validation("Bad", path)
+    assert record is not None
+    assert record.status == "warning"
 
 
 def test_unit_system_value_restriction(tmp_path):
@@ -155,3 +161,9 @@ def test_new_tool_added_via_user_file(tmp_path):
     tool = get_tool("Ceramic", path)
     assert tool is not None
     assert math.isclose(tool.cutting_speed_factor, 4.0, rel_tol=1e-9)
+
+
+def test_engineered_wood_defaults_are_single_generic_entries():
+    names = list_materials()
+    assert names.count("Plywood") == 1
+    assert names.count("MDF") == 1
