@@ -206,6 +206,9 @@ Only after explicit approval:
    pattern already used in this repo's workflow.
 4. Re-run `git branch -vv` and `git worktree list` to confirm cleanup.
 
+Note: merged PRs cannot be reopened on GitHub. If post-merge Copilot review is
+required, open a follow-up PR and request review there.
+
 ## 7. Anti-patterns to avoid
 
 - Counting all commits (docs typos, rebases) toward the 10-commit
