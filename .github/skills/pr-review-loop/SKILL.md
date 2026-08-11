@@ -36,6 +36,10 @@ Initialize (mentally or in a scratch note) two counters for this session:
 - **running summary** — one line per commit describing what changed and
   why, to be presented at the 10-commit checkpoint and again at closure.
 
+Also track a boolean:
+- **copilot-review-invoked** — set true only after posting `@copilot review`
+  on the current PR at least once in this session.
+
 ## 2. Fetch Copilot review comments, excluding suppressed ones
 
 Copilot review runs at the "balanced" preset for this repo (see
@@ -100,6 +104,7 @@ non-suppressed Copilot review comments remain unresolved.
 6. Re-request Copilot review if it doesn't auto re-review on push:
    `gh pr comment <number> --body "@copilot review"` or re-request via
    `gh api repos/:owner/:repo/pulls/:number/requested_reviewers`.
+   Set `copilot-review-invoked=true` when this is done.
 7. Poll CI: `gh pr checks <number> --watch` (or re-poll after a short
    wait). Required jobs in this repo's `ci.yml`: `lint`, `complexity`,
    `typecheck`, `security`, `dependency-scan`, `test`, `build`, `docs`,
@@ -130,6 +135,8 @@ every additional 10.
 ## 5. Exit criteria for the loop
 
 The loop (§3) is done only when, on a fresh fetch:
+- `copilot-review-invoked=true` (balanced Copilot review was explicitly
+  requested on this PR).
 - `gh pr checks <number>` shows all required jobs passing (no pending
   jobs either — wait them out).
 - No unresolved, non-suppressed Copilot review comments remain (§2).
