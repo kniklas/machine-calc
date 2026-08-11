@@ -307,6 +307,30 @@ def test_invalid_material_entries_are_registered_with_warning_metadata(caplog, t
     assert str(fixture) in caplog.text
 
 
+def test_non_finite_numeric_fields_are_marked_as_warnings(tmp_path):
+    path = tmp_path / "non_finite.toml"
+    path.write_text(
+        """
+        [[materials]]
+        name = "Infinite Oak"
+        reference_cutting_speed = inf
+        reference_feed_per_rev = 0.22
+        specific_cutting_force = 1200.0
+        """
+    )
+    names = list_materials(config_path=str(path))
+    assert "Infinite Oak" in names
+
+    material = get_material("Infinite Oak", str(path))
+    assert material is not None
+    assert not material.is_usable
+
+    record = get_material_validation("Infinite Oak", str(path))
+    assert record is not None
+    assert record.status == "warning"
+    assert "must be finite" in " ".join(record.issues)
+
+
 def test_is_usable_true_for_all_built_in_materials():
     for name in list_materials():
         material = get_material(name)
