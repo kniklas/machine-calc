@@ -149,7 +149,47 @@ must not merge, close, or delete anything yet. Before asking for approval:
    what was fixed during review iteration).
 2. Confirm CI status and review status explicitly in that summary (green
    checkmarks, 0 unresolved required comments).
-3. Ask the user for explicit approval via `ask_user` — do not merge/close
+3. Post an AIC usage summary comment on the PR using real markdown newlines.
+   Do not use inline `--body "...\n..."` strings because GitHub CLI will post
+   literal `\n` characters. Always write the comment to a file (heredoc) and
+   post with `--body-file`, for example:
+
+```bash
+cat > /tmp/pr-aic-summary.md <<'EOF'
+## Session usage summary for authoring this PR
+
+### Scope
+Covers the PR-authoring session, including review-loop and CI-fix work.
+
+### Totals
+- **Session window:** <start> -> <end> (~<duration>)
+- **Session turns:** <turn_count>
+- **AIC events:** <event_count>
+- **Input tokens:** <input_tokens>
+- **Output tokens:** <output_tokens>
+- **Total AI usage:** <total_aiu> AIU
+
+### By model
+
+| Model | AIC events | Input tokens | Output tokens | AIU |
+|---|---:|---:|---:|---:|
+| <model> | <events> | <input> | <output> | <aiu> |
+
+### Copilot code-review credits
+- **Per-session code-review credit total:** <value or "not separately exposed in local telemetry">.
+- **Attribution status:** <how review activity is/is not isolated>.
+
+### Cost note
+USD value may be unavailable from local telemetry unless billing rates are available.
+EOF
+gh pr comment <number> --body-file /tmp/pr-aic-summary.md
+rm /tmp/pr-aic-summary.md
+```
+
+   If prior malformed summary comments exist (literal `\n`), replace them by
+   editing the latest summary comment or deleting malformed ones with:
+   `gh api repos/<owner>/<repo>/issues/comments/<comment_id> -X DELETE`.
+4. Ask the user for explicit approval via `ask_user` — do not merge/close
    on an assumption of approval, and do not proceed on a vague or partial
    answer.
 
