@@ -75,9 +75,15 @@ target spindle speed (with an optional advisory available power).
 
 ### Configurable materials & tools
 
-The six built-in materials (Mild Steel, Stainless Steel, Aluminum, Cast Iron,
-Brass, Titanium) and three built-in tools (HSS, Cobalt, Carbide) are bundled
-with the package and used automatically with no configuration required.
+The built-in materials include:
+
+- Metals: Mild Steel, Stainless Steel, Aluminum, Cast Iron, Brass, Titanium
+- Hardwood: Oak, Maple
+- Softwood: Pine, Spruce, Fir
+- Engineered wood: Plywood, MDF
+
+Three built-in tools (HSS, Cobalt, Carbide) are bundled with the package and
+used automatically with no configuration required.
 
 To add your own materials/tools, or override a built-in tool's factors,
 pass an optional user TOML file via `--materials-config`, either through the
@@ -116,6 +122,10 @@ feed_factor = 1.1
   CLI falls back to the bundled defaults. A malformed TOML file or a
   duplicate material/tool `name` within the file is a fatal, translated
   error and the CLI exits without starting the REPL.
+- Invalid material numeric fields (missing/non-numeric/non-positive cutting
+  speed, feed, or specific cutting force) are logged as warnings at registry
+  load time; startup continues and the entry remains listable, but calculations
+  with that entry fail safely with a user-facing `UNUSABLE_MATERIAL` error.
 
 See [`specs/005-configurable-materials-tools/quickstart.md`](specs/005-configurable-materials-tools/quickstart.md)
 for full runnable scenarios, and

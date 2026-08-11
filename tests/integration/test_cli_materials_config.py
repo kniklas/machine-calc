@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import builtins
 import math
+from pathlib import Path
 
 import pytest
 
@@ -65,12 +66,7 @@ def test_malformed_file_exits_without_traceback(monkeypatch, capsys, tmp_path):
 
 
 def test_invalid_positive_value_exits_without_traceback(monkeypatch, capsys, tmp_path):
-    """A non-positive numeric field is caught as a translated fatal error at
-
-    CLI startup, not a raw ``ValueError`` traceback (Copilot review fix:
-    ``_resolve_materials_config`` only handled ``RegistryConfigError``, but
-    ``registry.py``/``tools.py`` used to raise a plain ``ValueError`` for
-    this case)."""
+    """Invalid material entries should warn and continue startup (FR-008)."""
 
     bad = tmp_path / "bad.toml"
     bad.write_text("""
@@ -80,11 +76,24 @@ def test_invalid_positive_value_exits_without_traceback(monkeypatch, capsys, tmp
         reference_feed_per_rev = 0.2
         specific_cutting_force = 1900.0
         """)
-    with pytest.raises(SystemExit):
-        run(materials_config_path=str(bad))
+    _feed_inputs(monkeypatch, _BASE_REPL_INPUTS)
+    run(materials_config_path=str(bad))
     out = capsys.readouterr().out
     assert "Traceback" not in out
-    assert str(bad) in out
+    assert "Spindle speed:" in out
+
+
+def test_warning_and_continue_with_invalid_wood_fixture(monkeypatch, caplog, tmp_path):
+    source_fixture = (
+        Path(__file__).resolve().parents[1] / "fixtures" / "materials" / "wood-invalid-params.toml"
+    )
+    fixture = tmp_path / "wood-invalid-params.toml"
+    fixture.write_text(source_fixture.read_text(encoding="utf-8"), encoding="utf-8")
+    _feed_inputs(monkeypatch, _BASE_REPL_INPUTS)
+    caplog.set_level("WARNING")
+    run(materials_config_path=str(fixture))
+    assert "validation issue(s)" in caplog.text
+    assert str(fixture) in caplog.text
 
 
 def test_valid_override_file_lists_new_material(monkeypatch, capsys, tmp_path):
@@ -113,6 +122,23 @@ def test_valid_override_file_lists_new_material(monkeypatch, capsys, tmp_path):
     ]
     _feed_inputs(monkeypatch, inputs)
     run(materials_config_path=str(config))
+    out = capsys.readouterr().out
+    assert "Spindle speed:" in out
+
+
+def test_engineered_materials_can_be_selected(monkeypatch, capsys):
+    inputs = [
+        "metric",
+        "",
+        "Plywood",
+        "Carbide",
+        "10",
+        "25",
+        "",
+        "n",
+    ]
+    _feed_inputs(monkeypatch, inputs)
+    run(materials_config_path=None)
     out = capsys.readouterr().out
     assert "Spindle speed:" in out
 

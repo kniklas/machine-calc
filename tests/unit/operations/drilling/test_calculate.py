@@ -6,8 +6,23 @@ since both User Story 1 (CLI) and User Story 2 (library) depend on it.
 """
 
 import math
+from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - Python <3.11
+    import tomli as tomllib  # type: ignore[no-redef]
 
 from machine_calc import UnitSystem, calculate
+
+_FIXTURES_DIR = Path(__file__).resolve().parents[3] / "fixtures" / "materials"
+_BENCHMARK_FIXTURE = _FIXTURES_DIR / "wood-benchmark-cases.toml"
+_INVALID_FIXTURE = _FIXTURES_DIR / "wood-invalid-params.toml"
+
+
+def _load_benchmark_cases():
+    data = tomllib.loads(_BENCHMARK_FIXTURE.read_text(encoding="utf-8"))
+    return data["cases"]
 
 
 def test_success_metric():
@@ -126,3 +141,49 @@ def test_config_path_overrides_default_bounds(tmp_path):
         config_path=str(config_file),
     )
     assert result.error is None
+
+
+def test_unusable_material_returns_structured_error():
+    result = calculate(
+        diameter=10,
+        depth=25,
+        material="Oak",
+        tool="Carbide",
+        materials_config_path=str(_INVALID_FIXTURE),
+    )
+    assert result.error is not None
+    assert result.error.code == "UNUSABLE_MATERIAL"
+    assert result.spindle_speed_rpm is None
+
+
+def test_wood_reference_results_match_benchmark_cases_within_tolerance():
+    for case in _load_benchmark_cases():
+        result = calculate(
+            diameter=case["diameter_mm"],
+            depth=case["depth_mm"],
+            material=case["material"],
+            tool=case["tool"],
+        )
+        assert result.error is None, case
+        assert result.spindle_speed_rpm is not None
+        assert result.feed_rate is not None
+        assert result.torque is not None
+        assert result.power_required is not None
+        assert result.machining_time is not None
+        assert math.isclose(
+            result.spindle_speed_rpm,
+            case["expected_spindle_speed_rpm"],
+            rel_tol=0.10,
+        )
+        assert math.isclose(
+            result.feed_rate,
+            case["expected_feed_rate_mm_min"],
+            rel_tol=0.10,
+        )
+        assert math.isclose(result.torque, case["expected_torque_nm"], rel_tol=0.10)
+        assert math.isclose(result.power_required, case["expected_power_kw"], rel_tol=0.10)
+        assert math.isclose(
+            result.machining_time,
+            case["expected_machining_time_min"],
+            rel_tol=0.10,
+        )

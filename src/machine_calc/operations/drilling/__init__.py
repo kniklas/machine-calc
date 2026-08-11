@@ -14,7 +14,7 @@ import math
 from machine_calc.config import load_configuration
 from machine_calc.i18n import DEFAULT_LOCALE, translate
 from machine_calc.models import CalculationMode, CalculationResult, ErrorInfo, UnitSystem
-from machine_calc.registry import get_material
+from machine_calc.registry import get_material, get_material_validation
 from machine_calc.units import (
     hp_to_kw,
     in_to_mm,
@@ -150,6 +150,22 @@ def _resolve_material_and_tool(
             ErrorInfo(
                 "MISSING_MATERIAL",
                 translate(locale, "error.unknown_material", material=material),
+            ),
+            mode,
+        )
+    validation = get_material_validation(material, materials_config_path)
+    if validation is not None and validation.status == "warning":
+        details = "; ".join(validation.issues)
+        return _error_result(
+            unit_system,
+            ErrorInfo(
+                "UNUSABLE_MATERIAL",
+                translate(
+                    locale,
+                    "error.unusable_material",
+                    material=material,
+                    details=details,
+                ),
             ),
             mode,
         )

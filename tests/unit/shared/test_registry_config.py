@@ -112,6 +112,13 @@ def test_none_user_path_returns_bundled_only_no_notice():
         "Cast Iron",
         "Brass",
         "Titanium",
+        "Oak",
+        "Maple",
+        "Pine",
+        "Spruce",
+        "Fir",
+        "Plywood",
+        "MDF",
     ]
 
 

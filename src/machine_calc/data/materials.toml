@@ -50,3 +50,52 @@ reference_cutting_speed = 12.0
 reference_feed_per_rev = 0.10
 specific_cutting_force = 2100.0
 unit_system = "metric"
+
+[[materials]]
+name = "Oak"
+reference_cutting_speed = 35.0
+reference_feed_per_rev = 0.22
+specific_cutting_force = 1200.0
+unit_system = "metric"
+
+[[materials]]
+name = "Maple"
+reference_cutting_speed = 40.0
+reference_feed_per_rev = 0.24
+specific_cutting_force = 1100.0
+unit_system = "metric"
+
+[[materials]]
+name = "Pine"
+reference_cutting_speed = 70.0
+reference_feed_per_rev = 0.30
+specific_cutting_force = 650.0
+unit_system = "metric"
+
+[[materials]]
+name = "Spruce"
+reference_cutting_speed = 65.0
+reference_feed_per_rev = 0.28
+specific_cutting_force = 700.0
+unit_system = "metric"
+
+[[materials]]
+name = "Fir"
+reference_cutting_speed = 60.0
+reference_feed_per_rev = 0.27
+specific_cutting_force = 750.0
+unit_system = "metric"
+
+[[materials]]
+name = "Plywood"
+reference_cutting_speed = 55.0
+reference_feed_per_rev = 0.23
+specific_cutting_force = 900.0
+unit_system = "metric"
+
+[[materials]]
+name = "MDF"
+reference_cutting_speed = 45.0
+reference_feed_per_rev = 0.20
+specific_cutting_force = 1000.0
+unit_system = "metric"

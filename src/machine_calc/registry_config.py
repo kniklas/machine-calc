@@ -70,7 +70,7 @@ class RawRegistryEntry:
     """
 
     name: str
-    fields: dict[str, float]
+    fields: dict[str, Any]
     unit_system: str = "metric"
     translations: dict[str, str] = field(default_factory=dict)
     source_path: str = ""

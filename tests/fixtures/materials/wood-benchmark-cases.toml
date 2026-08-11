@@ -1,0 +1,153 @@
+[[cases]]
+material = "Oak"
+tool = "HSS"
+diameter_mm = 8.0
+depth_mm = 20.0
+expected_spindle_speed_rpm = 1392.606
+expected_feed_rate_mm_min = 306.373
+expected_torque_nm = 4.224
+expected_power_kw = 0.616
+expected_machining_time_min = 0.0731
+
+[[cases]]
+material = "Oak"
+tool = "Carbide"
+diameter_mm = 12.0
+depth_mm = 35.0
+expected_spindle_speed_rpm = 2321.010
+expected_feed_rate_mm_min = 561.684
+expected_torque_nm = 10.454
+expected_power_kw = 2.541
+expected_machining_time_min = 0.0687
+
+[[cases]]
+material = "Maple"
+tool = "HSS"
+diameter_mm = 8.0
+depth_mm = 20.0
+expected_spindle_speed_rpm = 1591.549
+expected_feed_rate_mm_min = 381.972
+expected_torque_nm = 4.224
+expected_power_kw = 0.704
+expected_machining_time_min = 0.0586
+
+[[cases]]
+material = "Maple"
+tool = "Carbide"
+diameter_mm = 12.0
+depth_mm = 35.0
+expected_spindle_speed_rpm = 2652.582
+expected_feed_rate_mm_min = 700.282
+expected_torque_nm = 10.454
+expected_power_kw = 2.904
+expected_machining_time_min = 0.0551
+
+[[cases]]
+material = "Pine"
+tool = "HSS"
+diameter_mm = 8.0
+depth_mm = 20.0
+expected_spindle_speed_rpm = 2785.212
+expected_feed_rate_mm_min = 835.563
+expected_torque_nm = 3.120
+expected_power_kw = 0.910
+expected_machining_time_min = 0.0268
+
+[[cases]]
+material = "Pine"
+tool = "Carbide"
+diameter_mm = 12.0
+depth_mm = 35.0
+expected_spindle_speed_rpm = 4642.019
+expected_feed_rate_mm_min = 1531.866
+expected_torque_nm = 7.722
+expected_power_kw = 3.753
+expected_machining_time_min = 0.0252
+
+[[cases]]
+material = "Spruce"
+tool = "HSS"
+diameter_mm = 8.0
+depth_mm = 20.0
+expected_spindle_speed_rpm = 2586.268
+expected_feed_rate_mm_min = 724.155
+expected_torque_nm = 3.136
+expected_power_kw = 0.849
+expected_machining_time_min = 0.0309
+
+[[cases]]
+material = "Spruce"
+tool = "Carbide"
+diameter_mm = 12.0
+depth_mm = 35.0
+expected_spindle_speed_rpm = 4310.446
+expected_feed_rate_mm_min = 1327.617
+expected_torque_nm = 7.762
+expected_power_kw = 3.503
+expected_machining_time_min = 0.0291
+
+[[cases]]
+material = "Fir"
+tool = "HSS"
+diameter_mm = 8.0
+depth_mm = 20.0
+expected_spindle_speed_rpm = 2387.324
+expected_feed_rate_mm_min = 644.578
+expected_torque_nm = 3.240
+expected_power_kw = 0.810
+expected_machining_time_min = 0.0348
+
+[[cases]]
+material = "Fir"
+tool = "Carbide"
+diameter_mm = 12.0
+depth_mm = 35.0
+expected_spindle_speed_rpm = 3978.874
+expected_feed_rate_mm_min = 1181.725
+expected_torque_nm = 8.019
+expected_power_kw = 3.341
+expected_machining_time_min = 0.0327
+
+[[cases]]
+material = "Plywood"
+tool = "HSS"
+diameter_mm = 8.0
+depth_mm = 20.0
+expected_spindle_speed_rpm = 2188.380
+expected_feed_rate_mm_min = 503.328
+expected_torque_nm = 3.312
+expected_power_kw = 0.759
+expected_machining_time_min = 0.0445
+
+[[cases]]
+material = "Plywood"
+tool = "Carbide"
+diameter_mm = 12.0
+depth_mm = 35.0
+expected_spindle_speed_rpm = 3647.301
+expected_feed_rate_mm_min = 922.767
+expected_torque_nm = 8.197
+expected_power_kw = 3.131
+expected_machining_time_min = 0.0418
+
+[[cases]]
+material = "MDF"
+tool = "HSS"
+diameter_mm = 8.0
+depth_mm = 20.0
+expected_spindle_speed_rpm = 1790.493
+expected_feed_rate_mm_min = 358.099
+expected_torque_nm = 3.200
+expected_power_kw = 0.600
+expected_machining_time_min = 0.0626
+
+[[cases]]
+material = "MDF"
+tool = "Carbide"
+diameter_mm = 12.0
+depth_mm = 35.0
+expected_spindle_speed_rpm = 2984.155
+expected_feed_rate_mm_min = 656.514
+expected_torque_nm = 7.920
+expected_power_kw = 2.475
+expected_machining_time_min = 0.0588
