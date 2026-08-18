@@ -9,6 +9,13 @@ Wood-materials support (hardwood/softwood/engineered) is covered in:
 - ``specs/007-wood-materials-support/spec.md``
 - ``specs/007-wood-materials-support/quickstart.md``
 
+Materials are grouped by material type (``metal``, ``wood``, and any further
+type declared in a materials config file), and the CLI selects a type before
+a specific material. See:
+
+- ``specs/008-material-categorization/spec.md``
+- ``specs/005-configurable-materials-tools/contracts/materials-config-schema.md``
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:

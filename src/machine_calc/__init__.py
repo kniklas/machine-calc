@@ -2,7 +2,18 @@
 
 Public surface (contracts/library-api.md)::
 
-    from machine_calc import calculate, list_materials, list_tools, UnitSystem
+    from machine_calc import (
+        calculate,
+        list_material_types,
+        list_materials,
+        list_tools,
+        UnitSystem,
+    )
+
+Materials are grouped into categories (``"metal"``, ``"wood"``, ...) that
+drive the CLI's two-step type-then-material selection flow; see
+``list_material_types`` and ``list_materials(material_type=...)``
+(specs/008-material-categorization).
 
 Currently exposes drilling calculations (``operations.drilling``); future
 operations (turning, milling, ...) will add their own
@@ -15,10 +26,11 @@ from __future__ import annotations
 from machine_calc.models import CalculationMode, CalculationResult, ErrorInfo, UnitSystem
 from machine_calc.operations.drilling import calculate
 from machine_calc.operations.drilling.tools import list_tools
-from machine_calc.registry import list_materials
+from machine_calc.registry import list_material_types, list_materials
 
 __all__ = [
     "calculate",
+    "list_material_types",
     "list_materials",
     "list_tools",
     "UnitSystem",

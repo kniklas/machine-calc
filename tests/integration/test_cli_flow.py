@@ -15,6 +15,7 @@ def test_repl_displays_values_matching_direct_calculate(monkeypatch, capsys):
         [
             "metric",  # unit system
             "",  # calculation mode (default: standard)
+            "Metal",  # material type
             "Mild Steel",  # material
             "Carbide",  # tool
             "10",  # diameter
@@ -49,6 +50,7 @@ def test_repl_softwood_selection_works(monkeypatch, capsys):
         [
             "metric",
             "",
+            "Wood",  # material type
             "Pine",
             "Carbide",
             "10",

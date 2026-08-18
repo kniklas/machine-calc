@@ -15,7 +15,14 @@ from __future__ import annotations
 
 import argparse
 
-from machine_calc import CalculationMode, UnitSystem, calculate, list_materials, list_tools
+from machine_calc import (
+    CalculationMode,
+    UnitSystem,
+    calculate,
+    list_material_types,
+    list_materials,
+    list_tools,
+)
 from machine_calc.config import Configuration
 from machine_calc.i18n import get_locale, get_raw_locale, translate
 from machine_calc.logging_setup import configure_logging
@@ -115,6 +122,51 @@ def _display_label(
     return translate(
         message_locale, "cli.label.unit_system_suffix", name=name, unit_system=entry.unit_system
     )
+
+
+def _material_type_label(material_type: str, locale: str) -> str:
+    """Return a human-readable label for a ``material_type`` id (008 FR-001).
+
+    Prefers the ``material_type.<id>`` message-catalog entry (Constitution
+    Principle VIII). Categories introduced by data alone have no catalog
+    entry — :func:`~machine_calc.i18n.translate` signals that by returning
+    the key verbatim — so those fall back to a title-cased form of the raw
+    id. This keeps "add a new category without a code change" (008 FR-004)
+    true for the prompt labels too, while still letting a bundled category
+    be translated.
+    """
+
+    key = f"material_type.{material_type}"
+    label = translate(locale, key)
+    if label != key:
+        return label
+    return material_type.replace("_", " ").replace("-", " ").title()
+
+
+def _prompt_material_type_choice(
+    material_types: list[str],
+    default: str | None,
+    locale: str,
+) -> str:
+    """Prompt for a material type, returning the canonical type id (008 FR-001).
+
+    Step one of the two-step type-then-material selection flow. Uses the
+    same "label dict / reverse-lookup dict" pattern as
+    :func:`_prompt_material_choice` so the user picks a translated label but
+    the caller receives the stable identifier.
+    """
+
+    labels_by_type = {
+        material_type: _material_type_label(material_type, locale)
+        for material_type in material_types
+    }
+    types_by_label = {label: key for key, label in labels_by_type.items()}
+    options = list(labels_by_type.values())
+    default_label = labels_by_type.get(default) if default else None
+    choice_label = _prompt_choice(
+        translate(locale, "cli.label.material_type"), options, default_label, locale
+    )
+    return types_by_label[choice_label]
 
 
 def _prompt_material_choice(
@@ -388,10 +440,11 @@ def run(materials_config_path: str | None = None) -> None:
 
     _resolve_materials_config(materials_config_path, locale)
 
-    materials = list_materials(config_path=materials_config_path)
+    material_types = list_material_types(config_path=materials_config_path)
     tools = list_tools(config_path=materials_config_path)
 
     unit_system = UnitSystem.METRIC
+    material_type: str | None = None
     material: str | None = None
     tool: str | None = None
     diameter: float | None = None
@@ -413,6 +466,13 @@ def run(materials_config_path: str | None = None) -> None:
             target_rpm = None
             available_power = None
         previous_mode = mode
+        # Two-step material selection (008 FR-001, FR-002): pick a category
+        # first, then a material within it. A remembered material from a
+        # different category is silently dropped as a default by
+        # `_prompt_material_choice`, which resolves defaults against the
+        # options it was given (008 FR-011).
+        material_type = _prompt_material_type_choice(material_types, material_type, locale)
+        materials = list_materials(config_path=materials_config_path, material_type=material_type)
         material = _prompt_material_choice(
             materials, materials_config_path, material, locale, display_locale
         )

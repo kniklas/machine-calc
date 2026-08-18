@@ -7,10 +7,17 @@
 # Sandvik Coromant general-purpose reference ranges for twist drilling); see
 # specs/001-metal-drilling-calc/research.md #4.
 #
+# `material_type` groups entries into the two-step (type -> material) selection
+# flow of specs/008-material-categorization. It is a free-form identifier, not a
+# closed enum: declaring a new value (e.g. "cement", "plastic") in this file or
+# in a user-supplied `--materials-config` file registers a new category with no
+# code change (FR-004). Entries omitting the key fall back to "uncategorized".
+#
 # Schema: specs/005-configurable-materials-tools/contracts/materials-config-schema.md
 
 [[materials]]
 name = "Mild Steel"
+material_type = "metal"
 reference_cutting_speed = 25.0
 reference_feed_per_rev = 0.20
 specific_cutting_force = 1900.0
@@ -18,6 +25,7 @@ unit_system = "metric"
 
 [[materials]]
 name = "Stainless Steel"
+material_type = "metal"
 reference_cutting_speed = 15.0
 reference_feed_per_rev = 0.15
 specific_cutting_force = 2400.0
@@ -25,6 +33,7 @@ unit_system = "metric"
 
 [[materials]]
 name = "Aluminum"
+material_type = "metal"
 reference_cutting_speed = 60.0
 reference_feed_per_rev = 0.25
 specific_cutting_force = 700.0
@@ -32,6 +41,7 @@ unit_system = "metric"
 
 [[materials]]
 name = "Cast Iron"
+material_type = "metal"
 reference_cutting_speed = 20.0
 reference_feed_per_rev = 0.20
 specific_cutting_force = 1500.0
@@ -39,6 +49,7 @@ unit_system = "metric"
 
 [[materials]]
 name = "Brass"
+material_type = "metal"
 reference_cutting_speed = 45.0
 reference_feed_per_rev = 0.20
 specific_cutting_force = 800.0
@@ -46,6 +57,7 @@ unit_system = "metric"
 
 [[materials]]
 name = "Titanium"
+material_type = "metal"
 reference_cutting_speed = 12.0
 reference_feed_per_rev = 0.10
 specific_cutting_force = 2100.0
@@ -53,6 +65,7 @@ unit_system = "metric"
 
 [[materials]]
 name = "Oak"
+material_type = "wood"
 reference_cutting_speed = 35.0
 reference_feed_per_rev = 0.22
 specific_cutting_force = 1200.0
@@ -60,6 +73,7 @@ unit_system = "metric"
 
 [[materials]]
 name = "Maple"
+material_type = "wood"
 reference_cutting_speed = 40.0
 reference_feed_per_rev = 0.24
 specific_cutting_force = 1100.0
@@ -67,6 +81,7 @@ unit_system = "metric"
 
 [[materials]]
 name = "Pine"
+material_type = "wood"
 reference_cutting_speed = 70.0
 reference_feed_per_rev = 0.30
 specific_cutting_force = 650.0
@@ -74,6 +89,7 @@ unit_system = "metric"
 
 [[materials]]
 name = "Spruce"
+material_type = "wood"
 reference_cutting_speed = 65.0
 reference_feed_per_rev = 0.28
 specific_cutting_force = 700.0
@@ -81,6 +97,7 @@ unit_system = "metric"
 
 [[materials]]
 name = "Fir"
+material_type = "wood"
 reference_cutting_speed = 60.0
 reference_feed_per_rev = 0.27
 specific_cutting_force = 750.0
@@ -88,6 +105,7 @@ unit_system = "metric"
 
 [[materials]]
 name = "Plywood"
+material_type = "wood"
 reference_cutting_speed = 55.0
 reference_feed_per_rev = 0.23
 specific_cutting_force = 900.0
@@ -95,6 +113,7 @@ unit_system = "metric"
 
 [[materials]]
 name = "MDF"
+material_type = "wood"
 reference_cutting_speed = 45.0
 reference_feed_per_rev = 0.20
 specific_cutting_force = 1000.0

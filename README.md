@@ -73,14 +73,28 @@ The REPL prompts for a calculation mode (`standard`, `power-constrained`,
 asks for a required available power, and `fixed-rpm` asks for a required
 target spindle speed (with an optional advisory available power).
 
+### Material selection is two-step
+
+Materials are grouped by **material type**, so the REPL asks for the type
+first and then only offers the materials belonging to it:
+
+```text
+Material type (Metal, Wood): Wood
+Material (Oak, Maple, Pine, Spruce, Fir, Plywood, MDF): Oak
+```
+
+This keeps the material list short as the catalog grows. On a repeat
+calculation the previous type is offered as the default; switching to a
+different type discards the remembered material, so you always pick a
+material that actually belongs to the chosen type.
+
 ### Configurable materials & tools
 
-The built-in materials include:
+The built-in materials are grouped into two types:
 
-- Metals: Mild Steel, Stainless Steel, Aluminum, Cast Iron, Brass, Titanium
-- Hardwood: Oak, Maple
-- Softwood: Pine, Spruce, Fir
-- Engineered wood: Plywood, MDF
+- `metal` — Mild Steel, Stainless Steel, Aluminum, Cast Iron, Brass, Titanium
+- `wood` — Oak, Maple (hardwood), Pine, Spruce, Fir (softwood),
+  Plywood, MDF (engineered wood)
 
 Three built-in tools (HSS, Cobalt, Carbide) are bundled with the package and
 used automatically with no configuration required.
@@ -99,15 +113,35 @@ machine-calc --materials-config my-machine-calc.toml
 # my-machine-calc.toml
 [[materials]]
 name = "Bronze"
+material_type = "metal"           # groups it under the "Metal" type prompt
 reference_cutting_speed = 45.0    # m/min (or ft/min if unit_system = "imperial")
 reference_feed_per_rev = 0.18     # mm/rev (or in/rev if imperial)
 specific_cutting_force = 750.0    # N/mm^2 (or psi if imperial)
+
+[[materials]]
+name = "PVC"
+material_type = "plastic"         # a brand-new type - no code change needed
+reference_cutting_speed = 200.0
+reference_feed_per_rev = 0.30
+specific_cutting_force = 80.0
 
 [[tools]]
 name = "Carbide"                  # matches a built-in name -> overrides its factors
 cutting_speed_factor = 3.0
 feed_factor = 1.1
 ```
+
+- `material_type` is a free-form identifier, so declaring a value that is not
+  yet in use (e.g. `"plastic"` or `"cement"`) registers a new type in the
+  material-type prompt without any code change. Types are listed in the order
+  they first appear across the bundled then user-supplied materials.
+- Types with a known identifier (`metal`, `wood`) get a translated label;
+  any other identifier is displayed title-cased (`composite-fibre` →
+  `Composite Fibre`).
+- `material_type` is optional. A material that omits it is grouped under
+  `uncategorized`. Because the key is "sticky" when merging, a user entry that
+  overrides a built-in material without restating `material_type` keeps the
+  built-in type rather than being decategorized.
 
 - Entries with a new `name` are **added** alongside the built-in defaults;
   entries whose `name` matches a built-in material/tool **override** it.
