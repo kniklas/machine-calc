@@ -14,6 +14,7 @@ fixed for the entire REPL loop — it is never re-read mid-session.
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 
 from machine_calc import (
     CalculationMode,
@@ -154,11 +155,23 @@ def _prompt_material_type_choice(
     same "label dict / reverse-lookup dict" pattern as
     :func:`_prompt_material_choice` so the user picks a translated label but
     the caller receives the stable identifier.
+
+    Because type ids are free-form and case-sensitive while labels are not,
+    two distinct ids can render the same label — a user-defined
+    ``material_type = "Metal"`` title-cases to the same ``"Metal"`` as the
+    bundled ``metal`` does via the message catalog. Colliding labels are
+    therefore suffixed with their canonical id, so no type can be made
+    unreachable by the reverse lookup (008 FR-006a).
     """
 
-    labels_by_type = {
+    display = {
         material_type: _material_type_label(material_type, locale)
         for material_type in material_types
+    }
+    collisions = Counter(display.values())
+    labels_by_type = {
+        material_type: (f"{label} ({material_type})" if collisions[label] > 1 else label)
+        for material_type, label in display.items()
     }
     types_by_label = {label: key for key, label in labels_by_type.items()}
     options = list(labels_by_type.values())

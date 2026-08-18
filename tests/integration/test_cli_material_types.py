@@ -264,3 +264,77 @@ class TestCategoryLabelLocalization:
         out = capsys.readouterr().out
         assert "Material type (Metal, Wood)" in out
         assert "material_type.metal" not in out
+
+
+class TestDuplicateLabelDisambiguation:
+    """Distinct type ids that render the same label stay individually reachable.
+
+    Type ids are free-form and case-sensitive, but labels are not: a
+    user-defined ``material_type = "Metal"`` title-cases to ``"Metal"``,
+    which is exactly what the bundled ``metal`` resolves to via the message
+    catalog. Without disambiguation the reverse lookup would collapse them
+    and make one category unreachable (008 FR-006a).
+    """
+
+    CONFIG = """
+[[materials]]
+name = "Bronze"
+material_type = "Metal"
+reference_cutting_speed = 45.0
+reference_feed_per_rev = 0.18
+specific_cutting_force = 750.0
+"""
+
+    def test_colliding_labels_are_suffixed_with_their_canonical_id(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        config_path = _write_config(tmp_path, self.CONFIG)
+        _feed(
+            monkeypatch,
+            ["metric", "", "Metal (metal)", "Aluminum", "Carbide", "10", "25", "", "n"],
+        )
+
+        run(materials_config_path=config_path)
+
+        out = capsys.readouterr().out
+        assert "Material type (Metal (metal), Wood, Metal (Metal))" in out
+
+    def test_bundled_category_stays_reachable_when_a_label_collides(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        config_path = _write_config(tmp_path, self.CONFIG)
+        _feed(
+            monkeypatch,
+            ["metric", "", "Metal (metal)", "Aluminum", "Carbide", "10", "25", "", "n"],
+        )
+
+        run(materials_config_path=config_path)
+
+        out = capsys.readouterr().out
+        # The bundled `metal` members are offered, not the single user "Metal" one.
+        assert "Material (Mild Steel, Stainless Steel, Aluminum, Cast Iron, Brass, Titanium)" in out
+        assert "Bronze" not in out
+
+    def test_user_category_stays_reachable_when_a_label_collides(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        config_path = _write_config(tmp_path, self.CONFIG)
+        _feed(
+            monkeypatch,
+            ["metric", "", "Metal (Metal)", "Bronze", "Carbide", "10", "25", "", "n"],
+        )
+
+        run(materials_config_path=config_path)
+
+        out = capsys.readouterr().out
+        assert "Material (Bronze)" in out
+        assert "Spindle speed:" in out
+
+    def test_labels_are_not_suffixed_when_there_is_no_collision(self, monkeypatch, capsys):
+        _feed(monkeypatch, ["metric", "", "Metal", "Mild Steel", "Carbide", "10", "25", "", "n"])
+
+        run()
+
+        out = capsys.readouterr().out
+        assert "Material type (Metal, Wood)" in out
+        assert "(metal)" not in out
