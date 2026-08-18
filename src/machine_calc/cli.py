@@ -159,9 +159,13 @@ def _prompt_material_type_choice(
     Because type ids are free-form and case-sensitive while labels are not,
     two distinct ids can render the same label — a user-defined
     ``material_type = "Metal"`` title-cases to the same ``"Metal"`` as the
-    bundled ``metal`` does via the message catalog. Colliding labels are
-    therefore suffixed with their canonical id, so no type can be made
-    unreachable by the reverse lookup (008 FR-006a).
+    bundled ``metal`` does via the message catalog. Labels are therefore
+    allocated so that the mapping stays a bijection: a colliding label is
+    suffixed with its canonical id, and if that suffixed form is *itself*
+    already taken (an id such as ``"Metal (Metal)"`` can collide with the
+    suffix generated for ``"Metal"``) a numeric discriminator is appended
+    until the label is unique. No type can be made unreachable by the
+    reverse lookup (008 FR-006a).
     """
 
     display = {
@@ -169,10 +173,17 @@ def _prompt_material_type_choice(
         for material_type in material_types
     }
     collisions = Counter(display.values())
-    labels_by_type = {
-        material_type: (f"{label} ({material_type})" if collisions[label] > 1 else label)
-        for material_type, label in display.items()
-    }
+    labels_by_type: dict[str, str] = {}
+    taken: set[str] = set()
+    for material_type, label in display.items():
+        candidate = f"{label} ({material_type})" if collisions[label] > 1 else label
+        if candidate in taken:
+            discriminator = 2
+            while f"{candidate} #{discriminator}" in taken:
+                discriminator += 1
+            candidate = f"{candidate} #{discriminator}"
+        taken.add(candidate)
+        labels_by_type[material_type] = candidate
     types_by_label = {label: key for key, label in labels_by_type.items()}
     options = list(labels_by_type.values())
     default_label = labels_by_type.get(default) if default else None

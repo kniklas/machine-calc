@@ -338,3 +338,43 @@ specific_cutting_force = 750.0
         out = capsys.readouterr().out
         assert "Material type (Metal, Wood)" in out
         assert "(metal)" not in out
+
+    def test_suffixed_labels_that_collide_again_stay_distinct(self, tmp_path, monkeypatch, capsys):
+        """A generated suffix must not collide with a literal id of the same shape.
+
+        `metal`, `Metal` and `Metal (Metal)` all render as some form of
+        "Metal": the first two collide on "Metal", and disambiguating
+        `Metal` produces "Metal (Metal)" — which is exactly what the third
+        id renders as on its own. Every id must still be reachable.
+        """
+        config_path = _write_config(
+            tmp_path,
+            """
+[[materials]]
+name = "Bronze"
+material_type = "Metal"
+reference_cutting_speed = 45.0
+reference_feed_per_rev = 0.18
+specific_cutting_force = 750.0
+
+[[materials]]
+name = "Pewter"
+material_type = "Metal (Metal)"
+reference_cutting_speed = 60.0
+reference_feed_per_rev = 0.22
+specific_cutting_force = 400.0
+""",
+        )
+        _feed(
+            monkeypatch,
+            ["metric", "", "Metal (Metal)", "Bronze", "Carbide", "10", "25", "", "n"],
+        )
+
+        run(materials_config_path=config_path)
+
+        out = capsys.readouterr().out
+        prompt = out[out.index("Material type (") : out.index("Material (")]
+        labels = prompt[prompt.index("(") + 1 : prompt.rindex(")")].split(", ")
+        assert len(labels) == len(set(labels)), f"duplicate labels offered: {labels}"
+        # The chosen label resolves to the `Metal` id (Bronze), not `Metal (Metal)` (Pewter).
+        assert "Material (Bronze)" in out
