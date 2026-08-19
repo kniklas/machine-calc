@@ -94,15 +94,13 @@ def test_unusable_material_with_non_positive_kc_is_reported(tmp_path):
     """FR-010: milling torque/power need a usable specific cutting force."""
 
     path = tmp_path / "materials.toml"
-    path.write_text(
-        """
+    path.write_text("""
         [[materials]]
         name = "Nonsense Alloy"
         reference_cutting_speed = 30.0
         reference_feed_per_rev = 0.2
         specific_cutting_force = -5.0
-        """
-    )
+        """)
 
     result = _calc(material="Nonsense Alloy", materials_config_path=str(path))
 
