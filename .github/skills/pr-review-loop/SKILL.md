@@ -54,8 +54,9 @@ Initialize (mentally or in a scratch note) two counters for this session:
   why, to be presented at the 10-commit checkpoint and again at closure.
 
 Also track a boolean:
-- **copilot-review-invoked** — set true only after posting `@copilot review`
-  on the current PR at least once in this session.
+- **copilot-review-invoked** — set true only after explicitly requesting
+  Copilot review via the `requested_reviewers` API call (§3 step 6) at
+  least once in this session.
 
 At closure, derive from the time log:
   - **total wall time** = now − loop-start timestamp.
@@ -161,8 +162,21 @@ non-suppressed Copilot review comments remain unresolved.
    - Cap at ~12 minutes; if still not completed by then, report this to
      the user rather than continuing to poll silently — it may indicate
      a stuck run.
+   - `status: completed` is not the same as success — check `conclusion`
+     too. A `cancelled`/`timed_out`/`failure` conclusion on either run
+     means don't proceed as if freshly reviewed/CI-verified: report it
+     and re-request the review or re-run CI instead of silently
+     re-fetching stale threads and treating `copilot-review-invoked=true`
+     as sufficient.
    - Stop polling and proceed the moment both runs show
-     `status: completed` — don't wait out a fixed timer past that point.
+     `status: completed` **with a successful `conclusion`** — don't wait
+     out a fixed timer past that point.
+
+   (Verified empirically across PRs #30/#31/#35: this repo's Copilot
+   review surfaces as an `event: dynamic` Actions run named `Running
+   Copilot Code Review`, so it does appear in `gh run list` alongside
+   `CI`. If a future GitHub change stops surfacing it there, fall back to
+   `gh api repos/:owner/:repo/commits/<sha>/check-runs` instead.)
 8. Re-fetch review threads (§2) to see what's newly resolved/added.
 
 ## 4. 10-commit checkpoint
