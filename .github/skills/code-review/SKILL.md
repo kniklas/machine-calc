@@ -60,9 +60,14 @@ determined, not only in `tests/performance/harness.py`:
   back into a real-looking number (e.g. `None` normalized to `0` for a
   numeric field, then treated as a measured zero downstream).
 - A platform/environment limitation (Windows lacking `resource`, a
-  container without CPU affinity support, etc.) MUST degrade to
-  "unavailable/skipped for this dimension," never to an artificial pass
-  *or* an artificial fail.
+  container without CPU affinity support, etc.) affecting an *optional*
+  measurement dimension MUST degrade to "unavailable/skipped for this
+  dimension," never to an artificial pass *or* an artificial fail. This
+  does not relax §3's stricter rule for *required* measurements (e.g.
+  the performance suite's memory reading): if a dimension is contractually
+  required to gate the result, an invalid/unavailable reading for it
+  MUST still fail the case, not merely skip it — only genuinely optional
+  dimensions get the skip treatment.
 - When combining a partial result and an error/failure signal (e.g. "N
   cases produced a report" AND "the test step itself errored"), the
   failure signal MUST take precedence — a partial success must not mask
