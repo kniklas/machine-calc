@@ -135,10 +135,13 @@ bundled catalog.
 
 Only the `en` locale exists in this project. A `material_type.<id>` key with
 no catalog entry (any category introduced purely via TOML data, e.g.
-`"plastic"`) is not an error: `cli._material_type_label()` detects the
-missing entry (`translate()` returns the key unchanged) and falls back to a
+`"plastic"`) is not an error: `cli._material_type_label()` asks
+`i18n.has_message()` whether the key exists and, on a miss, falls back to a
 title-cased rendering of the identifier (e.g. `"plastic"` → `"Plastic"`,
-`"composite-fibre"` → `"Composite Fibre"`).
+`"composite-fibre"` → `"Composite Fibre"`). Catalog membership is tested
+before translating because the key embeds user data — formatting a dynamic
+key would collapse doubled braces into a false hit and warn on unmatched
+ones.
 
 ## Functions added/changed
 

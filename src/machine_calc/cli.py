@@ -121,11 +121,10 @@ def _material_type_label(material_type: str, locale: str) -> str:
 
     Prefers the ``material_type.<id>`` message-catalog entry (Constitution
     Principle VIII). Categories introduced by data alone have no catalog
-    entry — :func:`~machine_calc.i18n.translate` signals that by returning
-    the key itself — so those fall back to a title-cased form of the raw
-    id. This keeps "add a new category without a code change" (008 FR-004)
-    true for the prompt labels too, while still letting a bundled category
-    be translated.
+    entry, which :func:`~machine_calc.i18n.has_message` reports directly, so
+    those fall back to a title-cased form of the raw id. This keeps "add a
+    new category without a code change" (008 FR-004) true for the prompt
+    labels too, while still letting a bundled category be translated.
     """
 
     key = f"material_type.{material_type}"

@@ -110,11 +110,18 @@ material, changes the category order with no additional schema.
 ### 5. Label lookup for unrecognized categories
 
 **Decision**: `cli.py::_material_type_label()` looks up the message-catalog
-key `material_type.<id>` via `machine_calc.i18n.translate()`. Because
-`translate()` returns the key **verbatim** when it has no entry, an absent
-label is detected by `label != key` and falls back to a title-cased form of
-the raw identifier (e.g. `composite-fibre` → `Composite Fibre`,
-underscores/hyphens replaced with spaces).
+key `material_type.<id>` and asks `machine_calc.i18n.has_message()` whether
+that key exists, translating only on a hit. Otherwise it falls back to a
+title-cased form of the raw identifier (e.g. `composite-fibre` →
+`Composite Fibre`, underscores/hyphens replaced with spaces).
+
+Membership is checked *before* translating because the key is built from
+user data. `translate()` formats its fallback template, and that template
+is the key itself, so comparing its output against the key cannot detect a
+miss reliably: doubled braces collapse (`material_type.{{alloy}}` →
+`material_type.{alloy}`, a false hit that leaks the key into the prompt),
+and unmatched braces (`al{o}y`) make the format raise and log a warning on
+every prompt. `has_message()` stops before any of that.
 
 **Rationale**: This keeps "declare a new category with zero code changes"
 true for the CLI prompt too. Catalog entries only exist for

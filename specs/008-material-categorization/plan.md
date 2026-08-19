@@ -122,9 +122,11 @@ tests/
    with drilling tools, stays kind-agnostic; `registry.py` supplies `("material_type",)`.
 5. **Warn-and-continue validation** for an invalid type, matching how the module already treats
    invalid numerics, instead of raising and making one bad entry fatal.
-6. **Title-case label fallback.** `machine_calc.i18n.translate()` returns the key verbatim when
-   missing, which is used to detect an absent catalog entry and render `composite-fibre` as
-   `Composite Fibre` — keeping "new type, no code change" true for the prompt text too.
+6. **Title-case label fallback.** `machine_calc.i18n.has_message()` reports whether a catalog
+   entry exists, and only on a miss is `composite-fibre` rendered as `Composite Fibre` — keeping
+   "new type, no code change" true for the prompt text too. Membership is checked rather than
+   comparing `translate()` output against the key, because type ids are user data: formatting a
+   dynamic key collapses doubled braces into a false hit and warns on unmatched ones.
 7. **No explicit reset on type switch.** `_prompt_material_choice` already resolves a default
    against the option list it is handed, so a remembered material from another type is simply not
    offered. An explicit reset was written, proven dead (its test passed with the logic removed),
