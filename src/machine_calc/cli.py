@@ -122,7 +122,7 @@ def _material_type_label(material_type: str, locale: str) -> str:
     Prefers the ``material_type.<id>`` message-catalog entry (Constitution
     Principle VIII). Categories introduced by data alone have no catalog
     entry — :func:`~machine_calc.i18n.translate` signals that by returning
-    the key verbatim — so those fall back to a title-cased form of the raw
+    the key itself — so those fall back to a title-cased form of the raw
     id. This keeps "add a new category without a code change" (008 FR-004)
     true for the prompt labels too, while still letting a bundled category
     be translated.
@@ -130,7 +130,16 @@ def _material_type_label(material_type: str, locale: str) -> str:
 
     key = f"material_type.{material_type}"
     label = translate(locale, key)
-    if label != key:
+    # `translate` runs `str.format()` on the fallback key too, so a miss is
+    # not always returned verbatim: an id containing braces (`{{alloy}}`)
+    # comes back as `material_type.{alloy}`. Comparing against the raw key
+    # would read that as a catalog hit and leak the key into the prompt, so
+    # compare against the key put through the same formatting rules.
+    try:
+        untranslated = key.format()
+    except (KeyError, IndexError, ValueError):
+        untranslated = key
+    if label != untranslated and label != key:
         return label
     # `_prompt_choice` strips the user's input before comparing it to the
     # offered options, so a label carrying leading/trailing whitespace could

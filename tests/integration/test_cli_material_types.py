@@ -479,3 +479,68 @@ specific_cutting_force = 750.0
         assert (
             len(materials_loads) == 1
         ), f"materials config parsed {len(materials_loads)}x, expected 1: {materials_loads}"
+
+
+class TestBraceContainingTypeId:
+    """`translate()` formats the fallback key, so braces need care (FR-004)."""
+
+    def test_brace_id_uses_title_case_fallback_not_the_catalog_key(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        """A brace-containing id must not leak the raw message-catalog key.
+
+        `translate()` runs `str.format()` even when the key is its own
+        fallback, so `material_type.{{alloy}}` comes back as
+        `material_type.{alloy}`. Comparing the result against the unformatted
+        key reads that as a catalog hit and prints the key to the user.
+        """
+        config_path = _write_config(
+            tmp_path,
+            """
+[[materials]]
+name = "Bronze"
+material_type = "{{alloy}}"
+reference_cutting_speed = 45.0
+reference_feed_per_rev = 0.18
+specific_cutting_force = 750.0
+""",
+        )
+        _feed(
+            monkeypatch,
+            ["metric", "", "{{Alloy}}", "Bronze", "Carbide", "10", "25", "", "n"],
+        )
+
+        run(materials_config_path=config_path)
+
+        out = capsys.readouterr().out
+        prompt = out[out.index("Material type (") : out.index("Material (")]
+        assert "material_type." not in prompt, prompt
+        assert "{{Alloy}}" in prompt, prompt
+        assert "Material (Bronze)" in out
+
+    def test_single_brace_id_uses_title_case_fallback(self, tmp_path, monkeypatch, capsys):
+        """An id with unbalanced braces makes `str.format()` raise, not substitute.
+
+        `material_type.al{o}y` raises `KeyError('o')`, which `translate()`
+        swallows and returns unformatted, so the sentinel used to detect a
+        catalog miss has to tolerate the same failure.
+        """
+        config_path = _write_config(
+            tmp_path,
+            """
+[[materials]]
+name = "Bronze"
+material_type = "al{o}y"
+reference_cutting_speed = 45.0
+reference_feed_per_rev = 0.18
+specific_cutting_force = 750.0
+""",
+        )
+        _feed(monkeypatch, ["metric", "", "Al{O}Y", "Bronze", "Carbide", "10", "25", "", "n"])
+
+        run(materials_config_path=config_path)
+
+        out = capsys.readouterr().out
+        prompt = out[out.index("Material type (") : out.index("Material (")]
+        assert "material_type." not in prompt, prompt
+        assert "Material (Bronze)" in out
