@@ -141,7 +141,13 @@ def _material_type_label(material_type: str, locale: str) -> str:
     label = translate(locale, key)
     if label != key:
         return label
-    return material_type.replace("_", " ").replace("-", " ").title()
+    # `_prompt_choice` strips the user's input before comparing it to the
+    # offered options, so a label carrying leading/trailing whitespace could
+    # never be typed. Ids such as "-metal" normalise to " Metal", and "-"
+    # normalises to whitespace only, so strip the result and fall back to the
+    # raw id when nothing printable survives (008 FR-006a).
+    fallback = material_type.replace("_", " ").replace("-", " ").title().strip()
+    return fallback or material_type
 
 
 def _prompt_material_type_choice(

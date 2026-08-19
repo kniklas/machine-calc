@@ -378,3 +378,58 @@ specific_cutting_force = 400.0
         assert len(labels) == len(set(labels)), f"duplicate labels offered: {labels}"
         # The chosen label resolves to the `Metal` id (Bronze), not `Metal (Metal)` (Pewter).
         assert "Material (Bronze)" in out
+
+    def test_leading_punctuation_type_id_stays_selectable(self, tmp_path, monkeypatch, capsys):
+        """A type id whose label normalises to leading whitespace must be typeable.
+
+        `-metal` title-cases to " Metal"; because `_prompt_choice` strips the
+        user's input before matching, an option with leading whitespace could
+        never be entered. It also collides with the bundled `metal` label once
+        stripped, so it must additionally be disambiguated.
+        """
+        config_path = _write_config(
+            tmp_path,
+            """
+[[materials]]
+name = "Bronze"
+material_type = "-metal"
+reference_cutting_speed = 45.0
+reference_feed_per_rev = 0.18
+specific_cutting_force = 750.0
+""",
+        )
+        _feed(
+            monkeypatch,
+            ["metric", "", "Metal (-metal)", "Bronze", "Carbide", "10", "25", "", "n"],
+        )
+
+        run(materials_config_path=config_path)
+
+        out = capsys.readouterr().out
+        prompt = out[out.index("Material type (") : out.index("Material (")]
+        labels = prompt[prompt.index("(") + 1 : prompt.rindex(")")].split(", ")
+        assert all(label == label.strip() for label in labels), labels
+        assert all(label.strip() for label in labels), labels
+        assert "Material (Bronze)" in out
+
+    def test_type_id_with_no_printable_label_falls_back_to_raw_id(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        """An id that normalises to nothing printable falls back to the raw id."""
+        config_path = _write_config(
+            tmp_path,
+            """
+[[materials]]
+name = "Bronze"
+material_type = "-"
+reference_cutting_speed = 45.0
+reference_feed_per_rev = 0.18
+specific_cutting_force = 750.0
+""",
+        )
+        _feed(monkeypatch, ["metric", "", "-", "Bronze", "Carbide", "10", "25", "", "n"])
+
+        run(materials_config_path=config_path)
+
+        out = capsys.readouterr().out
+        assert "Material (Bronze)" in out
