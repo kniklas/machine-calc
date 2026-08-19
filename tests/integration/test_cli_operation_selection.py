@@ -27,6 +27,7 @@ _DRILLING_ANSWERS = [
 _END_MILLING_ANSWERS = [
     "end milling",
     "metric",
+    "standard",
     "Metal",
     "Mild Steel",
     "Carbide",

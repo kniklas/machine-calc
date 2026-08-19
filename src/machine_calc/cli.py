@@ -648,6 +648,9 @@ class _MillingSessionState:
     number_of_teeth: float | None = None
     length_of_cut: float | None = None
     available_power: float | None = None
+    mode: CalculationMode = CalculationMode.STANDARD
+    target_rpm: float | None = None
+    previous_mode: CalculationMode = CalculationMode.STANDARD
 
     def resolved(self) -> _ResolvedMillingInputs:
         """Return the prompted inputs with their "not answered yet" state gone.
@@ -879,10 +882,13 @@ def _prompt_milling_inputs(
     """Run the full milling prompt sequence, updating ``state`` in place.
 
     Implements steps 1-10 of contracts/cli-repl-milling.md in order: unit
-    system, material type, material, tool, the six geometry inputs, then the
-    optional power rating. Milling offers no calculation-mode prompt (only
-    the standard mode is supported), which is what keeps the flow within the
-    SC-001 prompt budget.
+    system, calculation mode, material type, material, tool, the six
+    geometry inputs, then the mode-appropriate power/RPM prompt(s)
+    (contracts/cli-repl-milling-modes-delta.md of
+    ``specs/010-milling-calculation-modes``). The mode prompt is placed
+    immediately after the unit-system prompt and before material-type,
+    matching drilling's ``_run_drilling_session`` prompt placement exactly
+    (FR-001a).
 
     Returns:
         The unit-label dict for the chosen unit system, for result display.
@@ -890,6 +896,15 @@ def _prompt_milling_inputs(
 
     state.unit_system = _prompt_unit_system(state.unit_system, locale)
     labels = UNIT_LABELS[state.unit_system]
+
+    state.mode = _prompt_mode(state.mode, locale)
+    if state.mode is not state.previous_mode:
+        # Loop re-run mode switch (FR-013): clear mode-specific values
+        # rather than carrying them over as editable defaults. Shared
+        # inputs (unit system, material, tool, geometry) are unaffected.
+        state.target_rpm = None
+        state.available_power = None
+    state.previous_mode = state.mode
 
     material_types = list_material_types(config_path=materials_config_path)
     state.material_type = _prompt_material_type_choice(material_types, state.material_type, locale)
@@ -901,7 +916,19 @@ def _prompt_milling_inputs(
 
     _prompt_milling_geometry(state, engagement_label_key, labels, locale)
 
-    state.available_power = _prompt_optional_power(labels["power"], state.available_power, locale)
+    if state.mode is CalculationMode.POWER_CONSTRAINED:
+        state.available_power = _prompt_required_power(
+            labels["power"], state.available_power, locale
+        )
+    elif state.mode is CalculationMode.FIXED_RPM:
+        state.target_rpm = _prompt_target_rpm(state.target_rpm, locale)
+        state.available_power = _prompt_optional_power(
+            labels["power"], state.available_power, locale
+        )
+    else:
+        state.available_power = _prompt_optional_power(
+            labels["power"], state.available_power, locale
+        )
     return labels
 
 
@@ -935,6 +962,8 @@ def _run_end_milling_session(
         unit_system=state.unit_system,
         available_power=state.available_power,
         locale=locale,
+        mode=state.mode,
+        target_rpm=state.target_rpm,
         materials_config_path=materials_config_path,
     )
     _display_result(result, labels, locale)
@@ -970,6 +999,8 @@ def _run_face_milling_session(
         unit_system=state.unit_system,
         available_power=state.available_power,
         locale=locale,
+        mode=state.mode,
+        target_rpm=state.target_rpm,
         materials_config_path=materials_config_path,
     )
     _display_result(result, labels, locale)

@@ -14,6 +14,7 @@ _ANSWERS = [
     "milling",
     "end milling",
     "metric",
+    "standard",
     "Metal",
     "Mild Steel",
     "Carbide",
@@ -29,6 +30,7 @@ _EXPECTED_PROMPT_ORDER = [
     "Machining operation",
     "Milling operation",
     "Unit system",
+    "Calculation mode",
     "Material type",
     "Material",
     "End-mill tool",
@@ -66,15 +68,17 @@ def test_prompt_sequence_matches_the_contract(monkeypatch, capsys):
         assert expected in prompt, f"expected {expected!r} in {prompt!r}"
 
 
-def test_no_calculation_mode_prompt_is_offered(monkeypatch, capsys):
-    """Milling supports the standard mode only (spec.md Assumptions)."""
+def test_calculation_mode_prompt_defaults_to_standard(monkeypatch, capsys):
+    """The mode prompt is offered (FR-001a), but the default (standard) keeps
+    the rest of the flow byte-for-byte unchanged from 009-milling-calculations
+    (SC-004)."""
 
     prompts = _prompts(monkeypatch, [*_ANSWERS, "", "n"])
 
     run()
     capsys.readouterr()
 
-    assert not any("Calculation mode" in p for p in prompts)
+    assert any("Calculation mode" in p for p in prompts)
 
 
 def test_result_block_includes_the_material_removal_rate(monkeypatch, capsys):
@@ -131,6 +135,7 @@ def test_radial_depth_above_the_diameter_is_reprompted(monkeypatch, capsys):
         "milling",
         "end milling",
         "metric",
+        "standard",
         "Metal",
         "Mild Steel",
         "Carbide",
@@ -158,6 +163,7 @@ def test_fractional_tooth_count_is_reprompted(monkeypatch, capsys):
         "milling",
         "end milling",
         "metric",
+        "standard",
         "Metal",
         "Mild Steel",
         "Carbide",
@@ -185,6 +191,7 @@ def test_imperial_flow_uses_imperial_labels(monkeypatch, capsys):
         "milling",
         "end milling",
         "imperial",
+        "standard",
         "Metal",
         "Mild Steel",
         "Carbide",

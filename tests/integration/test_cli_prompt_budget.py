@@ -1,32 +1,37 @@
-"""SC-001 prompt-budget test for the milling REPL flow (T023a).
+"""SC-001 prompt-budget test for the milling REPL flow (T023a, T028).
 
-SC-001 caps a complete end-milling run at **14** prompts, of which at most
-**12** require the user to type a value.
-``contracts/cli-repl-milling.md`` "Prompt-count budget" specifies the actual
-flow as 13 prompts / 12 typed.
+SC-001 caps a complete end-milling run at **14** prompts for the standard
+mode, of which at most **12** require the user to type a value.
+``specs/010-milling-calculation-modes/quickstart.md`` "Per-mode
+prompt-count budget" extends this per-mode (research.md #5): standard mode
+is unchanged (14 prompts / 12 typed); power-constrained mode is 14 prompts
+/ 14 typed (the mode prompt adds one, and the now-required available-power
+prompt converts from optional to typed); fixed-RPM mode is 15 prompts / 14
+typed (the mode prompt and the required target-RPM prompt add two, offset
+by the optional advisory available-power prompt remaining a single-Enter
+default).
 
-The exact-count assertions below are a deliberate tripwire: the *binding*
-requirement is SC-001's ceiling, so a change that legitimately adds a prompt
-must update this test **and** re-check SC-001, rather than letting the count
-drift silently up to (or past) the limit.
+The exact-count assertions below are a deliberate tripwire: a change that
+legitimately adds a prompt must update this test **and** re-check the
+budget in quickstart.md, rather than letting the count drift silently up
+to (or past) SC-001's ceiling.
 """
 
 import builtins
 
+import pytest
+
 from machine_calc.cli import run
 
-#: SC-001's ceiling.
+#: SC-001's ceiling for the standard mode (unchanged, SC-004).
 SC001_MAX_PROMPTS = 14
 SC001_MAX_TYPED_VALUES = 12
 
-#: The exact counts the current flow is contracted to issue.
-CONTRACT_PROMPT_COUNT = 13
-CONTRACT_TYPED_VALUE_COUNT = 12
-
-_END_MILLING_ANSWERS = [
+_END_MILLING_STANDARD_ANSWERS = [
     "milling",
     "end milling",
     "metric",
+    "",  # calculation mode -- dismissible with a bare Enter (default: standard)
     "Metal",
     "Mild Steel",
     "Carbide",
@@ -37,6 +42,67 @@ _END_MILLING_ANSWERS = [
     "4",
     "100",
     "",  # optional power rating -- dismissible with a bare Enter
+]
+
+_END_MILLING_POWER_CONSTRAINED_ANSWERS = [
+    "milling",
+    "end milling",
+    "metric",
+    "power-constrained",
+    "Metal",
+    "Mild Steel",
+    "Carbide",
+    "10",
+    "2",
+    "5",
+    "0.05",
+    "4",
+    "100",
+    "0.05",  # required available power -- no dismissible prompt in this mode
+]
+
+_END_MILLING_FIXED_RPM_ANSWERS = [
+    "milling",
+    "end milling",
+    "metric",
+    "fixed-rpm",
+    "Metal",
+    "Mild Steel",
+    "Carbide",
+    "10",
+    "2",
+    "5",
+    "0.05",
+    "4",
+    "100",
+    "3000",  # required target RPM
+    "",  # optional advisory power rating -- dismissible with a bare Enter
+]
+
+_FACE_MILLING_STANDARD_ANSWERS = [
+    "milling",
+    "face milling",
+    "metric",
+    "",
+    "Metal",
+    "Mild Steel",
+    "Carbide",
+    "50",
+    "1.5",
+    "40",
+    "0.15",
+    "5",
+    "200",
+    "",
+]
+
+#: (mode label, answers, expected total prompts, expected typed-value prompts).
+_MODE_CASES = [
+    pytest.param("standard", _END_MILLING_STANDARD_ANSWERS, 14, 12, id="standard"),
+    pytest.param(
+        "power-constrained", _END_MILLING_POWER_CONSTRAINED_ANSWERS, 14, 14, id="power-constrained"
+    ),
+    pytest.param("fixed-rpm", _END_MILLING_FIXED_RPM_ANSWERS, 15, 14, id="fixed-rpm"),
 ]
 
 
@@ -55,58 +121,83 @@ def _run_and_count(monkeypatch, answers):
     return prompts[:-1]
 
 
-def test_end_milling_issues_exactly_the_contracted_number_of_prompts(monkeypatch, capsys):
-    prompts = _run_and_count(monkeypatch, _END_MILLING_ANSWERS)
+@pytest.mark.parametrize("mode,answers,expected_total,expected_typed", _MODE_CASES)
+def test_end_milling_issues_the_contracted_number_of_prompts_per_mode(
+    monkeypatch, capsys, mode, answers, expected_total, expected_typed
+):
+    prompts = _run_and_count(monkeypatch, answers)
     capsys.readouterr()
 
-    assert len(prompts) == CONTRACT_PROMPT_COUNT
+    typed = [prompt for prompt, answer in zip(prompts, answers) if answer != ""]
+
+    assert len(prompts) == expected_total, f"{mode}: total prompt count"
+    assert len(typed) == expected_typed, f"{mode}: typed prompt count"
+
+
+def test_standard_mode_stays_within_the_sc001_ceiling(monkeypatch, capsys):
+    prompts = _run_and_count(monkeypatch, _END_MILLING_STANDARD_ANSWERS)
+    capsys.readouterr()
+
+    typed = [
+        prompt for prompt, answer in zip(prompts, _END_MILLING_STANDARD_ANSWERS) if answer != ""
+    ]
+
     assert len(prompts) <= SC001_MAX_PROMPTS
-
-
-def test_at_most_twelve_prompts_require_a_typed_value(monkeypatch, capsys):
-    prompts = _run_and_count(monkeypatch, _END_MILLING_ANSWERS)
-    capsys.readouterr()
-
-    typed = [prompt for prompt, answer in zip(prompts, _END_MILLING_ANSWERS) if answer != ""]
-
-    assert len(typed) == CONTRACT_TYPED_VALUE_COUNT
     assert len(typed) <= SC001_MAX_TYPED_VALUES
 
 
-def test_the_dismissible_prompt_is_the_optional_power_rating(monkeypatch, capsys):
-    """The one non-typed prompt must be the *optional* input, not a required one."""
+def test_the_dismissible_prompts_in_standard_mode_are_the_optional_ones(monkeypatch, capsys):
+    """The two non-typed prompts in standard mode must be the *optional*
+    calculation-mode and available-power inputs, not required ones."""
 
-    prompts = _run_and_count(monkeypatch, _END_MILLING_ANSWERS)
+    prompts = _run_and_count(monkeypatch, _END_MILLING_STANDARD_ANSWERS)
     capsys.readouterr()
 
-    dismissed = [prompt for prompt, answer in zip(prompts, _END_MILLING_ANSWERS) if answer == ""]
+    dismissed = [
+        prompt
+        for prompt, answer in zip(prompts, _END_MILLING_STANDARD_ANSWERS)
+        if answer == ""
+    ]
+
+    assert len(dismissed) == 2
+    assert any("Calculation mode" in p for p in dismissed)
+    assert any("Available power" in p for p in dismissed)
+
+
+def test_power_constrained_mode_has_no_dismissible_prompt(monkeypatch, capsys):
+    """Every prompt in power-constrained mode requires a typed value (FR-002)."""
+
+    prompts = _run_and_count(monkeypatch, _END_MILLING_POWER_CONSTRAINED_ANSWERS)
+    capsys.readouterr()
+
+    dismissed = [
+        prompt
+        for prompt, answer in zip(prompts, _END_MILLING_POWER_CONSTRAINED_ANSWERS)
+        if answer == ""
+    ]
+
+    assert dismissed == []
+
+
+def test_fixed_rpm_mode_the_dismissible_prompt_is_the_optional_available_power(monkeypatch, capsys):
+    """FR-008: available power stays optional/advisory in fixed-RPM mode."""
+
+    prompts = _run_and_count(monkeypatch, _END_MILLING_FIXED_RPM_ANSWERS)
+    capsys.readouterr()
+
+    dismissed = [
+        prompt for prompt, answer in zip(prompts, _END_MILLING_FIXED_RPM_ANSWERS) if answer == ""
+    ]
 
     assert len(dismissed) == 1
     assert "Available power" in dismissed[0]
 
 
-def test_face_milling_stays_within_the_same_budget(monkeypatch, capsys):
+def test_face_milling_stays_within_the_same_standard_mode_budget(monkeypatch, capsys):
     """Face milling has the same shape, so it must not exceed the ceiling."""
 
-    prompts = _run_and_count(
-        monkeypatch,
-        [
-            "milling",
-            "face milling",
-            "metric",
-            "Metal",
-            "Mild Steel",
-            "Carbide",
-            "50",
-            "1.5",
-            "40",
-            "0.15",
-            "5",
-            "200",
-            "",
-        ],
-    )
+    prompts = _run_and_count(monkeypatch, _FACE_MILLING_STANDARD_ANSWERS)
     capsys.readouterr()
 
-    assert len(prompts) == CONTRACT_PROMPT_COUNT
+    assert len(prompts) == 14
     assert len(prompts) <= SC001_MAX_PROMPTS

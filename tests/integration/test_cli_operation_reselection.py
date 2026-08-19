@@ -13,6 +13,7 @@ _DRILLING = ["metric", "", "Metal", "Mild Steel", "Carbide", "10", "25", ""]
 _END_MILLING = [
     "end milling",
     "metric",
+    "standard",
     "Metal",
     "Mild Steel",
     "Carbide",
@@ -27,6 +28,7 @@ _END_MILLING = [
 _FACE_MILLING = [
     "face milling",
     "metric",
+    "standard",
     "Metal",
     "Mild Steel",
     "Carbide",
@@ -127,7 +129,7 @@ def test_reselecting_the_same_flow_retains_previous_answers_as_defaults(monkeypa
             "y",
             "milling",
             "end milling",
-            *([""] * 10),  # unit system through length of cut, all defaulted
+            *([""] * 11),  # unit system through length of cut, all defaulted
             "",  # available power
             "n",
         ],

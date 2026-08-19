@@ -167,9 +167,11 @@ clears any previously-entered target RPM/available-power defaults (FR-013).
 **Per-mode prompt-count budget** (supersedes `009-milling-calculations`'
 SC-001 for the two new modes; research.md #5): standard mode remains 14
 prompts / 12 typed values (SC-004, unchanged); power-constrained mode is
-14 prompts / 13 typed values (the mode prompt adds one, the now-required
-available-power prompt is typed rather than optional); fixed-RPM mode is
-15 prompts / 13 typed values (the mode prompt plus the required target-RPM
+14 prompts / 14 typed values (the mode prompt adds one, and the
+now-required available-power prompt converts from optional to typed, so
+every prompt in this mode requires a typed value); fixed-RPM mode is
+15 prompts / 14 typed values (the mode prompt plus the required target-RPM
 prompt add two, offset by the optional advisory available-power prompt
-remaining a single-Enter default). `tests/integration/test_cli_prompt_budget.py`
+remaining a single-Enter default — the only dismissible prompt in this
+mode). `tests/integration/test_cli_prompt_budget.py`
 asserts these three counts per mode (see tasks.md T028).
