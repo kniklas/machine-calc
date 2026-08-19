@@ -173,6 +173,35 @@ def _material_type_label(material_type: str, locale: str) -> str:
     return fallback or material_type
 
 
+def _unique_labels(candidates: dict[str, str]) -> dict[str, str]:
+    """Return a collision-safe ``key -> label`` mapping for reverse lookup.
+
+    Two distinct keys (tool/material names, type ids) can render the same
+    translated label. Naively building the reverse ``label -> key`` map
+    from such labels silently drops all but the last-inserted key for a
+    colliding label, making it unreachable via the prompt (a correctness
+    bug, not just a display quirk). This suffixes a colliding label with
+    its own key, escalating to a numeric discriminator if that suffixed
+    form is itself already taken, so every key keeps a distinct label and
+    the reverse map stays a bijection. Mirrors the collision handling
+    :func:`_prompt_material_type_choice` already applies to type ids.
+    """
+
+    collisions = Counter(candidates.values())
+    taken: set[str] = set()
+    unique: dict[str, str] = {}
+    for key, label in candidates.items():
+        candidate = f"{label} ({key})" if collisions[label] > 1 else label
+        if candidate in taken:
+            discriminator = 2
+            while f"{candidate} #{discriminator}" in taken:
+                discriminator += 1
+            candidate = f"{candidate} #{discriminator}"
+        taken.add(candidate)
+        unique[key] = candidate
+    return unique
+
+
 def _prompt_material_type_choice(
     material_types: list[str],
     default: str | None,
@@ -189,30 +218,16 @@ def _prompt_material_type_choice(
     two distinct ids can render the same label — a user-defined
     ``material_type = "Metal"`` title-cases to the same ``"Metal"`` as the
     bundled ``metal`` does via the message catalog. Labels are therefore
-    allocated so that the mapping stays a bijection: a colliding label is
-    suffixed with its canonical id, and if that suffixed form is *itself*
-    already taken (an id such as ``"Metal (Metal)"`` can collide with the
-    suffix generated for ``"Metal"``) a numeric discriminator is appended
-    until the label is unique. No type can be made unreachable by the
-    reverse lookup (008 FR-006a).
+    made collision-safe by :func:`_unique_labels` so the mapping stays a
+    bijection: no type can be made unreachable by the reverse lookup (008
+    FR-006a).
     """
 
     display = {
         material_type: _material_type_label(material_type, locale)
         for material_type in material_types
     }
-    collisions = Counter(display.values())
-    labels_by_type: dict[str, str] = {}
-    taken: set[str] = set()
-    for material_type, label in display.items():
-        candidate = f"{label} ({material_type})" if collisions[label] > 1 else label
-        if candidate in taken:
-            discriminator = 2
-            while f"{candidate} #{discriminator}" in taken:
-                discriminator += 1
-            candidate = f"{candidate} #{discriminator}"
-        taken.add(candidate)
-        labels_by_type[material_type] = candidate
+    labels_by_type = _unique_labels(display)
     types_by_label = {label: key for key, label in labels_by_type.items()}
     options = list(labels_by_type.values())
     default_label = labels_by_type.get(default) if default else None
@@ -237,11 +252,12 @@ def _prompt_material_choice(
     """
 
     materials = {name: get_material(name, config_path) for name in names}
-    labels_by_name = {
+    display = {
         name: _display_label(material, display_locale, locale)
         for name, material in materials.items()
         if material is not None
     }
+    labels_by_name = _unique_labels(display)
     names_by_label = {label: name for name, label in labels_by_name.items()}
     options = list(labels_by_name.values())
     default_label = labels_by_name.get(default) if default else None
@@ -260,15 +276,20 @@ def _prompt_tool_choice(
 ) -> str:
     """Prompt for a drilling tool, displaying translated name + unit system.
 
-    Mirrors :func:`_prompt_material_choice` for :class:`DrillingTool`.
+    Mirrors :func:`_prompt_material_choice` for :class:`DrillingTool`,
+    including :func:`_unique_labels`'s collision-safe reverse lookup: two
+    tool names (bundled or user-supplied) can render the same translated
+    label, and without disambiguation the naive reverse map would silently
+    make one of them unreachable from the prompt.
     """
 
     tools = {name: get_tool(name, config_path) for name in names}
-    labels_by_name = {
+    display = {
         name: _display_label(tool, display_locale, locale)
         for name, tool in tools.items()
         if tool is not None
     }
+    labels_by_name = _unique_labels(display)
     names_by_label = {label: name for name, label in labels_by_name.items()}
     options = list(labels_by_name.values())
     default_label = labels_by_name.get(default) if default else None
@@ -726,17 +747,19 @@ def _prompt_mill_tool_choice(
 ) -> str:
     """Prompt for a milling tool, displaying translated name + unit system.
 
-    Mirrors :func:`_prompt_tool_choice`; ``resolve``/``label_key`` select the
-    end-mill or face-mill registry so both sub-operations share one
+    Mirrors :func:`_prompt_tool_choice`, including its collision-safe
+    :func:`_unique_labels` reverse lookup; ``resolve``/``label_key`` select
+    the end-mill or face-mill registry so both sub-operations share one
     implementation (FR-004, FR-006).
     """
 
     tools = {name: resolve(name, config_path) for name in names}
-    labels_by_name = {
+    display = {
         name: _display_label(tool, display_locale, locale)
         for name, tool in tools.items()
         if tool is not None
     }
+    labels_by_name = _unique_labels(display)
     names_by_label = {label: name for name, label in labels_by_name.items()}
     options = list(labels_by_name.values())
     default_label = labels_by_name.get(default) if default else None

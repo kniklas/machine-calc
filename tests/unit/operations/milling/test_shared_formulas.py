@@ -114,8 +114,14 @@ def test_feed_rate_scales_linearly_with_tooth_count(teeth):
     )
 
 
-def test_torque_is_independent_of_tooth_count_at_fixed_chip_load():
-    """Mc = Pc * 9550 / n, and both Pc and n scale together with vf."""
+def test_torque_scales_with_tooth_count_via_power_at_fixed_spindle_speed():
+    """Mc = Pc * 9550 / n, and both Pc and n scale together with vf.
+
+    Torque is *not* independent of tooth count here — the docstring below
+    documents why it doubles even though spindle speed (n) does not: at a
+    fixed chip load, doubling the tooth count doubles the feed rate and
+    therefore the cutting power, which flows directly into torque.
+    """
 
     four = _metrics(number_of_teeth=4)
     eight = _metrics(number_of_teeth=8)

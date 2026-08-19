@@ -94,7 +94,7 @@ def _to_tool(
 
     source_path = entry.source_path or bundled_resource
     try:
-        cutting_speed_factor = float(entry.fields["cutting_speed_factor"])
+        raw_factor = entry.fields["cutting_speed_factor"]
     except KeyError as exc:
         raise RegistryConfigError(
             "error.materials_config.invalid_entry",
@@ -103,17 +103,20 @@ def _to_tool(
             name=entry.name,
             details="missing required field 'cutting_speed_factor'",
         ) from exc
-    except (TypeError, ValueError) as exc:
+
+    # TOML deserializes booleans as a bool subtype of int and quoted values
+    # as str; both would otherwise pass silently through float() (e.g.
+    # `true` -> 1.0, `"1.8"` -> 1.8), so reject them explicitly rather than
+    # accepting a mistyped config value as a valid multiplier.
+    if isinstance(raw_factor, bool) or not isinstance(raw_factor, (int, float)):
         raise RegistryConfigError(
             "error.materials_config.invalid_entry",
             path=source_path,
             kind=kind,
             name=entry.name,
-            details=(
-                "field 'cutting_speed_factor' must be a number, got "
-                f"{entry.fields['cutting_speed_factor']!r}"
-            ),
-        ) from exc
+            details=f"field 'cutting_speed_factor' must be a number, got {raw_factor!r}",
+        )
+    cutting_speed_factor = float(raw_factor)
 
     if not math.isfinite(cutting_speed_factor) or cutting_speed_factor <= 0:
         raise RegistryConfigError(
@@ -130,6 +133,14 @@ def _to_tool(
         unit_system=entry.unit_system,
         translations=dict(entry.translations),
     )
+
+
+#: ``cutting_speed_factor`` is optional when a user override merges into a
+#: bundled entry (``contracts/milling-tools-config-schema.md``: "optional
+#: when overriding") — an omitted override value keeps the bundled factor
+#: rather than being dropped and then rejected by :func:`_to_tool` as a
+#: missing required field.
+_STICKY_FIELDS = ("cutting_speed_factor",)
 
 
 def build_registry(
@@ -154,7 +165,9 @@ def build_registry(
         A name -> tool mapping in bundled-then-appended order.
     """
 
-    result = load_and_merge(bundled_package, bundled_resource, config_path, table_key)
+    result = load_and_merge(
+        bundled_package, bundled_resource, config_path, table_key, _STICKY_FIELDS
+    )
     kind = table_key[:-1]
     return {
         entry.name: _to_tool(tool_cls, entry, bundled_resource, kind) for entry in result.entries

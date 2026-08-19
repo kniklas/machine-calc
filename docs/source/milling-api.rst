@@ -26,9 +26,9 @@ All four names are importable directly from ``machine_calc``.
             available_power=None,
             config_path=None,
             locale="en",
+            materials_config_path=None,
             mode=CalculationMode.STANDARD,
             target_rpm=None,
-            materials_config_path=None,
         ) -> CalculationResult
 
 ``calculate_face_milling(...)``
@@ -125,7 +125,7 @@ top-level modules (``config``, ``models``, ``units``, ``validation``,
 
 ``_calculate.calculate_milling()`` holds the single copy of the validation,
 unit-conversion and result-assembly sequence. It stays generic over the two
-sub-operations by taking three injection points:
+sub-operations by taking four injection points:
 
 ``resolve_tool``
     Looks a tool name up in that sub-operation's registry.
@@ -140,6 +140,13 @@ sub-operations by taking three injection points:
     The message-catalog key naming the radial input, so validation errors say
     "Radial depth of cut" for end milling and "Width of cut" for face
     milling.
+
+``compute_at_rpm``
+    The sub-operation's ``formulas.py`` at-RPM adapter, used instead of
+    ``compute`` when ``mode`` is ``POWER_CONSTRAINED`` or ``FIXED_RPM``
+    (``010-milling-calculation-modes``), so each sub-operation supplies its
+    own fixed-spindle-speed metrics rather than sharing one implementation
+    across both.
 
 The ``compute`` callable returns anything satisfying the
 ``MillingMetricsLike`` protocol. Its members are declared as read-only
