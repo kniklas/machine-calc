@@ -301,6 +301,31 @@ def list_materials(config_path: str | None = None, material_type: str | None = N
     return [name for name, material in materials.items() if material.material_type == material_type]
 
 
+def materials_load_notice(
+    config_path: str | None = None,
+) -> tuple[str | None, tuple[tuple[str, object], ...]]:
+    """Return the non-fatal load notice for the materials registry, if any.
+
+    Exists so callers never have to re-specify the bundled resource
+    coordinates or the sticky-field tuple themselves. Passing a different
+    ``sticky_fields`` value produces a different ``load_and_merge`` cache
+    key, which would silently reread and reparse both TOML files instead of
+    reusing the load the registry already performed.
+
+    Args:
+        config_path: Optional path to a user-supplied materials TOML file.
+
+    Returns:
+        A ``(notice_key, notice_kwargs)`` pair; ``notice_key`` is ``None``
+        when the load produced no notice.
+    """
+
+    result = load_and_merge(
+        _BUNDLED_PACKAGE, _BUNDLED_RESOURCE, config_path, _TABLE_KEY, _STICKY_FIELDS
+    )
+    return result.notice_key, result.notice_kwargs
+
+
 def list_material_types(config_path: str | None = None) -> list[str]:
     """Return the registered material-type identifiers (008 FR-001, FR-006).
 

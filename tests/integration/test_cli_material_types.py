@@ -433,3 +433,49 @@ specific_cutting_force = 750.0
 
         out = capsys.readouterr().out
         assert "Material (Bronze)" in out
+
+
+class TestMaterialsConfigLoadCaching:
+    """The startup notice must not defeat the merge cache (008 Principle IV)."""
+
+    def test_startup_notice_reuses_the_registry_merge_cache(self, tmp_path, monkeypatch, capsys):
+        """A CLI startup must parse each materials TOML file only once.
+
+        `registry` loads materials with its sticky-field tuple, so the startup
+        notice lookup must use the same tuple; a different one is a different
+        `functools.cache` key and silently rereads and reparses both the
+        bundled and the user file a second time.
+        """
+        from machine_calc import registry_config
+
+        registry_config.clear_cache()
+        config_path = _write_config(
+            tmp_path,
+            """
+[[materials]]
+name = "Bronze"
+material_type = "metal"
+reference_cutting_speed = 45.0
+reference_feed_per_rev = 0.18
+specific_cutting_force = 750.0
+""",
+        )
+        calls: list[tuple[object, ...]] = []
+        original = registry_config._load_and_merge_uncached
+        monkeypatch.setattr(
+            registry_config,
+            "_load_and_merge_uncached",
+            lambda *args: (calls.append(args), original(*args))[1],
+        )
+        _feed(
+            monkeypatch,
+            ["metric", "", "Metal", "Bronze", "Carbide", "10", "25", "", "n"],
+        )
+
+        run(materials_config_path=config_path)
+        capsys.readouterr()
+
+        materials_loads = [args for args in calls if args[3] == "materials"]
+        assert (
+            len(materials_loads) == 1
+        ), f"materials config parsed {len(materials_loads)}x, expected 1: {materials_loads}"

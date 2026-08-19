@@ -28,21 +28,12 @@ from machine_calc.config import Configuration
 from machine_calc.i18n import get_locale, get_raw_locale, translate
 from machine_calc.logging_setup import configure_logging
 from machine_calc.operations.drilling.tools import DrillingTool, get_tool
-from machine_calc.registry import WorkpieceMaterial, get_material
-from machine_calc.registry_config import RegistryConfigError, load_and_merge
+from machine_calc.registry import WorkpieceMaterial, get_material, materials_load_notice
+from machine_calc.registry_config import RegistryConfigError
 from machine_calc.units import in_to_mm
 from machine_calc.validation import validate_depth_mm, validate_diameter_mm
 
 _DEFAULT_CONFIG = Configuration()
-
-# Bundled package/resource identifiers, reused (not duplicated) here purely
-# to detect a "missing/unreadable materials-config path" startup notice
-# ahead of the REPL loop (contracts/library-cli-extensions.md "Startup
-# sequence"); the actual parse/merge/validate logic lives in
-# ``registry.py``/``operations/drilling/tools.py``/``registry_config.py``.
-_MATERIALS_BUNDLED_PACKAGE = "machine_calc.data"
-_MATERIALS_BUNDLED_RESOURCE = "materials.toml"
-_MATERIALS_TABLE_KEY = "materials"
 
 UNIT_LABELS = {
     UnitSystem.METRIC: {
@@ -439,14 +430,9 @@ def _resolve_materials_config(materials_config_path: str | None, locale: str) ->
         print(translate(locale, exc.message_key, **exc.kwargs))
         raise SystemExit(1) from exc
 
-    result = load_and_merge(
-        _MATERIALS_BUNDLED_PACKAGE,
-        _MATERIALS_BUNDLED_RESOURCE,
-        materials_config_path,
-        _MATERIALS_TABLE_KEY,
-    )
-    if result.notice_key:
-        print(translate(locale, result.notice_key, **dict(result.notice_kwargs)))
+    notice_key, notice_kwargs = materials_load_notice(materials_config_path)
+    if notice_key:
+        print(translate(locale, notice_key, **dict(notice_kwargs)))
 
 
 def run(materials_config_path: str | None = None) -> None:
