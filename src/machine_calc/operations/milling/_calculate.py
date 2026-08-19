@@ -299,7 +299,7 @@ def _compute_metrics(
                 ),
                 mode,
             )
-        metrics = calculate_power_constrained_milling_metrics(
+        power_constrained_metrics = calculate_power_constrained_milling_metrics(
             diameter_mm=geometry_mm["diameter_mm"],
             axial_depth_of_cut_mm=geometry_mm["axial_depth_of_cut_mm"],
             radial_engagement_mm=geometry_mm["radial_engagement_mm"],
@@ -310,16 +310,23 @@ def _compute_metrics(
             cutting_speed_factor=resolved_tool.cutting_speed_factor,
             available_power_kw=available_power_kw,
         )
-        if not math.isfinite(metrics.spindle_speed_rpm) or metrics.spindle_speed_rpm <= 0:
-            return error_result(
-                unit_system,
-                ErrorInfo(
-                    "INFEASIBLE_POWER_BUDGET",
-                    translate(locale, "error.infeasible_power_budget"),
-                ),
-                mode,
-            )
-        return metrics
+        # Validate every metric field, not just spindle_speed_rpm: the
+        # no-reduction-needed no-op path (available power already
+        # sufficient) returns the *nominal* metrics directly, before ever
+        # reaching calculate_power_constrained_milling_metrics()'s own
+        # adjusted-path finiteness guard — so an extreme-but-otherwise-
+        # valid input (e.g. a tiny positive feed_per_tooth making nominal
+        # power underflow to ~0 and machining_time overflow to inf) can
+        # still slip through with a finite, positive spindle_speed_rpm but
+        # invalid other fields.
+        return _reject_if_invalid(
+            power_constrained_metrics,
+            unit_system,
+            mode,
+            locale,
+            error_code="INFEASIBLE_POWER_BUDGET",
+            error_message_key="error.infeasible_power_budget",
+        )
 
     if mode is CalculationMode.FIXED_RPM:
         # target_rpm is guaranteed non-None here (INVALID_TARGET_RPM is
@@ -329,31 +336,54 @@ def _compute_metrics(
         rpm_metrics: MillingMetricsLike = compute_at_rpm(
             geometry_mm, resolved_material, resolved_tool, target_rpm
         )
-        return _reject_if_overflowed(rpm_metrics, unit_system, mode, locale)
+        return _reject_if_invalid(
+            rpm_metrics,
+            unit_system,
+            mode,
+            locale,
+            error_code="CALCULATION_OVERFLOW",
+            error_message_key="error.calculation_overflow",
+        )
 
     standard_metrics: MillingMetricsLike = compute(geometry_mm, resolved_material, resolved_tool)
-    return _reject_if_overflowed(standard_metrics, unit_system, mode, locale)
+    return _reject_if_invalid(
+        standard_metrics,
+        unit_system,
+        mode,
+        locale,
+        error_code="CALCULATION_OVERFLOW",
+        error_message_key="error.calculation_overflow",
+    )
 
 
-def _reject_if_overflowed(
+def _reject_if_invalid(
     metrics: MillingMetricsLike,
     unit_system: UnitSystem,
     mode: CalculationMode,
     locale: str,
+    *,
+    error_code: str,
+    error_message_key: str,
 ) -> MillingMetricsLike | CalculationResult:
-    """Guard against an extreme-but-individually-valid input (e.g. an
-    unbounded ``feed_per_tooth``/``target_rpm``, per FR-008/FR-018's
-    explicit no-upper-bound design) producing a non-finite downstream
-    result.
+    """Guard against a metrics result with any non-finite field.
 
-    ``validate_feed_per_tooth_mm()``/``validate_target_rpm()`` deliberately
-    impose no upper bound, so a physically-absurd but "valid" input can
-    still make ``feed_rate_mm_min = spindle_speed_rpm * feed_per_tooth_mm *
-    number_of_teeth`` (or a value derived from it) overflow to ``inf``.
-    Rather than surface a result that mixes finite and ``inf``/``nan``
-    fields, report it as a structured error (FR-012/FR-015 never-raises
-    contract) — mirrors the ``POWER_CONSTRAINED`` branch's own
-    finiteness check above, generalized to the other two modes' metrics.
+    Two distinct root causes both land here:
+
+    - ``feed_per_tooth``/``target_rpm`` deliberately have no upper bound
+      (FR-008/FR-018), so a physically-absurd but individually-"valid"
+      input can make ``feed_rate_mm_min`` (or a value derived from it)
+      overflow to ``inf`` (STANDARD/FIXED_RPM: reported as
+      ``CALCULATION_OVERFLOW``).
+    - In ``POWER_CONSTRAINED`` mode's no-reduction-needed no-op path, the
+      *nominal* metrics are returned before the adjusted-path finiteness
+      guard ever runs, so a tiny positive ``feed_per_tooth`` can underflow
+      nominal power towards zero while ``machining_time_min`` overflows to
+      ``inf`` (reported as ``INFEASIBLE_POWER_BUDGET``, matching this
+      mode's other invalid-budget cases).
+
+    Either way, a result mixing finite and ``inf``/``nan`` fields would
+    violate the never-raises, structured-error API contract
+    (FR-012/FR-015) if returned as-is.
     """
 
     if all(
@@ -370,7 +400,7 @@ def _reject_if_overflowed(
         return metrics
     return error_result(
         unit_system,
-        ErrorInfo("CALCULATION_OVERFLOW", translate(locale, "error.calculation_overflow")),
+        ErrorInfo(error_code, translate(locale, error_message_key)),
         mode,
     )
 

@@ -118,3 +118,23 @@ def test_end_milling_subnormal_available_power_is_infeasible_not_crash():
     assert result.error is not None
     assert result.error.code == "INFEASIBLE_POWER_BUDGET"
     assert result.spindle_speed_rpm is None
+
+
+def test_end_milling_tiny_feed_per_tooth_no_op_path_is_infeasible_not_a_bad_result():
+    """A tiny positive feed_per_tooth can make the *nominal* power
+    underflow towards zero while machining_time overflows to inf — this
+    happens on the no-reduction-needed no-op path (available power
+    comfortably exceeds nominal), which returns the nominal metrics
+    directly, before ever reaching the adjusted-path finiteness guard in
+    calculate_power_constrained_milling_metrics(). Must still surface as
+    a structured INFEASIBLE_POWER_BUDGET result, not a "successful"
+    result containing inf/nan fields."""
+    result = calculate_end_milling(
+        **{**_END_MILLING_ARGS, "feed_per_tooth": 5e-320},
+        mode=CalculationMode.POWER_CONSTRAINED,
+        available_power=1000.0,
+    )
+    assert result.error is not None
+    assert result.error.code == "INFEASIBLE_POWER_BUDGET"
+    assert result.spindle_speed_rpm is None
+    assert result.machining_time is None
