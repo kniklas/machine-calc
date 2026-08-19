@@ -16,13 +16,30 @@ all PR/CI/review operations below.
 
 ## 1. Setup — identify the PR and gather state
 
+Start the **time log** for this session first, before anything else in
+this section — including the ambiguity confirmation below, which is
+itself a human-blocked wait and must be captured:
+- **loop-start timestamp** — capture once, as the very first action of
+  this skill (e.g. `date -u +%Y-%m-%dT%H:%M:%SZ`).
+- **waiting intervals** — every time execution pauses on a human decision
+  (an `ask_user` call, a plain-text confirmation question the user must
+  answer before you proceed, or any other point where you are explicitly
+  waiting on the user rather than doing agent work), record a
+  `(wait-start, wait-end)` pair. `wait-start` is when the question is
+  asked / the pause begins; `wait-end` is when the user's answer resumes
+  the loop. Do **not** count CI-polling waits or Copilot-review-polling
+  waits — the agent is still driving those, not blocked on the human —
+  only count waits that are genuinely blocked on a human response.
+
 ```bash
 gh pr view <number-or-branch> --json number,title,url,headRefName,baseRefName,state,mergeable,reviewDecision,commits,body
 gh pr checks <number-or-branch>
 ```
 
 If no PR number/branch is given, infer it from the current branch
-(`git branch --show-current`) and confirm with the user if ambiguous.
+(`git branch --show-current`) and confirm with the user if ambiguous —
+record this confirmation as a waiting interval in the time log if it
+happens.
 
 Keep the fetched `body` (the PR description) on hand — §2's suppression
 check depends on cross-referencing it against the "Quality & Security Gate
@@ -39,6 +56,14 @@ Initialize (mentally or in a scratch note) two counters for this session:
 Also track a boolean:
 - **copilot-review-invoked** — set true only after posting `@copilot review`
   on the current PR at least once in this session.
+
+At closure, derive from the time log:
+  - **total wall time** = now − loop-start timestamp.
+
+  - **time waiting on human decisions** = sum of all recorded waiting
+    intervals.
+  - **time agent was working** = total wall time − time waiting on human
+    decisions.
 
 ## 2. Fetch Copilot review comments, excluding suppressed ones
 
@@ -127,7 +152,10 @@ fix — and:
    recommend continuing" or "remaining items look architecturally
    significant, recommend a human look before more automated commits").
 4. Ask the user, via `ask_user`, whether to continue iterating. Only
-   resume the loop (§3) on explicit "yes" — do not assume.
+   resume the loop (§3) on explicit "yes" — do not assume. Record this as
+   a waiting interval in the time log (§1): note when the question was
+   asked and when the user responded, for the closure-time time
+   accounting.
 
 If the user says yes, keep counting further commits and re-checkpoint
 every additional 10.
@@ -147,16 +175,54 @@ Do not treat "PR looks fine to me" as sufficient — always do the fresh
 ## 6. Closure — never automatic
 
 Once §5's exit criteria are met, the PR is *ready* to close/merge, but you
-must not merge, close, or delete anything yet. Before asking for approval:
+must not merge, close, or delete anything yet.
 
 1. Produce a high-level summary of **all** changes/commits on the PR
    (not just this session's fixes) — pull the full commit list:
    `gh pr view <number> --json commits --jq '.commits[].messageHeadline'`
    and group it into a short narrative (what the PR does overall, then
-   what was fixed during review iteration).
-2. Confirm CI status and review status explicitly in that summary (green
-   checkmarks, 0 unresolved required comments).
-3. Post an AIC usage summary comment on the PR using real markdown newlines.
+   what was fixed during review iteration). Confirm CI status and review
+   status explicitly in that summary (green checkmarks, 0 unresolved
+   required comments). Present this narrative in chat.
+2. Ask the user for explicit approval via `ask_user` — do not merge/close
+   on an assumption of approval, and do not proceed on a vague or partial
+   answer. Record the moment this question is asked as the start of the
+   **closure-approval** waiting interval in the time log (§1); its end is
+   whenever the user responds.
+
+Only after explicit approval:
+
+1. Merge/close the PR per the user's stated preference (e.g.
+   `gh pr merge <number> --squash` — confirm merge method if not already
+   agreed).
+2. Delete the now-stale remote branch (`gh pr merge --delete-branch`, or
+   `git push origin --delete <branch>` if closed without the flag).
+3. Clean up local state: delete the local branch
+   (`git branch -d <branch>`) and remove any associated worktree
+   (`git worktree remove <path>`) — mirror the stale-branch cleanup
+   pattern already used in this repo's workflow.
+4. Re-run `git branch -vv` and `git worktree list` to confirm cleanup.
+
+Note: merged PRs cannot be reopened on GitHub. If post-merge Copilot review is
+required, open a follow-up PR and request review there.
+
+Once merge/close and cleanup above are actually complete (not merely
+approved), finalize and publish the time accounting — this is the *only*
+point where "now" for total wall time should be captured, since it is the
+first moment after every step this metric is meant to cover (including
+merge, branch deletion, and cleanup) has actually finished:
+
+1. Finalize the time accounting from the time log (§1):
+   - **Total wall time** — this "now" minus the loop-start timestamp.
+   - **Time agent was working** — total wall time minus all recorded
+     human-decision waiting intervals (this includes CI/review polling
+     time, since the agent was actively driving that, not blocked).
+   - **Time waiting on human decisions** — the sum of the recorded
+     waiting intervals (e.g. "ambiguous PR confirmation — 1m", "10-commit
+     checkpoint: continue? — 4m", "closure approval — 2m"), including the
+     closure-approval interval closed above.
+   Report these three numbers in chat.
+2. Post an AIC usage summary comment on the PR using real markdown newlines.
    Do not use inline `--body "...\n..."` strings because GitHub CLI will post
    literal `\n` characters. Always write the comment to a file (heredoc) and
    post with `--body-file`, for example:
@@ -168,8 +234,18 @@ cat > /tmp/pr-aic-summary.md <<'EOF'
 ### Scope
 Covers the PR-authoring session, including review-loop and CI-fix work.
 
+### Time accounting
+_(Loop-invocation window only — from this skill's first action to closure,
+not the entire PR-authoring session, which may have started earlier.)_
+- **Total wall time (this review loop):** <start> -> <end> (~<total_duration>)
+- **Agent working time:** ~<working_duration> (drafting fixes, running
+  gates, polling CI/Copilot review, committing/pushing)
+- **Waiting on human decisions:** ~<waiting_duration> across
+  <wait_count> checkpoint(s):
+  - <checkpoint description> — ~<duration>
+  - <checkpoint description> — ~<duration>
+
 ### Totals
-- **Session window:** <start> -> <end> (~<duration>)
 - **Session turns:** <turn_count>
 - **AIC events:** <event_count>
 - **Input tokens:** <input_tokens>
@@ -189,32 +265,24 @@ Covers the PR-authoring session, including review-loop and CI-fix work.
 ### Cost note
 USD value may be unavailable from local telemetry unless billing rates are available.
 EOF
-gh pr comment <number> --body-file /tmp/pr-aic-summary.md
+gh pr comment <number> --repo <owner>/<repo> --body-file /tmp/pr-aic-summary.md
 rm /tmp/pr-aic-summary.md
 ```
+
+   Pass `--repo <owner>/<repo>` explicitly (captured during §1 setup) rather
+   than relying on the current checkout to infer it — by this point the
+   local worktree/branch may already be removed (§6 cleanup runs first),
+   so an inferred-repo lookup could fail and silently drop this required
+   post-closure comment.
 
    If prior malformed summary comments exist (literal `\n`), replace them by
    editing the latest summary comment or deleting malformed ones with:
    `gh api repos/<owner>/<repo>/issues/comments/<comment_id> -X DELETE`.
-4. Ask the user for explicit approval via `ask_user` — do not merge/close
-   on an assumption of approval, and do not proceed on a vague or partial
-   answer.
+   If the PR was merged (rather than closed without merging), this comment
+   necessarily lands *after* the merge — that is expected and fine; it does
+   not need to land before merge the way earlier drafts of this skill
+   required.
 
-Only after explicit approval:
-
-1. Merge/close the PR per the user's stated preference (e.g.
-   `gh pr merge <number> --squash` — confirm merge method if not already
-   agreed).
-2. Delete the now-stale remote branch (`gh pr merge --delete-branch`, or
-   `git push origin --delete <branch>` if closed without the flag).
-3. Clean up local state: delete the local branch
-   (`git branch -d <branch>`) and remove any associated worktree
-   (`git worktree remove <path>`) — mirror the stale-branch cleanup
-   pattern already used in this repo's workflow.
-4. Re-run `git branch -vv` and `git worktree list` to confirm cleanup.
-
-Note: merged PRs cannot be reopened on GitHub. If post-merge Copilot review is
-required, open a follow-up PR and request review there.
 
 ## 7. Anti-patterns to avoid
 
@@ -230,3 +298,17 @@ required, open a follow-up PR and request review there.
 - Treating `performance` job or opt-in test suites as blocking when they
   are not part of required status checks (verify in branch protection or
   `ci.yml` before treating a red non-required job as a blocker).
+- Counting CI-polling or Copilot-review-polling time as "waiting on human
+  decisions" in the closure time accounting — the agent is actively
+  driving those waits, so they belong in agent working time, not human
+  waiting time.
+- Forgetting to close out a recorded waiting interval (no matching
+  `wait-end`) before computing closure totals. Total wall time is fixed by
+  the loop-start/loop-end timestamps regardless, but an unclosed interval
+  can't be counted toward human-waiting time, so its duration is silently
+  misattributed to agent working time instead (understating the former,
+  overstating the latter).
+- Capturing the loop-start timestamp after the ambiguity confirmation in
+  §1, or finalizing total wall time right after closure approval instead
+  of after merge/close and cleanup actually finish — both under-measure
+  the metric by excluding a real span of the session it is meant to cover.
