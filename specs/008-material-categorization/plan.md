@@ -54,7 +54,7 @@ is the realistic upper bound for a single-user CLI.
 | Principle | Requirement | Status | Notes |
 |-----------|-------------|--------|-------|
 | **I. Code Quality** | Readable, single-responsibility modules; documented public functions; lint/type gates | ✅ Pass | `ruff`, `black`, `mypy` clean; Maintainability Index rank A. `registry_config.py` stays kind-agnostic via a generic `sticky_fields` parameter rather than a materials-specific hack. |
-| **II. Testing Standards** | Unit tests for all logic, ≥90% coverage, CI | ✅ Pass | 52 new tests (33 registry, 19 CLI); suite at 295 passed / 8 skipped, 98.31% total coverage, `registry.py` at 100%. |
+| **II. Testing Standards** | Unit tests for all logic, ≥90% coverage, CI | ✅ Pass | 54 new tests (35 registry, 19 CLI); suite at 297 passed / 8 skipped, 98.31% total coverage, `registry.py` at 100%. |
 | **III. Calculation Robustness** | Input validation, clear errors, edge cases | ✅ Pass | Invalid/missing `material_type` follows the module's established warn-and-continue policy: a validation issue is recorded, the material stays usable, and it falls back to `uncategorized`. Invalid prompt input is re-prompted with valid options. |
 | **IV. Python Packaging** | `pyproject.toml`, PEP 257 docstrings, PEP 8 naming | ✅ Pass | No packaging change needed — `material_type` rides inside the already-shipped `data/*.toml`. New public functions carry PEP 257 docstrings. |
 | **V. Resource Constraints** | <128 MB RAM, legacy hardware, single-threaded | ✅ Pass | Zero new dependencies and zero new files; types are derived in-memory from the existing registry. |
@@ -99,7 +99,7 @@ src/machine_calc/
 └── __init__.py             # + list_material_types export
 
 tests/
-├── unit/shared/test_registry_material_types.py    # 33 tests (new)
+├── unit/shared/test_registry_material_types.py    # 35 tests (new)
 ├── integration/test_cli_material_types.py         # 19 tests (new)
 └── integration/test_cli_*.py                      # ~30 existing tests updated for the new prompt
 ```

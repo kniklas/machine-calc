@@ -85,7 +85,7 @@ each layer's tests exercise the layer below.
 
 ## Phase 4: Tests
 
-- [X] **T012** Add `tests/unit/shared/test_registry_material_types.py` — 33 tests covering bundled
+- [X] **T012** Add `tests/unit/shared/test_registry_material_types.py` — 35 tests covering bundled
       categorization, filtering, derived type ordering, pre-008 signature preservation,
       data-driven new categories, sticky-field backward compatibility, and invalid-type
       warn-and-continue — *FR-001, FR-004*
@@ -111,7 +111,7 @@ each layer's tests exercise the layer below.
 - [X] **T018** Reference material categorization from `docs/source/index.rst` (Sphinx builds with `-W`)
 - [X] **T019** Revise `spec.md`, `plan.md`, and this file to describe the delivered architecture
 - [X] **T020** Verify quality gates: `ruff` ✓, `black` ✓, `mypy` ✓, `bandit` ✓, Maintainability Index
-      rank A ✓, Sphinx `-W` ✓, pytest 295 passed / 8 skipped at 98.31% coverage ✓ (`registry.py` 100%)
+      rank A ✓, Sphinx `-W` ✓, pytest 297 passed / 8 skipped at 98.31% coverage ✓ (`registry.py` 100%)
 
 ---
 

@@ -81,8 +81,10 @@ fr = "..."
    `notice_key` (`notice.materials_config.not_found`) for the caller to
    surface (FR-005).
 7. `material_type`, if present, MUST be a non-empty, single-line string
-   containing no control characters (interior spaces are fine; tabs and
-   newlines, reachable via TOML multiline strings, are not). A type id is
+   containing no C0/C1 control character and no Unicode line or paragraph
+   separator. Interior spacing is fine — including printable non-ASCII
+   spacing such as a non-breaking space — but tabs, newlines (reachable via
+   TOML multiline strings) and terminal controls such as `U+009B` are not. A type id is
    offered verbatim as a prompt option, and `input()` only ever returns a
    single line, so an id spanning lines could never be selected. Any other
    value (empty string, non-string, control characters) is **not** fatal:

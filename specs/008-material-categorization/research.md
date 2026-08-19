@@ -201,7 +201,7 @@ admin-edit code path for it to guard.
 
 ## Testing Delivered
 
-- `tests/unit/shared/test_registry_material_types.py` — 33 tests covering
+- `tests/unit/shared/test_registry_material_types.py` — 35 tests covering
   bundled categorization, `material_type` filtering, extensibility (new
   category via TOML alone), backward compatibility (sticky-field merge), and
   invalid-`material_type` handling.
@@ -210,7 +210,7 @@ admin-edit code path for it to guard.
   localization, and the title-case fallback for unrecognized categories.
 - ~30 pre-existing CLI integration tests were updated to answer the new
   "Material type" prompt.
-- Final state: 295 passed, 8 skipped, 98.31% coverage; ruff/black/mypy/bandit
+- Final state: 297 passed, 8 skipped, 98.31% coverage; ruff/black/mypy/bandit
   clean; Maintainability Index rank A.
 
 ## Cross-References

@@ -19,6 +19,7 @@ from __future__ import annotations
 import functools
 import logging
 import math
+import unicodedata
 from dataclasses import dataclass, field
 
 from machine_calc.registry_config import RawRegistryEntry, load_and_merge
@@ -31,6 +32,12 @@ _TABLE_KEY = "materials"
 #: Fallback category for entries that omit ``material_type`` (008 FR-011).
 #: Keeps pre-008 user-supplied config files loadable unchanged.
 DEFAULT_MATERIAL_TYPE = "uncategorized"
+
+#: Unicode general categories rejected in a ``material_type`` id: ``Cc``
+#: covers the C0 and C1 control ranges (including tab, newline and DEL),
+#: ``Zl``/``Zp`` the line and paragraph separators. Everything else --
+#: including printable non-ASCII spacing -- is a usable single-line id.
+_FORBIDDEN_ID_CATEGORIES = frozenset({"Cc", "Zl", "Zp"})
 
 #: Fields carried over from the bundled entry when a user override omits
 #: them (``registry_config.merge_entries``). Without this, a config file
@@ -173,11 +180,15 @@ def _parse_material_type(entry: RawRegistryEntry, issues: list[str]) -> str:
     (008 FR-011).
 
     A value is invalid if it is not a non-empty string, or if it contains a
-    control character. TOML multiline strings make the latter reachable
+    C0/C1 control character or a Unicode line/paragraph separator. TOML
+    multiline strings make the latter reachable
     (``material_type = \"\"\"metal\\nalloy\"\"\"``), and an id containing a
-    newline would be offered as a prompt option that ``input()`` can never
-    return, making the category and its materials permanently unselectable
-    (008 FR-006a).
+    line break would be offered as a prompt option that ``input()`` can
+    never return, making the category and its materials permanently
+    unselectable (008 FR-006a). Controls are rejected rather than merely
+    line breaks because values such as ``U+009B`` are emitted straight into
+    the terminal prompt. Printable non-ASCII spacing (a non-breaking space,
+    say) stays valid, so single-line Unicode ids remain usable.
     """
 
     raw = entry.fields.get("material_type")
@@ -187,7 +198,7 @@ def _parse_material_type(entry: RawRegistryEntry, issues: list[str]) -> str:
         issues.append(f"field 'material_type' must be a non-empty string, got {raw!r}")
         return DEFAULT_MATERIAL_TYPE
     value = raw.strip()
-    if any(character.isspace() and character != " " for character in value):
+    if any(unicodedata.category(character) in _FORBIDDEN_ID_CATEGORIES for character in value):
         issues.append(
             f"field 'material_type' must be a single line without control "
             f"characters, got {raw!r}"

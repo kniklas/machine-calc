@@ -279,6 +279,43 @@ class TestMultilineMaterialTypeRejected:
         assert all("\t" not in material_type for material_type in types), types
         assert DEFAULT_MATERIAL_TYPE in types
 
+    def test_c1_control_in_material_type_falls_back_to_default(self, tmp_path):
+        """Non-whitespace C1 controls are rejected too, not just line breaks.
+
+        U+009B is not whitespace, so a whitespace-based check would let it
+        through and emit a terminal control sequence straight into the prompt.
+        """
+        config_path = tmp_path / "materials.toml"
+        config_path.write_text(
+            "[[materials]]\n"
+            'name = "Bronze"\n'
+            'material_type = "met\\u009Bal"\n'
+            "reference_cutting_speed = 45.0\n"
+            "reference_feed_per_rev = 0.18\n"
+            "specific_cutting_force = 750.0\n",
+            encoding="utf-8",
+        )
+
+        types = list_material_types(config_path=str(config_path))
+
+        assert all("\u009b" not in material_type for material_type in types), types
+        assert DEFAULT_MATERIAL_TYPE in types
+
+    def test_non_breaking_space_in_material_type_is_allowed(self, tmp_path):
+        """Printable non-ASCII spacing stays valid — it is selectable and single-line."""
+        config_path = tmp_path / "materials.toml"
+        config_path.write_text(
+            "[[materials]]\n"
+            'name = "Bronze"\n'
+            'material_type = "light\\u00A0metal"\n'
+            "reference_cutting_speed = 45.0\n"
+            "reference_feed_per_rev = 0.18\n"
+            "specific_cutting_force = 750.0\n",
+            encoding="utf-8",
+        )
+
+        assert "light\u00a0metal" in list_material_types(config_path=str(config_path))
+
     def test_interior_space_in_material_type_is_still_allowed(self, tmp_path):
         """Ordinary spaces remain valid — only control characters are rejected."""
         config_path = tmp_path / "materials.toml"
