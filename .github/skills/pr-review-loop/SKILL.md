@@ -55,7 +55,7 @@ Initialize (mentally or in a scratch note) two counters for this session:
 
 Also track a boolean:
 - **copilot-review-invoked** — set true only after explicitly requesting
-  Copilot review via the `requested_reviewers` API call (§3 step 6) at
+  Copilot review via the `requested_reviewers` API call (§3 step 7) at
   least once in this session.
 
 At closure, derive from the time log:
@@ -75,13 +75,14 @@ is available (REST `pulls/comments` does not expose it):
 
 ```bash
 gh api graphql -f query='
-  query($owner:String!,$repo:String!,$pr:Int!) {
+  query($owner:String!,$repo:String!,$pr:Int!,$cursor:String) {
     repository(owner:$owner, name:$repo) {
       pullRequest(number:$pr) {
         reviews(last:20, states:[COMMENTED, CHANGES_REQUESTED]) {
           nodes { author { login } body state }
         }
-        reviewThreads(first:100) {
+        reviewThreads(first:100, after:$cursor) {
+          pageInfo { hasNextPage endCursor }
           nodes {
             isResolved
             isOutdated
@@ -92,6 +93,12 @@ gh api graphql -f query='
     }
   }' -f owner=<org> -f repo=<repo> -F pr=<number>
 ```
+
+If `pageInfo.hasNextPage` is `true`, re-run with `-F cursor=<endCursor>`
+and merge the results — a PR with more than 100 review threads (rare, but
+possible on a long-running one) would otherwise silently hide older or
+newer threads beyond the first page, and §5 could incorrectly declare no
+actionable comments remain.
 
 A comment counts as **suppressed / not actionable** — and must be
 **ignored** — if any of the following hold:
@@ -120,20 +127,41 @@ non-suppressed Copilot review comments remain unresolved.
 2. Make the fix. Follow `.github/instructions/python.instructions.md` and
    the priorities in `.github/skills/code-review/SKILL.md` (calculation
    correctness > resource limits > tests > extensibility > style).
-3. Run the smallest targeted test/lint/build command locally that covers
+3. **Local pre-check before pushing** — apply the relevant checklist
+   yourself against the diff, catching mechanically-checkable issues
+   before spending a Copilot review round on them (each round costs
+   ~2-10 min, see §7's anti-pattern on blind sleeps):
+   - Changes under `src/`/`tests/`/`.github/workflows/ci.yml`: re-read
+     `.github/skills/code-review/SKILL.md` §2a, §3, §6a, §6b, §7a against
+     the diff — these sections were written from patterns Copilot has
+     repeatedly found in this repo (silent zero/placeholder substitution
+     on error, CI-gating precedence bugs, resource-limit scoping,
+     derived-key collisions, spec-kit artifact drift). §7a specifically
+     targets `ci.yml` gating logic, so don't skip this check just because
+     the change is to a workflow file rather than application code.
+   - Changes under `.github/skills/**/*.md` (editing a skill itself, as
+     you may be doing right now): apply
+     `.github/skills/skill-authoring/SKILL.md` — grep the file for every
+     mention of any concept/flag/command you changed, and verify any
+     newly-asserted CLI/API behavior claim in a real shell before writing
+     it down as fact.
+   - This is not a substitute for the remote Copilot review (§5's exit
+     criteria still requires it) — it's a cheap filter to reduce how many
+     rounds you need.
+4. Run the smallest targeted test/lint/build command locally that covers
    the change before pushing (see repo CI job list below) — don't rely on
    CI alone for feedback loop speed.
-4. Commit with a message describing the specific review comment or CI
+5. Commit with a message describing the specific review comment or CI
    failure addressed (not a generic "fix review comments"). Increment the
    review-fix commit counter and append a line to the running summary.
-5. Push: `git push`. Capture the new head SHA (`git rev-parse HEAD`) — it
+6. Push: `git push`. Capture the new head SHA (`git rev-parse HEAD`) — it
    identifies which CI/review run belongs to this specific commit.
-6. Re-request Copilot review if it doesn't auto re-review on push:
+7. Re-request Copilot review if it doesn't auto re-review on push:
    `gh api repos/:owner/:repo/pulls/:number/requested_reviewers -X POST
    -f "reviewers[]=copilot-pull-request-reviewer[bot]"` (a PR comment
    saying `@copilot review` is not reliable — use the API call). Set
    `copilot-review-invoked=true` when this is done.
-7. **Poll for completion — don't blind-sleep a fixed 4-5 minutes.** The
+8. **Poll for completion — don't blind-sleep a fixed 4-5 minutes.** The
    Copilot review surfaces as a pollable GitHub Actions run for the
    pushed commit; required CI jobs are best read via `gh pr checks`
    directly (see below for why). Poll both adaptively instead of
@@ -173,7 +201,7 @@ non-suppressed Copilot review comments remain unresolved.
      being `in_progress`), don't keep waiting out the full 12-minute cap
      assuming it's merely queued — this can mean automatic re-review
      didn't trigger for this push. Immediately issue the
-     `requested_reviewers` call from step 6 (if not already done for this
+     `requested_reviewers` call from step 7 (if not already done for this
      SHA) and keep polling for the newest run it creates.
    - Otherwise keep polling every 20-30s.
    - After ~2.5-3 minutes total (roughly 70-80% of the historical average
@@ -198,11 +226,11 @@ non-suppressed Copilot review comments remain unresolved.
    Copilot Code Review`, so it does appear in `gh run list`. If a future
    GitHub change stops surfacing it there, fall back to `gh api
    repos/:owner/:repo/commits/<sha>/check-runs` instead.)
-8. Re-fetch review threads (§2) to see what's newly resolved/added.
+9. Re-fetch review threads (§2) to see what's newly resolved/added.
 
 ## 4. 10-commit checkpoint
 
-The moment the **review-fix commit count** (from step 3, not all commits
+The moment the **review-fix commit count** (from step 5, not all commits
 on the PR) reaches 10, stop looping immediately — do not start another
 fix — and:
 
@@ -234,6 +262,11 @@ The loop (§3) is done only when, on a fresh fetch:
   `deploy-docs`/`quality-summary` are supporting jobs — check `ci.yml`
   if unsure which are branch-protection required.
 - No unresolved, non-suppressed Copilot review comments remain (§2).
+- A fresh `gh pr view <number> --json mergeable,reviewDecision` shows
+  `mergeable=MERGEABLE` and `reviewDecision` is not `CHANGES_REQUESTED`
+  (re-fetch these two fields explicitly here — the values captured back
+  in §1's setup step can go stale after a force-push, a base-branch
+  update, or a maintainer's own review since the loop started).
 
 Do not treat "PR looks fine to me" as sufficient — always do the fresh
 `gh pr checks` + review-thread re-fetch before declaring done.
@@ -263,10 +296,14 @@ Only after explicit approval:
    agreed).
 2. Delete the now-stale remote branch (`gh pr merge --delete-branch`, or
    `git push origin --delete <branch>` if closed without the flag).
-3. Clean up local state: delete the local branch
-   (`git branch -d <branch>`) and remove any associated worktree
-   (`git worktree remove <path>`) — mirror the stale-branch cleanup
-   pattern already used in this repo's workflow.
+3. Clean up local state, in this order: first remove any associated
+   worktree (`git worktree remove <path>`), *then* delete the local
+   branch. Removing the worktree first avoids "branch is checked out"
+   failures, and — since the merge above was a squash (the local branch's
+   history is not an ancestor of the updated base branch) — use the
+   force form `git branch -D <branch>`, not `-d`, or plain `-d` will
+   refuse to delete it. Only use `-d` here if the merge method was a
+   true (non-squash) merge or rebase.
 4. Re-run `git branch -vv` and `git worktree list` to confirm cleanup.
 
 Note: merged PRs cannot be reopened on GitHub. If post-merge Copilot review is
@@ -369,7 +406,7 @@ rm /tmp/pr-aic-summary.md
   from ~1-2 min (small/single-file diffs) to ~8-10 min (large multi-file
   diffs) — a fixed long sleep wastes idle time on the common fast case and
   still isn't safe for the slow tail. Use the adaptive polling in §3 step
-  7 instead.
+  8 instead.
 - Inferring whether a new Copilot review has landed by comparing review
   `submittedAt` timestamps against a remembered "latest so far" value —
   it's easy to re-fetch too early, see the same stale review, and
