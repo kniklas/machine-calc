@@ -86,7 +86,7 @@
 
 - [X] T023 [US2] When `fixed-rpm` mode is selected for either milling sub-operation, add a required target-RPM prompt (replacing the derived-RPM step) followed by the existing optional advisory available-power prompt in `src/machine_calc/cli.py`, re-prompting on invalid RPM using the existing validation message (FR-005, FR-007, FR-008; depends on T006, T015)
 - [X] T024 [US2] Update CLI result display in `src/machine_calc/cli.py` to show the mode-appropriate label (e.g., "user-specified") next to spindle speed for both milling sessions when `result.mode is CalculationMode.FIXED_RPM`, reusing the existing catalog key (FR-012; depends on T006, T015, T017)
-- [X] T024a [US2] Integration test proving identical `CalculationResult` values from direct `calculate_end_milling(mode=..., ...)`/`calculate_face_milling(mode=..., ...)` calls and from driving the CLI with the same inputs and mode selection, for both new modes and both sub-operations (FR-010 extension) in `tests/integration/test_identical_results_milling_modes.py` (depends on T016, T017, T023, T024)
+- [ ] T024a [US2] Integration test proving identical `CalculationResult` values from direct `calculate_end_milling(mode=..., ...)`/`calculate_face_milling(mode=..., ...)` calls and from driving the CLI with the same inputs and mode selection, for both new modes and both sub-operations (FR-010 extension) in `tests/integration/test_identical_results_milling_modes.py` (depends on T016, T017, T023, T024)
 
 **Checkpoint**: Both user stories are independently functional for both milling sub-operations; mutual exclusivity (FR-009) and the SC-004 no-regression guarantee are proven by automated tests.
 
