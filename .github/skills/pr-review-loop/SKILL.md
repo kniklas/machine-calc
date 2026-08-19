@@ -168,32 +168,40 @@ Do not treat "PR looks fine to me" as sufficient — always do the fresh
 ## 6. Closure — never automatic
 
 Once §5's exit criteria are met, the PR is *ready* to close/merge, but you
-must not merge, close, or delete anything yet. Before asking for approval:
+must not merge, close, or delete anything yet.
 
 1. Produce a high-level summary of **all** changes/commits on the PR
    (not just this session's fixes) — pull the full commit list:
    `gh pr view <number> --json commits --jq '.commits[].messageHeadline'`
    and group it into a short narrative (what the PR does overall, then
-   what was fixed during review iteration).
-2. Confirm CI status and review status explicitly in that summary (green
-   checkmarks, 0 unresolved required comments).
-3. Report the session's time accounting, computed from the time log
-   started in §1:
-   - **Total wall time** — now minus the loop-start timestamp.
+   what was fixed during review iteration). Confirm CI status and review
+   status explicitly in that summary (green checkmarks, 0 unresolved
+   required comments). Present this narrative in chat.
+2. Ask the user for explicit approval via `ask_user` — do not merge/close
+   on an assumption of approval, and do not proceed on a vague or partial
+   answer. Record the moment this question is asked as the start of the
+   **closure-approval** waiting interval in the time log (§1); its end is
+   whenever the user responds.
+3. Only once approval is received, finalize the time accounting from the
+   time log — this is the *only* point where "now" for total wall time
+   should be captured, since it is the first moment after the last
+   human-blocked wait has actually closed:
+   - **Total wall time** — this "now" minus the loop-start timestamp.
    - **Time agent was working** — total wall time minus all recorded
      human-decision waiting intervals (this includes CI/review polling
      time, since the agent was actively driving that, not blocked).
    - **Time waiting on human decisions** — the sum of the recorded
-     waiting intervals (e.g. time spent on each `ask_user` checkpoint
-     before the user responded), plus a one-line breakdown of what each
-     wait was for (e.g. "10-commit checkpoint: continue? — 4m", "closure
-     approval — 2m").
-   Include these three numbers in the same summary as the commit
-   narrative and CI/review status, not only in the AIC comment.
-4. Post an AIC usage summary comment on the PR using real markdown newlines.
-   Do not use inline `--body "...\n..."` strings because GitHub CLI will post
-   literal `\n` characters. Always write the comment to a file (heredoc) and
-   post with `--body-file`, for example:
+     waiting intervals (e.g. "10-commit checkpoint: continue? — 4m",
+     "closure approval — 2m"), including the closure-approval interval
+     just closed in step 2.
+   Report these three numbers in chat alongside (or appended to) the
+   narrative from step 1.
+4. Post an AIC usage summary comment on the PR — using the time accounting
+   just finalized in step 3, so the closure-approval wait is included —
+   with real markdown newlines. Do not use inline `--body "...\n..."`
+   strings because GitHub CLI will post literal `\n` characters. Always
+   write the comment to a file (heredoc) and post with `--body-file`, for
+   example:
 
 ```bash
 cat > /tmp/pr-aic-summary.md <<'EOF'
@@ -238,11 +246,6 @@ rm /tmp/pr-aic-summary.md
    If prior malformed summary comments exist (literal `\n`), replace them by
    editing the latest summary comment or deleting malformed ones with:
    `gh api repos/<owner>/<repo>/issues/comments/<comment_id> -X DELETE`.
-5. Ask the user for explicit approval via `ask_user` — do not merge/close
-   on an assumption of approval, and do not proceed on a vague or partial
-   answer. (This checkpoint itself becomes another recorded waiting
-   interval — close it out once the user responds, before finalizing the
-   time accounting above.)
 
 Only after explicit approval:
 
