@@ -45,7 +45,7 @@ fr = "..."
 | `reference_feed_per_rev` | Yes | float > 0 | mm/rev if metric/omitted; in/rev if imperial | Converted to canonical mm/rev internally |
 | `specific_cutting_force` | Yes | float > 0 | N/mm² (≡ MPa) if metric/omitted; psi if imperial | Converted to canonical N/mm² internally |
 | `unit_system` | No | `"metric"` \| `"imperial"` | — | Default `"metric"` when omitted (FR-011) |
-| `material_type` | No | non-empty string | — | Free-form type identifier used to group materials in the two-step selection prompt (008 FR-001, FR-004). Default `"uncategorized"` when omitted. **Sticky on override** — see rule 7 |
+| `material_type` | No | non-empty single-line string | — | Free-form type identifier used to group materials in the two-step selection prompt (008 FR-001, FR-004). Default `"uncategorized"` when omitted. **Sticky on override** — see rule 7 |
 | `translations` (sub-table) | No | table of `locale -> string` | — | Locale codes are free-form strings (e.g. `"fr"`, `"de"`); merged per-locale on override (FR-015) |
 
 ## `[[tools]]` entry fields
@@ -80,8 +80,13 @@ fr = "..."
    is **not** an error: it yields the bundled defaults unchanged plus a
    `notice_key` (`notice.materials_config.not_found`) for the caller to
    surface (FR-005).
-7. `material_type`, if present, MUST be a non-empty string. Any other value
-   (empty string, non-string) is **not** fatal: a validation issue is
+7. `material_type`, if present, MUST be a non-empty, single-line string
+   containing no control characters (interior spaces are fine; tabs and
+   newlines, reachable via TOML multiline strings, are not). A type id is
+   offered verbatim as a prompt option, and `input()` only ever returns a
+   single line, so an id spanning lines could never be selected. Any other
+   value (empty string, non-string, control characters) is **not** fatal:
+   a validation issue is
    recorded and the entry falls back to `"uncategorized"`, matching the
    warn-and-continue policy used for invalid material numerics. Unlike other
    fields, `material_type` is **sticky** across a merge: when a user entry

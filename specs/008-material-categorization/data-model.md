@@ -31,8 +31,12 @@ entry at a time, before the `WorkpieceMaterial` is constructed:
 
 - Key absent from the merged entry's `fields` → `DEFAULT_MATERIAL_TYPE`
   (`"uncategorized"`), no issue recorded.
-- Present, non-empty string (after `.strip()`) → used verbatim.
-- Present but not a string, or an empty/whitespace-only string → an issue is
+- Present, non-empty string (after `.strip()`) with no interior control
+  characters → used verbatim.
+- Present but not a string, an empty/whitespace-only string, or a string
+  containing a control character such as a tab or newline (reachable via a
+  TOML multiline string, and unselectable because `input()` returns a single
+  line) → an issue is
   appended to that material's `MaterialValidationRecord.issues` (existing
   entity, unchanged shape) and the value falls back to
   `DEFAULT_MATERIAL_TYPE`. This is **warn-and-continue**, matching the

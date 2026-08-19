@@ -171,6 +171,13 @@ def _parse_material_type(entry: RawRegistryEntry, issues: list[str]) -> str:
     and a present-but-invalid value is recorded as a validation issue while
     still falling back to the default so the material stays selectable
     (008 FR-011).
+
+    A value is invalid if it is not a non-empty string, or if it contains a
+    control character. TOML multiline strings make the latter reachable
+    (``material_type = \"\"\"metal\\nalloy\"\"\"``), and an id containing a
+    newline would be offered as a prompt option that ``input()`` can never
+    return, making the category and its materials permanently unselectable
+    (008 FR-006a).
     """
 
     raw = entry.fields.get("material_type")
@@ -179,7 +186,14 @@ def _parse_material_type(entry: RawRegistryEntry, issues: list[str]) -> str:
     if not isinstance(raw, str) or not raw.strip():
         issues.append(f"field 'material_type' must be a non-empty string, got {raw!r}")
         return DEFAULT_MATERIAL_TYPE
-    return raw.strip()
+    value = raw.strip()
+    if any(character.isspace() and character != " " for character in value):
+        issues.append(
+            f"field 'material_type' must be a single line without control "
+            f"characters, got {raw!r}"
+        )
+        return DEFAULT_MATERIAL_TYPE
+    return value
 
 
 def _to_material(entry: RawRegistryEntry) -> tuple[WorkpieceMaterial, MaterialValidationRecord]:

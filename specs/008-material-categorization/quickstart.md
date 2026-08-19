@@ -176,8 +176,8 @@ Scenario 3.
 
 Automated equivalents of these scenarios live in:
 
-- `tests/unit/shared/test_registry_material_types.py` (30 tests)
-- `tests/integration/test_cli_material_types.py` (18 tests)
+- `tests/unit/shared/test_registry_material_types.py` (33 tests)
+- `tests/integration/test_cli_material_types.py` (19 tests)
 
 Run them with:
 

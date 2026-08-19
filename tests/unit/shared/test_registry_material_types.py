@@ -230,3 +230,66 @@ specific_cutting_force = 750.0
 
         assert get_material("Spaced", config_path).material_type == "metal"
         assert "Spaced" in list_materials(config_path, material_type="metal")
+
+
+class TestMultilineMaterialTypeRejected:
+    """Control characters in a type id would make it unselectable (FR-006a)."""
+
+    def test_multiline_material_type_falls_back_to_default(self, tmp_path):
+        """A TOML multiline id is rejected rather than offered as a prompt option.
+
+        `input()` returns a single line, so an option containing a newline
+        could never be entered and the CLI would re-prompt forever.
+        """
+        config_path = tmp_path / "materials.toml"
+        config_path.write_text(
+            "[[materials]]\n"
+            'name = "Bronze"\n'
+            'material_type = """metal\nalloy"""\n'
+            "reference_cutting_speed = 45.0\n"
+            "reference_feed_per_rev = 0.18\n"
+            "specific_cutting_force = 750.0\n",
+            encoding="utf-8",
+        )
+
+        types = list_material_types(config_path=str(config_path))
+
+        assert all("\n" not in material_type for material_type in types), types
+        assert "metal\nalloy" not in types
+        assert DEFAULT_MATERIAL_TYPE in types
+        assert "Bronze" in list_materials(
+            config_path=str(config_path), material_type=DEFAULT_MATERIAL_TYPE
+        )
+
+    def test_tab_in_material_type_falls_back_to_default(self, tmp_path):
+        """Interior tabs are control characters too and are rejected alike."""
+        config_path = tmp_path / "materials.toml"
+        config_path.write_text(
+            "[[materials]]\n"
+            'name = "Bronze"\n'
+            'material_type = "met\\tal"\n'
+            "reference_cutting_speed = 45.0\n"
+            "reference_feed_per_rev = 0.18\n"
+            "specific_cutting_force = 750.0\n",
+            encoding="utf-8",
+        )
+
+        types = list_material_types(config_path=str(config_path))
+
+        assert all("\t" not in material_type for material_type in types), types
+        assert DEFAULT_MATERIAL_TYPE in types
+
+    def test_interior_space_in_material_type_is_still_allowed(self, tmp_path):
+        """Ordinary spaces remain valid — only control characters are rejected."""
+        config_path = tmp_path / "materials.toml"
+        config_path.write_text(
+            "[[materials]]\n"
+            'name = "Bronze"\n'
+            'material_type = "light metal"\n'
+            "reference_cutting_speed = 45.0\n"
+            "reference_feed_per_rev = 0.18\n"
+            "specific_cutting_force = 750.0\n",
+            encoding="utf-8",
+        )
+
+        assert "light metal" in list_material_types(config_path=str(config_path))
