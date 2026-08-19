@@ -235,7 +235,9 @@ cat > /tmp/pr-aic-summary.md <<'EOF'
 Covers the PR-authoring session, including review-loop and CI-fix work.
 
 ### Time accounting
-- **Total wall time:** <start> -> <end> (~<total_duration>)
+_(Loop-invocation window only — from this skill's first action to closure,
+not the entire PR-authoring session, which may have started earlier.)_
+- **Total wall time (this review loop):** <start> -> <end> (~<total_duration>)
 - **Agent working time:** ~<working_duration> (drafting fixes, running
   gates, polling CI/Copilot review, committing/pushing)
 - **Waiting on human decisions:** ~<waiting_duration> across
@@ -263,9 +265,15 @@ Covers the PR-authoring session, including review-loop and CI-fix work.
 ### Cost note
 USD value may be unavailable from local telemetry unless billing rates are available.
 EOF
-gh pr comment <number> --body-file /tmp/pr-aic-summary.md
+gh pr comment <number> --repo <owner>/<repo> --body-file /tmp/pr-aic-summary.md
 rm /tmp/pr-aic-summary.md
 ```
+
+   Pass `--repo <owner>/<repo>` explicitly (captured during §1 setup) rather
+   than relying on the current checkout to infer it — by this point the
+   local worktree/branch may already be removed (§6 cleanup runs first),
+   so an inferred-repo lookup could fail and silently drop this required
+   post-closure comment.
 
    If prior malformed summary comments exist (literal `\n`), replace them by
    editing the latest summary comment or deleting malformed ones with:
