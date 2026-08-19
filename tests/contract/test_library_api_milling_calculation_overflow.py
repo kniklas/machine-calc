@@ -80,3 +80,33 @@ def test_end_milling_normal_feed_per_tooth_does_not_overflow():
     )
     assert result.error is None
     assert result.spindle_speed_rpm is not None
+
+
+def test_end_milling_subnormal_target_rpm_reports_overflow_not_crash():
+    """FIXED_RPM's target_rpm has no lower bound beyond positivity — a
+    positive-subnormal value (e.g. 5e-324) underflows feed_rate_mm_min to
+    exactly 0.0, which previously raised ZeroDivisionError when computing
+    machining_time_min (length_of_cut_mm / feed_rate_mm_min). Must
+    instead surface as a structured CALCULATION_OVERFLOW result
+    (FR-012/FR-015 never-raises contract)."""
+    result = calculate_end_milling(
+        **_END_MILLING_ARGS,
+        feed_per_tooth=0.05,
+        mode=CalculationMode.FIXED_RPM,
+        target_rpm=5e-324,
+    )
+    assert result.error is not None
+    assert result.error.code == "CALCULATION_OVERFLOW"
+    assert result.spindle_speed_rpm is None
+
+
+def test_face_milling_subnormal_target_rpm_reports_overflow_not_crash():
+    result = calculate_face_milling(
+        **_FACE_MILLING_ARGS,
+        feed_per_tooth=0.15,
+        mode=CalculationMode.FIXED_RPM,
+        target_rpm=5e-324,
+    )
+    assert result.error is not None
+    assert result.error.code == "CALCULATION_OVERFLOW"
+    assert result.spindle_speed_rpm is None

@@ -138,7 +138,17 @@ def calculate_milling_metrics_at_rpm(
     torque_nm = power_kw * (TORQUE_POWER_CONSTANT / spindle_speed_rpm)
 
     # 7. Machining time: tc = length_of_cut / vf
-    machining_time_min = length_of_cut_mm / feed_rate_mm_min
+    # A subnormal-but-finite spindle_speed_rpm/feed_per_tooth_mm can make
+    # feed_rate_mm_min underflow to exactly 0.0 (e.g. target_rpm=5e-324 in
+    # FIXED_RPM mode, which has no upper *or* lower bound beyond
+    # positivity/finiteness) — Python raises ZeroDivisionError for
+    # float/0.0 rather than returning inf, so guard explicitly. inf is
+    # the mathematically correct machining time at a zero feed rate, and
+    # is caught by the caller's finiteness check
+    # (_calculate._reject_if_invalid()).
+    machining_time_min = (
+        float("inf") if feed_rate_mm_min == 0 else length_of_cut_mm / feed_rate_mm_min
+    )
 
     return MillingMetrics(
         spindle_speed_rpm=spindle_speed_rpm,

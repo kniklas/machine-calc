@@ -64,6 +64,25 @@ def test_at_rpm_torque_independent_of_spindle_speed():
     assert math.isclose(low.torque_nm, high.torque_nm, rel_tol=1e-9)
 
 
+def test_at_rpm_subnormal_spindle_speed_underflows_feed_rate_without_crashing():
+    """A positive-subnormal spindle_speed_rpm (e.g. FIXED_RPM's
+    target_rpm=5e-324, which validate_target_rpm() accepts — no lower
+    bound beyond positivity) can make feed_rate_mm_min underflow to
+    exactly 0.0. machining_time_min = length_of_cut_mm / feed_rate_mm_min
+    must not raise ZeroDivisionError for this — inf is the mathematically
+    correct value at a zero feed rate, and is what the caller's
+    finiteness check (_calculate._reject_if_invalid()) is designed to
+    catch."""
+    material = _material()
+
+    metrics = calculate_milling_metrics_at_rpm(
+        **_GEOMETRY, material=material, spindle_speed_rpm=5e-324
+    )
+
+    assert metrics.feed_rate_mm_min == 0.0
+    assert metrics.machining_time_min == float("inf")
+
+
 def test_power_constrained_reduces_spindle_speed_when_budget_below_nominal():
     material = _material()
     cutting_speed_factor = _cutting_speed_factor()
