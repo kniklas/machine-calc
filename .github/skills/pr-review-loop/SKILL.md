@@ -125,17 +125,44 @@ non-suppressed Copilot review comments remain unresolved.
 4. Commit with a message describing the specific review comment or CI
    failure addressed (not a generic "fix review comments"). Increment the
    review-fix commit counter and append a line to the running summary.
-5. Push: `git push`.
+5. Push: `git push`. Capture the new head SHA (`git rev-parse HEAD`) — it
+   identifies which CI/review run belongs to this specific commit.
 6. Re-request Copilot review if it doesn't auto re-review on push:
-   `gh pr comment <number> --body "@copilot review"` or re-request via
-   `gh api repos/:owner/:repo/pulls/:number/requested_reviewers`.
-   Set `copilot-review-invoked=true` when this is done.
-7. Poll CI: `gh pr checks <number> --watch` (or re-poll after a short
-   wait). Required jobs in this repo's `ci.yml`: `lint`, `complexity`,
-   `typecheck`, `security`, `dependency-scan`, `test`, `build`, `docs`,
-   plus CodeQL. `performance` and `deploy-docs`/`quality-summary` are
-   supporting jobs — check `ci.yml` if unsure which are branch-protection
-   required.
+   `gh api repos/:owner/:repo/pulls/:number/requested_reviewers -X POST
+   -f "reviewers[]=copilot-pull-request-reviewer[bot]"` (a PR comment
+   saying `@copilot review` is not reliable — use the API call). Set
+   `copilot-review-invoked=true` when this is done.
+7. **Poll for completion — don't blind-sleep a fixed 4-5 minutes.** Both
+   CI and the Copilot review surface as pollable GitHub Actions runs for
+   the pushed commit, so treat both as one adaptive polling loop instead
+   of guessing a wait or comparing review timestamps (stale timestamps
+   from a *previous* round are easy to mistake for a fresh one — poll run
+   status instead, it's unambiguous):
+
+   ```bash
+   gh run list --branch <branch> --limit 10 \
+     --json name,status,conclusion,headSha,createdAt,updatedAt
+   ```
+
+   Filter to `headSha == <new SHA>` and watch two run names: `CI` (the
+   required-jobs dispatcher — typically completes in ~40-90s regardless
+   of PR size) and `Running Copilot Code Review` (the actual review
+   latency driver — empirically ~1-2 min for small/single-file diffs, up
+   to ~8-10 min for large multi-file diffs; repo-wide average is ~3.5 min
+   as of this skill's last calibration, see repo issue #34).
+
+   Poll like this, not with one long fixed sleep:
+   - First check after a short delay (~20-30s) — cheap, catches the many
+     small-diff cases that finish in under 2 minutes.
+   - If not both `status: completed` yet, keep polling every 20-30s.
+   - After ~2.5-3 minutes total (roughly 70-80% of the historical
+     average for this repo), it's fine to space checks out to ~45-60s
+     apart to cut down on tool-call volume for the long tail.
+   - Cap at ~12 minutes; if still not completed by then, report this to
+     the user rather than continuing to poll silently — it may indicate
+     a stuck run.
+   - Stop polling and proceed the moment both runs show
+     `status: completed` — don't wait out a fixed timer past that point.
 8. Re-fetch review threads (§2) to see what's newly resolved/added.
 
 ## 4. 10-commit checkpoint
@@ -166,7 +193,11 @@ The loop (§3) is done only when, on a fresh fetch:
 - `copilot-review-invoked=true` (balanced Copilot review was explicitly
   requested on this PR).
 - `gh pr checks <number>` shows all required jobs passing (no pending
-  jobs either — wait them out).
+  jobs either — wait them out). Required jobs in this repo's `ci.yml`:
+  `lint`, `complexity`, `typecheck`, `security`, `dependency-scan`,
+  `test`, `build`, `docs`, plus CodeQL. `performance` and
+  `deploy-docs`/`quality-summary` are supporting jobs — check `ci.yml`
+  if unsure which are branch-protection required.
 - No unresolved, non-suppressed Copilot review comments remain (§2).
 
 Do not treat "PR looks fine to me" as sufficient — always do the fresh
@@ -298,6 +329,19 @@ rm /tmp/pr-aic-summary.md
 - Treating `performance` job or opt-in test suites as blocking when they
   are not part of required status checks (verify in branch protection or
   `ci.yml` before treating a red non-required job as a blocker).
+- Blind-sleeping a fixed 4-5 minutes after every push "to be safe" before
+  checking CI/review status. Copilot review latency in this repo ranges
+  from ~1-2 min (small/single-file diffs) to ~8-10 min (large multi-file
+  diffs) — a fixed long sleep wastes idle time on the common fast case and
+  still isn't safe for the slow tail. Use the adaptive polling in §3 step
+  7 instead.
+- Inferring whether a new Copilot review has landed by comparing review
+  `submittedAt` timestamps against a remembered "latest so far" value —
+  it's easy to re-fetch too early, see the same stale review, and
+  misread it as "already reviewed, must be up to date." Poll the
+  `Running Copilot Code Review` Actions run's `status`/`conclusion`
+  fields for the pushed commit's SHA instead — unambiguous completion
+  signal, no timestamp bookkeeping required.
 - Counting CI-polling or Copilot-review-polling time as "waiting on human
   decisions" in the closure time accounting — the agent is actively
   driving those waits, so they belong in agent working time, not human
