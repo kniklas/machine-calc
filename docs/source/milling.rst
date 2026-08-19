@@ -19,6 +19,7 @@ The first question is which machining operation to calculate. Choosing
     Machining operation (drilling, milling) (drilling): milling
     Milling operation (end milling, face milling) (end milling): end milling
     Unit system [metric/imperial] (metric):
+    Calculation mode (standard, power-constrained, fixed-rpm) (standard):
     Material type (Metal, Wood): Metal
     Material (Mild Steel, Stainless Steel, ...): Mild Steel
     End-mill tool (HSS, Cobalt, Carbide, Coated Carbide): Carbide
@@ -59,6 +60,39 @@ Face milling inputs
 Face milling asks the same six values, except that **radial depth of cut** is
 replaced by **width of cut** — the width of the surface being faced, measured
 across the cutter. As with end milling it must not exceed the cutter diameter.
+
+Calculation modes
+-----------------
+
+Right after choosing the unit system, the REPL asks for a calculation mode::
+
+    Calculation mode (standard, power-constrained, fixed-rpm) (standard):
+
+``standard`` (the default — press Enter to accept it)
+    The unconstrained calculation used throughout the rest of this guide.
+    Available power stays optional and only advisory: if the calculated
+    power exceeds it, the result is shown anyway with a warning.
+
+``power-constrained``
+    Available power becomes a **required** prompt instead of an optional
+    one. If your machine can already deliver the calculated power the
+    result is unchanged. Otherwise the spindle speed is reduced until the
+    power required matches what you supplied exactly, and the result label
+    reads "adjusted to fit available power" instead of "recommended". A
+    budget too small for any feasible spindle speed is rejected with a
+    re-prompt.
+
+``fixed-rpm``
+    Adds a required "Target spindle speed (RPM)" prompt. The spindle speed
+    in the result is exactly what you entered — labeled "user-specified" —
+    and every other value is recomputed for that speed. Available power
+    stays optional/advisory here too, so an insufficient machine still
+    produces a result, with a warning.
+
+Answering ``n`` at the "run another calculation?" prompt and then ``y``
+returns to the operation prompt, where you can pick a different mode; any
+previous mode's power/RPM answer is cleared rather than carried over as a
+stale default.
 
 Reading the results
 -------------------

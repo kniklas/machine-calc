@@ -154,9 +154,7 @@ def test_the_dismissible_prompts_in_standard_mode_are_the_optional_ones(monkeypa
     capsys.readouterr()
 
     dismissed = [
-        prompt
-        for prompt, answer in zip(prompts, _END_MILLING_STANDARD_ANSWERS)
-        if answer == ""
+        prompt for prompt, answer in zip(prompts, _END_MILLING_STANDARD_ANSWERS) if answer == ""
     ]
 
     assert len(dismissed) == 2

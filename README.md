@@ -90,7 +90,13 @@ Milling has its own tool catalogs, listed with `list_end_mill_tools()` and
 `list_face_mill_tools()`. Drilling results always leave
 `material_removal_rate` as `None`.
 
-See `specs/009-milling-calculations/quickstart.md` for full scenarios.
+Both entry points also accept the same `mode`/`target_rpm`/`available_power`
+arguments as drilling's `calculate()` (see "Constrained calculation modes"
+below) — for example `calculate_end_milling(..., mode=CalculationMode.FIXED_RPM,
+target_rpm=3000)`.
+
+See `specs/009-milling-calculations/quickstart.md` and
+`specs/010-milling-calculation-modes/quickstart.md` for full scenarios.
 
 ### Constrained calculation modes
 
@@ -137,7 +143,10 @@ each operation remembers its own previous answers as defaults.
 For drilling, the REPL prompts for a calculation mode (`standard`, `power-constrained`,
 `fixed-rpm`) right after the unit-system prompt; `power-constrained` then
 asks for a required available power, and `fixed-rpm` asks for a required
-target spindle speed (with an optional advisory available power).
+target spindle speed (with an optional advisory available power). Milling's
+REPL sessions (both end milling and face milling) prompt for the same
+calculation mode at the same point in the sequence, right after the
+unit-system prompt and before material selection.
 
 ### Material selection is two-step
 

@@ -96,15 +96,15 @@
 
 **Purpose**: Documentation, regression validation, and quality gates spanning both user stories.
 
-- [ ] T025 [P] Update `calculate_end_milling()`'s and `calculate_face_milling()`'s docstrings (`src/machine_calc/operations/milling/end_milling/__init__.py`, `.../face_milling/__init__.py`) to document `mode`, `target_rpm`, and the three reused error codes (Constitution I; Sphinx autodoc picks this up automatically per research.md — no new doc toolchain)
-- [ ] T026 [P] Update the Sphinx developer guide (`docs/source/developer-guide.rst`) and end-user guide (`docs/source/user-guide.rst`) with milling's two new modes and their CLI/library usage, alongside drilling's existing mode documentation (Constitution VII)
-- [ ] T027 Regression test: run the full existing `009-milling-calculations` test suite unchanged and confirm 100% pass, proving SC-004 (no behavior change for milling calls that omit `mode`/`target_rpm`)
+- [X] T025 [P] Update `calculate_end_milling()`'s and `calculate_face_milling()`'s docstrings (`src/machine_calc/operations/milling/end_milling/__init__.py`, `.../face_milling/__init__.py`) to document `mode`, `target_rpm`, and the three reused error codes (Constitution I; Sphinx autodoc picks this up automatically per research.md — no new doc toolchain)
+- [X] T026 [P] Update the Sphinx developer guide (`docs/source/developer-guide.rst`) and end-user guide (`docs/source/user-guide.rst`) with milling's two new modes and their CLI/library usage, alongside drilling's existing mode documentation (Constitution VII)
+- [X] T027 Regression test: run the full existing `009-milling-calculations` test suite unchanged and confirm 100% pass, proving SC-004 (no behavior change for milling calls that omit `mode`/`target_rpm`)
 - [X] T028 Update `tests/integration/test_cli_prompt_budget.py` to assert per-mode milling prompt counts (research.md #5: 14/12 standard, 14/13 power-constrained, 15/13 fixed-RPM) rather than one fixed count for all milling runs
-- [ ] T029 Run `pytest --cov=machine_calc --cov-report=term-missing` and confirm ≥90% coverage is maintained on calculation modules including the new `_shared.py`/`_calculate.py`/`formulas.py` code paths (Constitution II); address any gaps
-- [ ] T030 Execute all 8 quickstart.md scenarios (including the manual CLI scenario) and confirm actual behavior matches documented expected outcomes
-- [ ] T031 [P] Static check confirming no literal user-facing strings were introduced in `cli.py`'s new milling mode-prompt/output paths outside the message catalog (Constitution VIII; mirrors `002-constrained-calculation-modes` T029)
-- [ ] T032 [P] Update `README.md`'s usage section (if it documents CLI/library milling examples) to mention the two new milling modes, keeping the existing test-coverage reporting requirement intact (Constitution VII)
-- [ ] T033 Run the full quality-gate suite (`mypy`, `ruff`, `radon`/`xenon` complexity, `bandit`, `pip-audit`) per Constitution Principle IX and confirm no new findings introduced by this feature's changes
+- [X] T029 Run `pytest --cov=machine_calc --cov-report=term-missing` and confirm ≥90% coverage is maintained on calculation modules including the new `_shared.py`/`_calculate.py`/`formulas.py` code paths (Constitution II); address any gaps
+- [X] T030 Execute all 8 quickstart.md scenarios (including the manual CLI scenario) and confirm actual behavior matches documented expected outcomes
+- [X] T031 [P] Static check confirming no literal user-facing strings were introduced in `cli.py`'s new milling mode-prompt/output paths outside the message catalog (Constitution VIII; mirrors `002-constrained-calculation-modes` T029)
+- [X] T032 [P] Update `README.md`'s usage section (if it documents CLI/library milling examples) to mention the two new milling modes, keeping the existing test-coverage reporting requirement intact (Constitution VII)
+- [X] T033 Run the full quality-gate suite (`mypy`, `ruff`, `radon`/`xenon` complexity, `bandit`, `pip-audit`) per Constitution Principle IX and confirm no new findings introduced by this feature's changes
 
 ---
 

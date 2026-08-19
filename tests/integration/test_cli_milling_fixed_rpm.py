@@ -13,9 +13,7 @@ import builtins
 from machine_calc.cli import run
 
 
-def test_end_milling_fixed_rpm_mode_prompts_for_target_rpm_and_labels_result(
-    monkeypatch, capsys
-):
+def test_end_milling_fixed_rpm_mode_prompts_for_target_rpm_and_labels_result(monkeypatch, capsys):
     inputs = iter(
         [
             "milling",
@@ -77,9 +75,7 @@ def test_end_milling_fixed_rpm_invalid_target_rpm_is_reprompted(monkeypatch, cap
     assert "3000.0 RPM" in out
 
 
-def test_face_milling_fixed_rpm_mode_prompts_for_target_rpm_and_labels_result(
-    monkeypatch, capsys
-):
+def test_face_milling_fixed_rpm_mode_prompts_for_target_rpm_and_labels_result(monkeypatch, capsys):
     inputs = iter(
         [
             "milling",

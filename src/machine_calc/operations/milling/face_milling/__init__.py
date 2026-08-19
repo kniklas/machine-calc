@@ -137,7 +137,14 @@ def calculate_face_milling(
         A :class:`~machine_calc.models.CalculationResult`. On any validation
         failure, ``error`` is populated and every numeric field — including
         ``material_removal_rate`` — is ``None``; the function does not raise
-        for expected failures (FR-012).
+        for expected failures (FR-012). Mode-specific failures reuse
+        drilling's three error codes (``002-constrained-calculation-modes``):
+        ``INFEASIBLE_POWER_BUDGET`` (``available_power`` cannot support any
+        feasible spindle speed in ``POWER_CONSTRAINED`` mode),
+        ``INVALID_TARGET_RPM`` (``target_rpm`` is missing, non-numeric, or
+        not a positive finite number in ``FIXED_RPM`` mode), and
+        ``MODE_CONFLICT`` (``target_rpm`` supplied together with
+        ``POWER_CONSTRAINED`` mode; FR-009).
     """
 
     return calculate_milling(

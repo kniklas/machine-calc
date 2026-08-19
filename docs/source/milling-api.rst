@@ -26,6 +26,8 @@ All four names are importable directly from ``machine_calc``.
             available_power=None,
             config_path=None,
             locale="en",
+            mode=CalculationMode.STANDARD,
+            target_rpm=None,
             materials_config_path=None,
         ) -> CalculationResult
 
@@ -59,11 +61,45 @@ Error codes reused from drilling: ``INVALID_DIAMETER``,
 ``MISSING_MATERIAL``, ``MISSING_TOOL``, ``UNUSABLE_MATERIAL``. Codes specific
 to milling: ``INVALID_DEPTH_OF_CUT``, ``INVALID_ENGAGEMENT``,
 ``INVALID_FEED_PER_TOOTH``, ``INVALID_TOOTH_COUNT``,
-``INVALID_LENGTH_OF_CUT``.
+``INVALID_LENGTH_OF_CUT``. Codes reused from drilling's calculation modes
+(``002-constrained-calculation-modes``): ``INFEASIBLE_POWER_BUDGET``,
+``INVALID_TARGET_RPM``, ``MODE_CONFLICT`` (see "Calculation modes" below).
 
 Validation runs in a fixed order, so a call with several invalid inputs
 always reports the same first failure. ``material`` and ``tool`` presence are
-checked first, then the material and tool are resolved, then the geometry.
+checked first, then the material and tool are resolved, then the geometry,
+then — last — the ``mode``/``target_rpm`` combination.
+
+Calculation modes
+------------------
+
+Both entry points accept the same ``mode``/``target_rpm``/``available_power``
+arguments as :func:`machine_calc.calculate` (drilling), added by
+``010-milling-calculation-modes``:
+
+``CalculationMode.STANDARD`` (default)
+    Unconstrained calculation, unchanged from ``009-milling-calculations``.
+    ``available_power`` remains optional/advisory: an exceeded budget sets
+    ``feasibility_warning`` without altering the result.
+
+``CalculationMode.POWER_CONSTRAINED``
+    ``available_power`` becomes **required**. If it is at least the
+    STANDARD-mode power requirement the result is a no-op (identical to
+    STANDARD, only ``mode`` differs). Otherwise the spindle speed is reduced
+    so that ``power_required`` matches ``available_power`` exactly (within
+    ``math.isclose(rel_tol=1e-9)``); torque is unaffected, since it does not
+    depend on spindle speed. A budget too low to support any feasible
+    spindle speed returns ``INFEASIBLE_POWER_BUDGET``.
+
+``CalculationMode.FIXED_RPM``
+    ``target_rpm`` becomes **required** and is echoed back exactly as
+    ``spindle_speed_rpm``; every dependent field is recomputed at that
+    spindle speed. ``available_power`` stays optional/advisory here too. A
+    missing, non-numeric, non-positive or non-finite ``target_rpm`` returns
+    ``INVALID_TARGET_RPM``.
+
+Supplying both ``target_rpm`` and ``POWER_CONSTRAINED`` mode is rejected as
+``MODE_CONFLICT`` (FR-009) rather than silently picking one.
 
 Package layout
 --------------
