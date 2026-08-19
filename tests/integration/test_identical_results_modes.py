@@ -22,6 +22,7 @@ def test_power_constrained_cli_matches_direct_calculate(monkeypatch, capsys):
 
     inputs = iter(
         [
+            "drilling",  # machining operation (009 FR-001)
             "metric",
             "power-constrained",
             "Metal",  # material type
@@ -58,6 +59,7 @@ def test_fixed_rpm_cli_matches_direct_calculate(monkeypatch, capsys):
 
     inputs = iter(
         [
+            "drilling",  # machining operation (009 FR-001)
             "metric",
             "fixed-rpm",
             "Metal",  # material type

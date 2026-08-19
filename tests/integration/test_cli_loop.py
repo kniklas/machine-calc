@@ -10,6 +10,7 @@ from machine_calc.cli import run
 def test_loop_allows_changing_tool_and_recalculating(monkeypatch, capsys):
     inputs = iter(
         [
+            "drilling",  # machining operation (009 FR-001)
             "metric",
             "",  # calculation mode (default: standard)
             "Metal",  # material type
@@ -19,6 +20,7 @@ def test_loop_allows_changing_tool_and_recalculating(monkeypatch, capsys):
             "25",
             "",
             "y",  # run another calculation
+            "drilling",  # machining operation (009 FR-001)
             "metric",  # unit system unchanged (default reused)
             "",  # calculation mode unchanged (default reused)
             "",  # material type unchanged (reuse previous default)

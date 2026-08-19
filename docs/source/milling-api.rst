@@ -1,0 +1,144 @@
+Milling API reference (developers)
+==================================
+
+This page documents the milling public API and the internal structure of
+``machine_calc.operations.milling`` for contributors adding or extending
+milling behaviour. For end-user CLI guidance see :doc:`milling`.
+
+Public entry points
+-------------------
+
+All four names are importable directly from ``machine_calc``.
+
+``calculate_end_milling(...)``
+    .. code-block:: python
+
+        calculate_end_milling(
+            diameter,
+            axial_depth_of_cut,
+            radial_depth_of_cut,
+            feed_per_tooth,
+            number_of_teeth,
+            length_of_cut,
+            material,
+            tool,
+            unit_system=UnitSystem.METRIC,
+            available_power=None,
+            config_path=None,
+            locale="en",
+            materials_config_path=None,
+        ) -> CalculationResult
+
+``calculate_face_milling(...)``
+    Identical, except that ``radial_depth_of_cut`` is named ``width_of_cut``.
+
+``list_end_mill_tools(config_path=None) -> list[str]``
+    Names of the available end-mill tools, in catalog order.
+
+``list_face_mill_tools(config_path=None) -> list[str]``
+    Names of the available face-mill tools, in catalog order.
+
+Length inputs (``diameter``, the depths/width, ``feed_per_tooth`` and
+``length_of_cut``) are interpreted in the caller's ``unit_system``: mm under
+``METRIC`` and inches under ``IMPERIAL``. They are converted to canonical
+millimetres internally and the results converted back, so a metric call and
+the equivalent imperial call describe the same physical cut.
+
+Results and errors
+------------------
+
+Both functions return a :class:`~machine_calc.models.CalculationResult` and
+never raise for an expected validation failure. On success every numeric
+field is populated, including ``material_removal_rate`` (cm³/min under
+metric, in³/min under imperial). On failure ``error`` is an
+:class:`~machine_calc.models.ErrorInfo` with a stable ``code`` and a
+translated ``message``, and every numeric field — including
+``material_removal_rate`` — is ``None``.
+
+Error codes reused from drilling: ``INVALID_DIAMETER``,
+``MISSING_MATERIAL``, ``MISSING_TOOL``, ``UNUSABLE_MATERIAL``. Codes specific
+to milling: ``INVALID_DEPTH_OF_CUT``, ``INVALID_ENGAGEMENT``,
+``INVALID_FEED_PER_TOOTH``, ``INVALID_TOOTH_COUNT``,
+``INVALID_LENGTH_OF_CUT``.
+
+Validation runs in a fixed order, so a call with several invalid inputs
+always reports the same first failure. ``material`` and ``tool`` presence are
+checked first, then the material and tool are resolved, then the geometry.
+
+Package layout
+--------------
+
+.. code-block:: text
+
+    machine_calc/operations/milling/
+        _shared.py          formulas common to both sub-operations
+        _tool_registry.py   MillingTool base + build_registry()
+        _calculate.py       shared validate/convert/assemble orchestration
+        end_milling/
+            __init__.py     calculate_end_milling / list_end_mill_tools
+            formulas.py     EndMillingMetrics wrapper over _shared
+            tools.py        EndMillTool registry
+            data/tools.toml bundled end-mill catalog
+        face_milling/       same shape, for face milling
+
+Both sub-operations are peers: neither imports the other, and neither imports
+``operations.drilling``. Everything shared between operations lives in the
+top-level modules (``config``, ``models``, ``units``, ``validation``,
+``registry``, ``i18n``). This boundary is enforced statically by
+``tests/contract/test_library_api_milling.py``.
+
+``_calculate.calculate_milling()`` holds the single copy of the validation,
+unit-conversion and result-assembly sequence. It stays generic over the two
+sub-operations by taking three injection points:
+
+``resolve_tool``
+    Looks a tool name up in that sub-operation's registry.
+
+``compute``
+    The sub-operation's own ``formulas.py`` adapter. Routing through it — not
+    straight to ``_shared`` — is what keeps each sub-operation's module
+    boundary meaningful, so a sub-operation can diverge from the shared model
+    without touching the other.
+
+``engagement_label_key``
+    The message-catalog key naming the radial input, so validation errors say
+    "Radial depth of cut" for end milling and "Width of cut" for face
+    milling.
+
+The ``compute`` callable returns anything satisfying the
+``MillingMetricsLike`` protocol. Its members are declared as read-only
+properties because the concrete metrics types are frozen dataclasses.
+
+Adding a milling sub-operation
+------------------------------
+
+1. Create ``operations/milling/<name>/`` with ``__init__.py``,
+   ``formulas.py``, ``tools.py`` and ``data/tools.toml``.
+2. Give the TOML catalog a **table key unique across all operations**
+   (drilling uses ``tools``, end milling ``end_mill_tools``, face milling
+   ``face_mill_tools``). Reusing another operation's key will make that
+   operation's loader try to parse your entries.
+3. Register the data file in ``pyproject.toml``'s
+   ``[tool.setuptools.package-data]``.
+4. Build the registry with ``_tool_registry.build_registry()`` and implement
+   ``formulas.py`` as a thin adapter over ``_shared``.
+5. Implement the entry point by delegating to ``_calculate.calculate_milling()``
+   with your ``resolve_tool``, ``compute`` and ``engagement_label_key``.
+6. Add the sub-operation to ``MillingSubOperation``, add its prompts to the
+   message catalog, and wire a session function into ``cli.py``.
+7. Re-export the entry point from ``machine_calc/__init__.py``.
+
+Every user-facing string must be a catalog key, and every formula must cite
+its source in a docstring.
+
+Formulas
+--------
+
+``_shared.py`` implements, in order: cutting speed to spindle speed, feed
+rate from feed per tooth and tooth count, machining time from length of cut,
+material removal rate from the engaged cross-section and feed rate, cutting
+power from the specific cutting force (k\ :sub:`c`) and removal rate, and
+torque from power and spindle speed. The engagement model is full and
+symmetric, with no radial chip-thinning compensation. Sources are cited per
+function; see ``specs/009-milling-calculations/research.md`` for the
+decisions behind them.

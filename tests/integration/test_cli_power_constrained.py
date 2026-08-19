@@ -13,6 +13,7 @@ from machine_calc.cli import run
 def test_power_constrained_mode_prompts_for_power_and_labels_result(monkeypatch, capsys):
     inputs = iter(
         [
+            "drilling",  # machining operation (009 FR-001)
             "metric",  # unit system
             "power-constrained",  # calculation mode
             "Metal",  # material type
@@ -36,6 +37,7 @@ def test_power_constrained_mode_prompts_for_power_and_labels_result(monkeypatch,
 def test_power_constrained_infeasible_budget_shows_error(monkeypatch, capsys):
     inputs = iter(
         [
+            "drilling",  # machining operation (009 FR-001)
             "metric",
             "power-constrained",
             "Metal",  # material type

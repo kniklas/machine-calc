@@ -46,3 +46,52 @@ def test_logging_setup_uses_plain_english_not_the_catalog():
     source = inspect.getsource(logging_setup)
     assert "translate(" not in source
     assert "machine_calc.i18n" not in source and "from machine_calc.i18n" not in source
+
+
+#: The milling session functions added by specs/009-milling-calculations.
+#: The scan above walks the whole ``cli.py`` module, so these are already
+#: covered — this list exists to fail loudly if the milling prompts are ever
+#: moved into a module the scan does not read (009 T048).
+_MILLING_CLI_FUNCTIONS = {
+    "_prompt_operation",
+    "_prompt_milling_sub_operation",
+    "_prompt_mill_tool_choice",
+    "_prompt_validated_length",
+    "_prompt_milling_geometry",
+    "_prompt_milling_inputs",
+    "_run_end_milling_session",
+    "_run_face_milling_session",
+    "_run_milling_session",
+}
+
+
+def test_milling_session_functions_are_inside_the_scanned_surface():
+    tree = ast.parse(inspect.getsource(cli))
+    defined = {node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)}
+
+    missing = _MILLING_CLI_FUNCTIONS - defined
+    assert not missing, (
+        "these milling CLI functions are no longer in cli.py, so the "
+        f"hard-coded-string scan no longer covers them: {sorted(missing)}"
+    )
+
+
+def test_milling_prompts_are_translated():
+    """Every milling prompt/print argument must be a translate() call."""
+
+    tree = ast.parse(inspect.getsource(cli))
+    functions = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name in _MILLING_CLI_FUNCTIONS
+    ]
+    assert len(functions) == len(_MILLING_CLI_FUNCTIONS)
+
+    checked = 0
+    for function in functions:
+        for call in _call_sites(ast.unparse(function), {"input", "print"}):
+            for arg in call.args:
+                assert not isinstance(arg, ast.Constant) or not isinstance(arg.value, str)
+                checked += 1
+
+    assert checked, "expected the milling session functions to emit some output"

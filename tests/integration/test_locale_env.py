@@ -14,6 +14,7 @@ from machine_calc import i18n
 from machine_calc.cli import run
 
 _REPL_INPUTS = [
+    "drilling",  # machining operation (009 FR-001)
     "metric",  # unit system
     "",  # calculation mode (default: standard)
     "Metal",  # material type

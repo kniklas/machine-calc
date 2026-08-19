@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0]
+
+### Added
+
+- **Milling calculations** (specs/009-milling-calculations): new public
+  entry points `calculate_end_milling()` and `calculate_face_milling()`,
+  with their own bundled tool catalogs exposed via `list_end_mill_tools()`
+  and `list_face_mill_tools()`. Both report spindle speed, feed rate,
+  machining time, torque, required power and **material removal rate**,
+  in metric or imperial units.
+- New `MachiningOperation` and `MillingSubOperation` enums, and
+  `CalculationResult.material_removal_rate` (cm3/min metric, in3/min
+  imperial). Drilling results always leave this field `None`.
+- The interactive CLI now asks which machining operation to calculate
+  before anything else, and which milling sub-operation when `milling` is
+  chosen. Each operation keeps its own remembered defaults across repeat
+  calculations.
+- New milling configuration bounds — `max_mill_diameter_mm` (200.0),
+  `max_depth_of_cut_mm` (50.0, applied to both axial depth and radial/width
+  engagement) and `max_length_of_cut_mm` (1000.0) — plus the matching
+  validation errors and message-catalog entries.
+
+### Changed
+
+- The package version now has a single source of truth (Constitution IV):
+  `pyproject.toml` declares `dynamic = ["version"]` and reads
+  `machine_calc.__version__`, replacing the previously duplicated (and
+  divergent) declarations.
+- Milling reports "milling tool" wording in its missing/unknown-tool errors
+  (`error.missing_mill_tool`, `error.unknown_mill_tool`) rather than reusing
+  drilling's wording.
+
+### Unchanged
+
+- Drilling behaviour is byte-for-byte identical apart from the new leading
+  operation prompt, enforced by a golden-transcript contract test captured
+  from the pre-refactor CLI.
+
 ## [0.2.0] - 2026-08-11
 
 ### Added

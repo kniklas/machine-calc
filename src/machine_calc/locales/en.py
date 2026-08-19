@@ -105,4 +105,40 @@ MESSAGES: dict[str, str] = {
         "entry {name!r}: {details}"
     ),
     "cli.label.unit_system_suffix": "{name} [{unit_system}]",
+    # --- Operation / milling sub-operation selection (009 FR-001, FR-003) ---
+    "cli.label.operation": "Machining operation",
+    "cli.operation.drilling": "drilling",
+    "cli.operation.milling": "milling",
+    "cli.label.milling_sub_operation": "Milling operation",
+    "cli.milling_sub_operation.end_milling": "end milling",
+    "cli.milling_sub_operation.face_milling": "face milling",
+    # --- Milling input prompts and labels (009 FR-004, FR-006) ---
+    "cli.label.mill_diameter": "Cutter diameter",
+    "cli.label.end_mill_tool": "End-mill tool",
+    "cli.label.face_mill_tool": "Face-mill tool",
+    "cli.label.axial_depth_of_cut": "Axial depth of cut",
+    "cli.label.radial_depth_of_cut": "Radial depth of cut",
+    "cli.label.width_of_cut": "Width of cut",
+    "cli.label.feed_per_tooth": "Feed per tooth",
+    "cli.label.number_of_teeth": "Number of teeth",
+    "cli.label.length_of_cut": "Length of cut",
+    "cli.prompt.number_of_teeth.unit": "teeth",
+    "cli.result.material_removal_rate": "Material removal:  {value} {unit}",
+    # --- Milling validation / structured errors (009 FR-008, FR-009, FR-018) ---
+    "error.invalid_mill_diameter.zero": "Cutter diameter must be greater than 0.",
+    "error.invalid_mill_diameter.max": (
+        "Cutter diameter must not exceed {max_mill_diameter_mm:g} mm."
+    ),
+    "error.invalid_depth_of_cut.zero": "{label} must be greater than 0.",
+    "error.invalid_depth_of_cut.max": "{label} must not exceed {max_depth_of_cut_mm:g} mm.",
+    "error.invalid_engagement": "{label} must not exceed the cutter diameter ({diameter_mm:g} mm).",
+    "error.invalid_feed_per_tooth": "Feed per tooth must be greater than 0.",
+    "error.invalid_tooth_count": "Number of teeth must be greater than 0.",
+    "error.invalid_tooth_count.fractional": "Number of teeth must be a whole number.",
+    "error.invalid_length_of_cut.zero": "Length of cut must be greater than 0.",
+    "error.invalid_length_of_cut.max": (
+        "Length of cut must not exceed {max_length_of_cut_mm:g} mm."
+    ),
+    "error.missing_mill_tool": "A milling tool must be selected.",
+    "error.unknown_mill_tool": "Unknown milling tool: {tool!r}.",
 }

@@ -13,6 +13,7 @@ from machine_calc.cli import run
 def test_repl_displays_values_matching_direct_calculate(monkeypatch, capsys):
     inputs = iter(
         [
+            "drilling",  # machining operation (009 FR-001)
             "metric",  # unit system
             "",  # calculation mode (default: standard)
             "Metal",  # material type
@@ -48,6 +49,7 @@ def test_repl_displays_values_matching_direct_calculate(monkeypatch, capsys):
 def test_repl_softwood_selection_works(monkeypatch, capsys):
     inputs = iter(
         [
+            "drilling",  # machining operation (009 FR-001)
             "metric",
             "",
             "Wood",  # material type

@@ -15,6 +15,7 @@ from machine_calc.cli import run
 def test_invalid_mode_choice_is_reprompted(monkeypatch, capsys):
     inputs = iter(
         [
+            "drilling",  # machining operation (009 FR-001)
             "metric",
             "bogus-mode",  # invalid -> reprompt
             "",  # blank -> accepts default (standard)
@@ -39,6 +40,7 @@ def test_invalid_mode_choice_is_reprompted(monkeypatch, capsys):
 def test_switching_mode_on_loop_rerun_clears_previous_mode_values(monkeypatch, capsys):
     inputs = iter(
         [
+            "drilling",  # machining operation (009 FR-001)
             "metric",
             "power-constrained",  # first iteration: power-constrained
             "Metal",  # material type
@@ -48,6 +50,7 @@ def test_switching_mode_on_loop_rerun_clears_previous_mode_values(monkeypatch, c
             "25",
             "0.5",  # required available power
             "y",  # run another calculation
+            "drilling",  # machining operation (009 FR-001)
             "metric",
             "fixed-rpm",  # switch mode -> must clear available_power default
             "",  # material type unchanged

@@ -12,6 +12,7 @@ from machine_calc.cli import main, run
 def test_invalid_unit_system_is_reprompted(monkeypatch, capsys):
     inputs = iter(
         [
+            "drilling",  # machining operation (009 FR-001)
             "bogus",  # invalid unit system -> reprompt
             "metric",
             "",  # calculation mode (default: standard)
@@ -35,6 +36,7 @@ def test_invalid_unit_system_is_reprompted(monkeypatch, capsys):
 def test_imperial_flow_displays_imperial_labels(monkeypatch, capsys):
     inputs = iter(
         [
+            "drilling",  # machining operation (009 FR-001)
             "imperial",
             "",  # calculation mode (default: standard)
             "Metal",  # material type
@@ -59,6 +61,7 @@ def test_imperial_flow_displays_imperial_labels(monkeypatch, capsys):
 def test_feasibility_warning_is_displayed(monkeypatch, capsys):
     inputs = iter(
         [
+            "drilling",  # machining operation (009 FR-001)
             "metric",
             "",  # calculation mode (default: standard)
             "Metal",  # material type
@@ -81,6 +84,7 @@ def test_feasibility_warning_is_displayed(monkeypatch, capsys):
 def test_invalid_optional_power_is_ignored(monkeypatch, capsys):
     inputs = iter(
         [
+            "drilling",  # machining operation (009 FR-001)
             "metric",
             "",  # calculation mode (default: standard)
             "Metal",  # material type
@@ -101,7 +105,7 @@ def test_invalid_optional_power_is_ignored(monkeypatch, capsys):
 
 
 def test_main_runs_repl_to_completion(monkeypatch, capsys):
-    inputs = iter(["metric", "", "Metal", "Mild Steel", "Carbide", "10", "25", "", "n"])
+    inputs = iter(["drilling", "metric", "", "Metal", "Mild Steel", "Carbide", "10", "25", "", "n"])
     monkeypatch.setattr(builtins, "input", lambda _prompt="": next(inputs))
     monkeypatch.setattr(sys, "argv", ["machine-calc"])
 

@@ -71,6 +71,185 @@ def validate_tool_present(tool: str | None, locale: str = DEFAULT_LOCALE) -> Err
     return None
 
 
+def _is_positive_finite_number(value: object) -> bool:
+    """Return ``True`` when ``value`` is a positive, finite, non-bool number.
+
+    Shared guard for the milling validators below, which all apply the same
+    posture already established by :func:`validate_target_rpm`: zero,
+    negative, non-numeric, ``None``, ``bool``, ``NaN`` and ``Infinity`` are
+    all rejected (specs/009-milling-calculations FR-008).
+    """
+
+    if value is None or isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    return math.isfinite(value) and value > 0
+
+
+def validate_depth_of_cut_mm(
+    depth_of_cut_mm: float,
+    config: Configuration,
+    locale: str = DEFAULT_LOCALE,
+    label_key: str = "cli.label.axial_depth_of_cut",
+) -> ErrorInfo | None:
+    """Validate a milling depth of cut (in mm) — axial, radial, or width.
+
+    Args:
+        depth_of_cut_mm: The depth/width, in canonical metric mm.
+        config: Supplies ``max_depth_of_cut_mm`` (FR-018).
+        locale: Message-catalog locale for the returned message.
+        label_key: Catalog key naming which input is being validated, so
+            the message can distinguish an axial depth of cut from a radial
+            depth of cut or a width of cut (Constitution VIII — the label
+            itself comes from the catalog, never a literal).
+
+    Returns:
+        ``None`` when valid, else an ``INVALID_DEPTH_OF_CUT``
+        :class:`~machine_calc.models.ErrorInfo`.
+    """
+
+    label = translate(locale, label_key)
+    if not _is_positive_finite_number(depth_of_cut_mm):
+        return ErrorInfo(
+            "INVALID_DEPTH_OF_CUT",
+            translate(locale, "error.invalid_depth_of_cut.zero", label=label),
+        )
+    if depth_of_cut_mm > config.max_depth_of_cut_mm:
+        return ErrorInfo(
+            "INVALID_DEPTH_OF_CUT",
+            translate(
+                locale,
+                "error.invalid_depth_of_cut.max",
+                label=label,
+                max_depth_of_cut_mm=config.max_depth_of_cut_mm,
+            ),
+        )
+    return None
+
+
+def validate_engagement_mm(
+    radial_engagement_mm: float,
+    diameter_mm: float,
+    locale: str = DEFAULT_LOCALE,
+    label_key: str = "cli.label.radial_depth_of_cut",
+) -> ErrorInfo | None:
+    """Validate that radial engagement does not exceed the cutter diameter.
+
+    Implements FR-009: a radial depth of cut (end milling) or width of cut
+    (face milling) larger than the tool/cutter diameter is geometrically
+    impossible, so it is rejected rather than silently clamped. Positivity
+    and upper-bound checks belong to :func:`validate_depth_of_cut_mm` and
+    are expected to have run first (data-model.md "Validation Order").
+    """
+
+    if not _is_positive_finite_number(radial_engagement_mm) or not _is_positive_finite_number(
+        diameter_mm
+    ):
+        return None
+    if radial_engagement_mm > diameter_mm:
+        return ErrorInfo(
+            "INVALID_ENGAGEMENT",
+            translate(
+                locale,
+                "error.invalid_engagement",
+                label=translate(locale, label_key),
+                diameter_mm=diameter_mm,
+            ),
+        )
+    return None
+
+
+def validate_feed_per_tooth_mm(
+    feed_per_tooth_mm: float, locale: str = DEFAULT_LOCALE
+) -> ErrorInfo | None:
+    """Validate a milling feed per tooth (chip load), in mm/tooth (FR-008).
+
+    No upper bound is applied — feed per tooth is bounded in practice by
+    the depth-of-cut and diameter limits it is multiplied against, and the
+    spec defines configurable maxima only for diameter, depth/width and
+    length of cut (FR-018).
+    """
+
+    if not _is_positive_finite_number(feed_per_tooth_mm):
+        return ErrorInfo(
+            "INVALID_FEED_PER_TOOTH", translate(locale, "error.invalid_feed_per_tooth")
+        )
+    return None
+
+
+def validate_tooth_count(number_of_teeth: float, locale: str = DEFAULT_LOCALE) -> ErrorInfo | None:
+    """Validate a cutter's number of teeth/flutes/inserts (FR-008).
+
+    Accepts int-valued floats (``4.0``) for caller convenience but rejects
+    a fractional count such as ``4.5``: a cutter cannot have a fractional
+    number of teeth.
+    """
+
+    if not _is_positive_finite_number(number_of_teeth):
+        return ErrorInfo("INVALID_TOOTH_COUNT", translate(locale, "error.invalid_tooth_count"))
+    if float(number_of_teeth) != int(number_of_teeth):
+        return ErrorInfo(
+            "INVALID_TOOTH_COUNT", translate(locale, "error.invalid_tooth_count.fractional")
+        )
+    return None
+
+
+def validate_length_of_cut_mm(
+    length_of_cut_mm: float, config: Configuration, locale: str = DEFAULT_LOCALE
+) -> ErrorInfo | None:
+    """Validate a milling length of cut (travel distance), in mm (FR-008, FR-018)."""
+
+    if not _is_positive_finite_number(length_of_cut_mm):
+        return ErrorInfo(
+            "INVALID_LENGTH_OF_CUT", translate(locale, "error.invalid_length_of_cut.zero")
+        )
+    if length_of_cut_mm > config.max_length_of_cut_mm:
+        return ErrorInfo(
+            "INVALID_LENGTH_OF_CUT",
+            translate(
+                locale,
+                "error.invalid_length_of_cut.max",
+                max_length_of_cut_mm=config.max_length_of_cut_mm,
+            ),
+        )
+    return None
+
+
+def validate_mill_diameter_mm(
+    diameter_mm: float, config: Configuration, locale: str = DEFAULT_LOCALE
+) -> ErrorInfo | None:
+    """Validate an end-mill/face-mill cutter diameter (in mm).
+
+    Reuses drilling's ``INVALID_DIAMETER`` code (data-model.md "New Error
+    Codes") but checks the milling-specific ``max_mill_diameter_mm`` bound
+    rather than drilling's ``max_diameter_mm`` (FR-018).
+    """
+
+    if not _is_positive_finite_number(diameter_mm):
+        return ErrorInfo("INVALID_DIAMETER", translate(locale, "error.invalid_mill_diameter.zero"))
+    if diameter_mm > config.max_mill_diameter_mm:
+        return ErrorInfo(
+            "INVALID_DIAMETER",
+            translate(
+                locale,
+                "error.invalid_mill_diameter.max",
+                max_mill_diameter_mm=config.max_mill_diameter_mm,
+            ),
+        )
+    return None
+
+
+def validate_mill_tool_present(tool: str | None, locale: str = DEFAULT_LOCALE) -> ErrorInfo | None:
+    """Validate that a milling tool name was supplied (non-empty).
+
+    Mirrors :func:`validate_tool_present` but uses the milling wording, since
+    drilling's catalog entry names a *drilling* tool (FR-019a).
+    """
+
+    if not tool:
+        return ErrorInfo("MISSING_TOOL", translate(locale, "error.missing_mill_tool"))
+    return None
+
+
 def validate_target_rpm(target_rpm: float | None, locale: str = DEFAULT_LOCALE) -> ErrorInfo | None:
     """Validate a supplied target spindle RPM (fixed-RPM mode, FR-007).
 
