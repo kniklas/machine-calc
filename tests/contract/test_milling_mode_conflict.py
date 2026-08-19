@@ -1,8 +1,11 @@
-"""Contract test: milling mode mutual exclusivity, MODE_CONFLICT (T022;
-FR-009).
+"""Contract test: milling mode mutual exclusivity, MODE_CONFLICT (T022,
+T035; FR-009).
 
 Per quickstart.md Scenario 6, for both milling sub-operations:
 - ``POWER_CONSTRAINED`` mode with a ``target_rpm`` supplied is rejected.
+- ``POWER_CONSTRAINED`` mode with no ``available_power`` supplied is
+  rejected (FR-009's other conflicting-arguments sub-case; T035, closing
+  a gap found by ``/speckit.converge``).
 - ``FIXED_RPM`` mode with ``target_rpm`` omitted is rejected.
 
 Mirrors tests/contract/test_mode_conflict.py (drilling).
@@ -46,6 +49,22 @@ def test_end_milling_power_constrained_with_target_rpm_is_mode_conflict():
     assert result.spindle_speed_rpm is None
 
 
+def test_end_milling_power_constrained_without_available_power_is_mode_conflict():
+    """FR-009's other conflicting-arguments sub-case: POWER_CONSTRAINED mode
+    requires available_power; omitting it is MODE_CONFLICT, not treated as
+    an unconstrained standard calculation (T035)."""
+
+    result = calculate_end_milling(
+        **_END_MILLING_ARGS,
+        mode=CalculationMode.POWER_CONSTRAINED,
+        available_power=None,
+    )
+
+    assert result.error is not None
+    assert result.error.code == "MODE_CONFLICT"
+    assert result.spindle_speed_rpm is None
+
+
 def test_end_milling_fixed_rpm_without_target_rpm_is_invalid_target_rpm():
     """A missing target_rpm in FIXED_RPM mode is INVALID_TARGET_RPM, not
     MODE_CONFLICT (FIXED_RPM's own required-field check fires first)."""
@@ -80,6 +99,22 @@ def test_face_milling_power_constrained_with_target_rpm_is_mode_conflict():
         mode=CalculationMode.POWER_CONSTRAINED,
         available_power=1.0,
         target_rpm=500,
+    )
+
+    assert result.error is not None
+    assert result.error.code == "MODE_CONFLICT"
+    assert result.spindle_speed_rpm is None
+
+
+def test_face_milling_power_constrained_without_available_power_is_mode_conflict():
+    """FR-009's other conflicting-arguments sub-case: POWER_CONSTRAINED mode
+    requires available_power; omitting it is MODE_CONFLICT, not treated as
+    an unconstrained standard calculation (T035)."""
+
+    result = calculate_face_milling(
+        **_FACE_MILLING_ARGS,
+        mode=CalculationMode.POWER_CONSTRAINED,
+        available_power=None,
     )
 
     assert result.error is not None

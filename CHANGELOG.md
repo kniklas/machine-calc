@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0]
+
+### Added
+
+- **Milling calculation modes** (specs/010-milling-calculation-modes):
+  `calculate_end_milling()` and `calculate_face_milling()` now accept the
+  same `mode`/`target_rpm` parameters as drilling's `calculate()`,
+  supporting **power-constrained** (reduce spindle speed/feed rate to fit
+  a supplied available power budget) and **fixed-RPM** (derive feed rate,
+  machining time, torque, material removal rate, and required power from
+  a user-specified spindle RPM) calculation modes, in addition to the
+  existing standard mode.
+- The interactive CLI's milling flow now asks for a calculation mode
+  (`standard`, `power-constrained`, `fixed-rpm`) immediately after the
+  unit-system prompt, mirroring drilling's existing mode-selection
+  prompt position; the chosen mode determines whether the available-power
+  prompt is optional/advisory or required, and whether a target-RPM
+  prompt is shown.
+- Both new modes reuse drilling's existing `CalculationMode` enum,
+  validators, and error codes (`INFEASIBLE_POWER_BUDGET`,
+  `INVALID_TARGET_RPM`, `MODE_CONFLICT`) verbatim — no new error codes or
+  message-catalog entries were introduced.
+
+### Unchanged
+
+- Standard (unconstrained) milling calculations that omit `mode`/
+  `target_rpm` behave identically to `009-milling-calculations` (no
+  regression).
+
 ## [0.3.0]
 
 ### Added

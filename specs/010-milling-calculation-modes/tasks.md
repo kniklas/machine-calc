@@ -136,6 +136,11 @@
 - T011-T014a (US1 tests) can run in parallel with each other; T018-T022 (US2 tests) can run in parallel with each other; US1 and US2 test tasks can run in parallel with each other (different files) once Phase 2 completes.
 - T025, T026, T031, T032 (Polish) can run in parallel; T027, T028, T029, T030, T033 are sequential validation gates run after implementation is complete.
 
+## Phase 6: Convergence
+
+- [X] T034 Bump `src/machine_calc/__init__.py`'s `__version__` from `0.3.0` to `0.4.0` and add a `## [0.4.0]` entry to `CHANGELOG.md` documenting the power-constrained and fixed-RPM milling modes, per Constitution Principle IV (MUST) (missing)
+- [X] T035 [P] Add a milling contract test asserting `calculate_end_milling()`/`calculate_face_milling()` called with `mode=CalculationMode.POWER_CONSTRAINED` and `available_power=None` returns `MODE_CONFLICT`, closing the one FR-009 sub-case not yet covered by a milling-specific test (FR-009) (partial)
+
 ---
 
 ## Parallel Example: Foundational Phase
