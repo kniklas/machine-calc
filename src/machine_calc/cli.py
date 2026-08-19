@@ -25,7 +25,7 @@ from machine_calc import (
     list_tools,
 )
 from machine_calc.config import Configuration
-from machine_calc.i18n import get_locale, get_raw_locale, translate
+from machine_calc.i18n import get_locale, get_raw_locale, has_message, translate
 from machine_calc.logging_setup import configure_logging
 from machine_calc.operations.drilling.tools import DrillingTool, get_tool
 from machine_calc.registry import WorkpieceMaterial, get_material, materials_load_notice
@@ -129,18 +129,14 @@ def _material_type_label(material_type: str, locale: str) -> str:
     """
 
     key = f"material_type.{material_type}"
-    label = translate(locale, key)
-    # `translate` runs `str.format()` on the fallback key too, so a miss is
-    # not always returned verbatim: an id containing braces (`{{alloy}}`)
-    # comes back as `material_type.{alloy}`. Comparing against the raw key
-    # would read that as a catalog hit and leak the key into the prompt, so
-    # compare against the key put through the same formatting rules.
-    try:
-        untranslated = key.format()
-    except (KeyError, IndexError, ValueError):
-        untranslated = key
-    if label != untranslated and label != key:
-        return label
+    # Deliberately *not* `translate(...) != key`: type ids are user data, so
+    # the key is dynamic, and `translate` formats its fallback template — the
+    # key itself — which both collapses doubled braces (`{{alloy}}`) into a
+    # false catalog hit and logs a spurious warning when stray braces make
+    # that formatting raise (`al{o}y`). `has_message` answers the question
+    # directly, before any formatting happens.
+    if has_message(locale, key):
+        return translate(locale, key)
     # `_prompt_choice` strips the user's input before comparing it to the
     # offered options, so a label carrying leading/trailing whitespace could
     # never be typed. Ids such as "-metal" normalise to " Metal", and "-"

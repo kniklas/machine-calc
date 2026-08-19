@@ -9,6 +9,7 @@ handling (008 FR-001, FR-002, FR-004, FR-010, FR-011).
 from __future__ import annotations
 
 import builtins
+import logging
 
 import pytest
 
@@ -544,3 +545,29 @@ specific_cutting_force = 750.0
         prompt = out[out.index("Material type (") : out.index("Material (")]
         assert "material_type." not in prompt, prompt
         assert "Material (Bronze)" in out
+
+    def test_brace_id_does_not_emit_an_i18n_warning(self, tmp_path, monkeypatch, capsys, caplog):
+        """Valid free-form ids must not produce i18n diagnostics.
+
+        `main()` configures WARNING logging, so routing a dynamic id through
+        `translate()`'s formatting path made every material-type prompt print
+        a spurious warning for otherwise valid configuration.
+        """
+        config_path = _write_config(
+            tmp_path,
+            """
+[[materials]]
+name = "Bronze"
+material_type = "al{o}y"
+reference_cutting_speed = 45.0
+reference_feed_per_rev = 0.18
+specific_cutting_force = 750.0
+""",
+        )
+        _feed(monkeypatch, ["metric", "", "Al{O}Y", "Bronze", "Carbide", "10", "25", "", "n"])
+
+        with caplog.at_level(logging.WARNING, logger="machine_calc.i18n"):
+            run(materials_config_path=config_path)
+
+        capsys.readouterr()
+        assert [record.getMessage() for record in caplog.records] == []
