@@ -40,6 +40,24 @@ Also track a boolean:
 - **copilot-review-invoked** — set true only after posting `@copilot review`
   on the current PR at least once in this session.
 
+Also start a **time log** for this session, since closure (§6) reports it:
+- **loop-start timestamp** — capture once, right after this setup step
+  (e.g. `date -u +%Y-%m-%dT%H:%M:%SZ`).
+- **waiting intervals** — every time execution pauses on a human decision
+  (an `ask_user` call, or any point where you are explicitly waiting on the
+  user rather than doing agent work), record a `(wait-start, wait-end)`
+  pair. `wait-start` is when the question is asked / the pause begins;
+  `wait-end` is when the user's answer resumes the loop. Do **not** count
+  CI-polling waits or Copilot-review-polling waits — the agent is still
+  driving those, not blocked on the human — only count waits that are
+  genuinely blocked on a human response.
+- At closure, derive:
+  - **total wall time** = now − loop-start timestamp.
+  - **time waiting on human decisions** = sum of all recorded waiting
+    intervals.
+  - **time agent was working** = total wall time − time waiting on human
+    decisions.
+
 ## 2. Fetch Copilot review comments, excluding suppressed ones
 
 Copilot review runs at the "balanced" preset for this repo (see
@@ -127,7 +145,10 @@ fix — and:
    recommend continuing" or "remaining items look architecturally
    significant, recommend a human look before more automated commits").
 4. Ask the user, via `ask_user`, whether to continue iterating. Only
-   resume the loop (§3) on explicit "yes" — do not assume.
+   resume the loop (§3) on explicit "yes" — do not assume. Record this as
+   a waiting interval in the time log (§1): note when the question was
+   asked and when the user responded, for the closure-time time
+   accounting.
 
 If the user says yes, keep counting further commits and re-checkpoint
 every additional 10.
@@ -156,7 +177,20 @@ must not merge, close, or delete anything yet. Before asking for approval:
    what was fixed during review iteration).
 2. Confirm CI status and review status explicitly in that summary (green
    checkmarks, 0 unresolved required comments).
-3. Post an AIC usage summary comment on the PR using real markdown newlines.
+3. Report the session's time accounting, computed from the time log
+   started in §1:
+   - **Total wall time** — now minus the loop-start timestamp.
+   - **Time agent was working** — total wall time minus all recorded
+     human-decision waiting intervals (this includes CI/review polling
+     time, since the agent was actively driving that, not blocked).
+   - **Time waiting on human decisions** — the sum of the recorded
+     waiting intervals (e.g. time spent on each `ask_user` checkpoint
+     before the user responded), plus a one-line breakdown of what each
+     wait was for (e.g. "10-commit checkpoint: continue? — 4m", "closure
+     approval — 2m").
+   Include these three numbers in the same summary as the commit
+   narrative and CI/review status, not only in the AIC comment.
+4. Post an AIC usage summary comment on the PR using real markdown newlines.
    Do not use inline `--body "...\n..."` strings because GitHub CLI will post
    literal `\n` characters. Always write the comment to a file (heredoc) and
    post with `--body-file`, for example:
@@ -168,8 +202,16 @@ cat > /tmp/pr-aic-summary.md <<'EOF'
 ### Scope
 Covers the PR-authoring session, including review-loop and CI-fix work.
 
+### Time accounting
+- **Total wall time:** <start> -> <end> (~<total_duration>)
+- **Agent working time:** ~<working_duration> (drafting fixes, running
+  gates, polling CI/Copilot review, committing/pushing)
+- **Waiting on human decisions:** ~<waiting_duration> across
+  <wait_count> checkpoint(s):
+  - <checkpoint description> — ~<duration>
+  - <checkpoint description> — ~<duration>
+
 ### Totals
-- **Session window:** <start> -> <end> (~<duration>)
 - **Session turns:** <turn_count>
 - **AIC events:** <event_count>
 - **Input tokens:** <input_tokens>
@@ -196,9 +238,11 @@ rm /tmp/pr-aic-summary.md
    If prior malformed summary comments exist (literal `\n`), replace them by
    editing the latest summary comment or deleting malformed ones with:
    `gh api repos/<owner>/<repo>/issues/comments/<comment_id> -X DELETE`.
-4. Ask the user for explicit approval via `ask_user` — do not merge/close
+5. Ask the user for explicit approval via `ask_user` — do not merge/close
    on an assumption of approval, and do not proceed on a vague or partial
-   answer.
+   answer. (This checkpoint itself becomes another recorded waiting
+   interval — close it out once the user responds, before finalizing the
+   time accounting above.)
 
 Only after explicit approval:
 
@@ -230,3 +274,10 @@ required, open a follow-up PR and request review there.
 - Treating `performance` job or opt-in test suites as blocking when they
   are not part of required status checks (verify in branch protection or
   `ci.yml` before treating a red non-required job as a blocker).
+- Counting CI-polling or Copilot-review-polling time as "waiting on human
+  decisions" in the closure time accounting — the agent is actively
+  driving those waits, so they belong in agent working time, not human
+  waiting time.
+- Forgetting to close out a recorded waiting interval (no matching
+  `wait-end`) before computing closure totals, which silently inflates
+  "waiting on human" or drops time from the total entirely.
