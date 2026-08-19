@@ -71,6 +71,79 @@ class MillingMetrics:
     power_kw: float
 
 
+def calculate_milling_metrics_at_rpm(
+    diameter_mm: float,
+    axial_depth_of_cut_mm: float,
+    radial_engagement_mm: float,
+    feed_per_tooth_mm: float,
+    number_of_teeth: float,
+    length_of_cut_mm: float,
+    material: WorkpieceMaterial,
+    spindle_speed_rpm: float,
+) -> MillingMetrics:
+    """Compute milling parameters for an explicit spindle speed.
+
+    Shared by all three calculation modes
+    (``specs/010-milling-calculation-modes/research.md`` #1-#2): the
+    standard mode derives its nominal spindle speed from cutting speed and
+    delegates here (:func:`calculate_milling_metrics`); the
+    power-constrained mode passes its algebraically adjusted spindle speed
+    (:func:`calculate_power_constrained_milling_metrics`); the fixed-RPM
+    mode passes the caller-supplied ``target_rpm`` directly.
+
+    Args:
+        diameter_mm: Tool/cutter diameter (D), in mm (already validated > 0).
+        axial_depth_of_cut_mm: Axial depth of cut (ap), in mm (validated > 0).
+        radial_engagement_mm: Radial engagement (ae), in mm — the radial
+            depth of cut for end milling or the width of cut for face
+            milling (already validated > 0 and <= ``diameter_mm``).
+        feed_per_tooth_mm: Feed per tooth / chip load (fz), in mm/tooth
+            (already validated > 0).
+        number_of_teeth: Number of flutes/teeth/inserts (zn) (already
+            validated as a positive whole number).
+        length_of_cut_mm: Travel distance to be machined, in mm (validated
+            > 0).
+        material: The resolved workpiece material reference data, supplying
+            the specific cutting force (kc).
+        spindle_speed_rpm: Spindle speed to calculate at, in RPM (must be a
+            positive, finite number; not validated here).
+
+    Returns:
+        The computed :class:`MillingMetrics`.
+    """
+
+    # 3. Table feed rate: vf = n * fz * zn
+    feed_rate_mm_min = spindle_speed_rpm * feed_per_tooth_mm * number_of_teeth
+
+    # 4. Material removal rate: Q = (ap * ae * vf) / 1000
+    material_removal_rate_cm3_min = (
+        axial_depth_of_cut_mm * radial_engagement_mm * feed_rate_mm_min
+    ) / MM3_PER_CM3
+
+    # 5. Net cutting power: Pc = (ap * ae * vf * kc) / (60 * 10^6)
+    power_kw = (
+        axial_depth_of_cut_mm
+        * radial_engagement_mm
+        * feed_rate_mm_min
+        * material.specific_cutting_force_kc
+    ) / POWER_SCALE
+
+    # 6. Torque: Mc = (Pc * 9550) / n
+    torque_nm = (power_kw * TORQUE_POWER_CONSTANT) / spindle_speed_rpm
+
+    # 7. Machining time: tc = length_of_cut / vf
+    machining_time_min = length_of_cut_mm / feed_rate_mm_min
+
+    return MillingMetrics(
+        spindle_speed_rpm=spindle_speed_rpm,
+        feed_rate_mm_min=feed_rate_mm_min,
+        material_removal_rate_cm3_min=material_removal_rate_cm3_min,
+        machining_time_min=machining_time_min,
+        torque_nm=torque_nm,
+        power_kw=power_kw,
+    )
+
+
 def calculate_milling_metrics(
     diameter_mm: float,
     axial_depth_of_cut_mm: float,
@@ -110,33 +183,92 @@ def calculate_milling_metrics(
     # 2. Spindle speed: n = (vc * 1000) / (pi * D)
     spindle_speed_rpm = (cutting_speed_m_min * 1000) / (math.pi * diameter_mm)
 
-    # 3. Table feed rate: vf = n * fz * zn
-    feed_rate_mm_min = spindle_speed_rpm * feed_per_tooth_mm * number_of_teeth
-
-    # 4. Material removal rate: Q = (ap * ae * vf) / 1000
-    material_removal_rate_cm3_min = (
-        axial_depth_of_cut_mm * radial_engagement_mm * feed_rate_mm_min
-    ) / MM3_PER_CM3
-
-    # 5. Net cutting power: Pc = (ap * ae * vf * kc) / (60 * 10^6)
-    power_kw = (
-        axial_depth_of_cut_mm
-        * radial_engagement_mm
-        * feed_rate_mm_min
-        * material.specific_cutting_force_kc
-    ) / POWER_SCALE
-
-    # 6. Torque: Mc = (Pc * 9550) / n
-    torque_nm = (power_kw * TORQUE_POWER_CONSTANT) / spindle_speed_rpm
-
-    # 7. Machining time: tc = length_of_cut / vf
-    machining_time_min = length_of_cut_mm / feed_rate_mm_min
-
-    return MillingMetrics(
+    return calculate_milling_metrics_at_rpm(
+        diameter_mm=diameter_mm,
+        axial_depth_of_cut_mm=axial_depth_of_cut_mm,
+        radial_engagement_mm=radial_engagement_mm,
+        feed_per_tooth_mm=feed_per_tooth_mm,
+        number_of_teeth=number_of_teeth,
+        length_of_cut_mm=length_of_cut_mm,
+        material=material,
         spindle_speed_rpm=spindle_speed_rpm,
-        feed_rate_mm_min=feed_rate_mm_min,
-        material_removal_rate_cm3_min=material_removal_rate_cm3_min,
-        machining_time_min=machining_time_min,
-        torque_nm=torque_nm,
-        power_kw=power_kw,
+    )
+
+
+def calculate_power_constrained_milling_metrics(
+    diameter_mm: float,
+    axial_depth_of_cut_mm: float,
+    radial_engagement_mm: float,
+    feed_per_tooth_mm: float,
+    number_of_teeth: float,
+    length_of_cut_mm: float,
+    material: WorkpieceMaterial,
+    cutting_speed_factor: float,
+    available_power_kw: float,
+) -> MillingMetrics:
+    """Compute milling parameters adjusted to fit an available power budget.
+
+    Implements the closed-form (non-iterative) power-scaling derivation
+    (``specs/010-milling-calculation-modes/research.md`` #1): since torque
+    is independent of spindle speed, required power scales linearly with
+    spindle speed for a fixed diameter/material/tool/geometry selection, so
+    the highest spindle speed that keeps required power within budget can
+    be solved algebraically in a single step — the same identity
+    ``specs/002-constrained-calculation-modes`` already established for
+    drilling.
+
+    Args:
+        diameter_mm: Tool/cutter diameter (D), in mm (already validated > 0).
+        axial_depth_of_cut_mm: Axial depth of cut (ap), in mm (validated > 0).
+        radial_engagement_mm: Radial engagement (ae), in mm.
+        feed_per_tooth_mm: Feed per tooth / chip load (fz), in mm/tooth.
+        number_of_teeth: Number of flutes/teeth/inserts (zn).
+        length_of_cut_mm: Travel distance to be machined, in mm.
+        material: The resolved workpiece material reference data.
+        cutting_speed_factor: The selected milling tool's multiplier applied
+            to the material's baseline cutting speed.
+        available_power_kw: The available power budget, in kW. Must be a
+            positive number (not validated here — callers reject
+            non-positive budgets under ``INFEASIBLE_POWER_BUDGET`` before
+            calling this function).
+
+    Returns:
+        The computed :class:`MillingMetrics` at the nominal spindle speed
+        (if ``available_power_kw`` is already sufficient — within
+        ``math.isclose()``'s default ``rel_tol=1e-9``, including the exact
+        equality boundary), or at the algebraically reduced spindle speed
+        (otherwise).
+    """
+
+    nominal = calculate_milling_metrics(
+        diameter_mm=diameter_mm,
+        axial_depth_of_cut_mm=axial_depth_of_cut_mm,
+        radial_engagement_mm=radial_engagement_mm,
+        feed_per_tooth_mm=feed_per_tooth_mm,
+        number_of_teeth=number_of_teeth,
+        length_of_cut_mm=length_of_cut_mm,
+        material=material,
+        cutting_speed_factor=cutting_speed_factor,
+    )
+
+    if nominal.power_kw <= available_power_kw or math.isclose(
+        nominal.power_kw, available_power_kw, rel_tol=1e-9
+    ):
+        # Already sufficient, including the exact-equality boundary — no
+        # reduction is applied (research.md #1).
+        return nominal
+
+    # n_adjusted = n0 * (Pavail / Pc0) — power scales linearly with spindle
+    # speed since torque does not depend on it (research.md #1).
+    n_adjusted = nominal.spindle_speed_rpm * (available_power_kw / nominal.power_kw)
+
+    return calculate_milling_metrics_at_rpm(
+        diameter_mm=diameter_mm,
+        axial_depth_of_cut_mm=axial_depth_of_cut_mm,
+        radial_engagement_mm=radial_engagement_mm,
+        feed_per_tooth_mm=feed_per_tooth_mm,
+        number_of_teeth=number_of_teeth,
+        length_of_cut_mm=length_of_cut_mm,
+        material=material,
+        spindle_speed_rpm=n_adjusted,
     )

@@ -24,7 +24,7 @@ from machine_calc import (
     list_end_mill_tools,
     list_face_mill_tools,
 )
-from machine_calc.models import CalculationResult, UnitSystem
+from machine_calc.models import CalculationMode, CalculationResult, UnitSystem
 
 _SRC = Path(machine_calc.__file__).parent
 
@@ -35,6 +35,8 @@ _COMMON_TAIL = [
     ("available_power", None),
     ("config_path", None),
     ("locale", "en"),
+    ("mode", CalculationMode.STANDARD),
+    ("target_rpm", None),
     ("materials_config_path", None),
 ]
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import cast
 
-from machine_calc.models import CalculationResult, UnitSystem
+from machine_calc.models import CalculationMode, CalculationResult, UnitSystem
 from machine_calc.operations.milling._calculate import (
     MillingMetricsLike,
     calculate_milling,
@@ -18,7 +18,11 @@ from machine_calc.operations.milling._calculate import (
 from machine_calc.operations.milling._tool_registry import MillingTool
 from machine_calc.registry import WorkpieceMaterial
 
-from .formulas import FaceMillingMetrics, calculate_face_milling_metrics
+from .formulas import (
+    FaceMillingMetrics,
+    calculate_face_milling_metrics,
+    calculate_face_milling_metrics_at_rpm,
+)
 from .tools import FaceMillTool, get_face_mill_tool, list_face_mill_tools
 
 _ENGAGEMENT_LABEL_KEY = "cli.label.width_of_cut"
@@ -41,6 +45,31 @@ def _compute(
     )
 
 
+def _compute_at_rpm(
+    geometry_mm: dict,
+    material: WorkpieceMaterial,
+    tool: MillingTool,
+    spindle_speed_rpm: float,
+) -> MillingMetricsLike:
+    """Adapt the shared orchestration's fixed-RPM inputs to ``formulas.py``.
+
+    Used by fixed-RPM mode (FR-006 of
+    ``specs/010-milling-calculation-modes``); mirrors :func:`_compute` while
+    preserving the per-sub-operation module boundary required by FR-014.
+    """
+
+    return calculate_face_milling_metrics_at_rpm(
+        diameter_mm=geometry_mm["diameter_mm"],
+        axial_depth_of_cut_mm=geometry_mm["axial_depth_of_cut_mm"],
+        width_of_cut_mm=geometry_mm["radial_engagement_mm"],
+        feed_per_tooth_mm=geometry_mm["feed_per_tooth_mm"],
+        number_of_teeth=geometry_mm["number_of_teeth"],
+        length_of_cut_mm=geometry_mm["length_of_cut_mm"],
+        material=material,
+        spindle_speed_rpm=spindle_speed_rpm,
+    )
+
+
 def calculate_face_milling(
     diameter: float,
     axial_depth_of_cut: float,
@@ -54,6 +83,8 @@ def calculate_face_milling(
     available_power: float | None = None,
     config_path: str | None = None,
     locale: str = "en",
+    mode: CalculationMode = CalculationMode.STANDARD,
+    target_rpm: float | None = None,
     materials_config_path: str | None = None,
 ) -> CalculationResult:
     """Calculate face-milling parameters (FR-007, FR-011, FR-012).
@@ -86,12 +117,19 @@ def calculate_face_milling(
         tool: Registered face-mill tool name (see
             :func:`list_face_mill_tools`).
         unit_system: Unit system for both inputs and outputs.
-        available_power: Optional available machine power, used only to
-            attach a feasibility warning when the required **net cutting
-            power** exceeds it. Never turns a result into an error.
+        available_power: Optional available machine power. Semantics depend
+            on ``mode``: in ``STANDARD`` and ``FIXED_RPM`` modes it is
+            optional/advisory — an exceeded budget sets a
+            ``feasibility_warning`` without altering the result. In
+            ``POWER_CONSTRAINED`` mode it is a **required** hard constraint.
         config_path: Optional path to a configuration file supplying
             validation bounds.
         locale: Locale code for all human-readable messages.
+        mode: Which calculation mode to use (``STANDARD``,
+            ``POWER_CONSTRAINED``, or ``FIXED_RPM``). Defaults to
+            ``STANDARD``, unchanged from ``009-milling-calculations``
+            (SC-004).
+        target_rpm: Required when ``mode is CalculationMode.FIXED_RPM``.
         materials_config_path: Optional path to a user materials/tools
             configuration file.
 
@@ -119,6 +157,9 @@ def calculate_face_milling(
         resolve_tool=get_face_mill_tool,
         compute=_compute,
         engagement_label_key=_ENGAGEMENT_LABEL_KEY,
+        compute_at_rpm=_compute_at_rpm,
+        mode=mode,
+        target_rpm=target_rpm,
     )
 
 
