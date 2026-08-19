@@ -35,9 +35,9 @@ _COMMON_TAIL = [
     ("available_power", None),
     ("config_path", None),
     ("locale", "en"),
+    ("materials_config_path", None),
     ("mode", CalculationMode.STANDARD),
     ("target_rpm", None),
-    ("materials_config_path", None),
 ]
 
 _EXPECTED_SIGNATURES = {

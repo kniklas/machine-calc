@@ -15,7 +15,7 @@ def test_repl_displays_values_matching_direct_calculate(monkeypatch, capsys):
         [
             "drilling",  # machining operation (009 FR-001)
             "metric",  # unit system
-            "",  # calculation mode (default: standard)
+            "standard",  # calculation mode -- no blank/default option (FR-001a)
             "Metal",  # material type
             "Mild Steel",  # material
             "Carbide",  # tool
@@ -51,7 +51,7 @@ def test_repl_softwood_selection_works(monkeypatch, capsys):
         [
             "drilling",  # machining operation (009 FR-001)
             "metric",
-            "",
+            "standard",  # calculation mode -- no blank/default option (FR-001a)
             "Wood",  # material type
             "Pine",
             "Carbide",

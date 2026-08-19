@@ -14,6 +14,7 @@ fixed for the entire REPL loop — it is never re-read mid-session.
 from __future__ import annotations
 
 import argparse
+import math
 from collections import Counter
 from dataclasses import dataclass
 from typing import Callable, cast
@@ -344,11 +345,14 @@ _MODE_OPTION_KEYS = {
 def _prompt_mode(default: CalculationMode, locale: str) -> CalculationMode:
     """Prompt for the calculation mode (FR-001a).
 
-    Re-prompts on an invalid/unrecognized entry, the same as material/tool
-    selection (base spec FR-010) — it MUST NOT silently fall back to a
-    default mode on an unrecognized entry (spec.md Clarifications
-    2026-07-11). A blank entry accepts the current default, exactly like
-    the existing material/tool prompts.
+    Re-prompts on an invalid, unrecognized, *or blank* entry, the same as
+    material/tool selection's invalid-entry behavior (base spec FR-010) —
+    it MUST NOT silently fall back to a default mode (spec.md
+    Clarifications 2026-07-11/2026-08-19; the mode prompt has no
+    blank/default option, unlike prompts that retain an editable default).
+    ``default`` is accepted for call-site symmetry with the other
+    ``_prompt_*`` helpers but is deliberately never passed to
+    :func:`_prompt_choice` as a fallback.
     """
 
     labels_by_mode = {m: translate(locale, key) for m, key in _MODE_OPTION_KEYS.items()}
@@ -356,7 +360,7 @@ def _prompt_mode(default: CalculationMode, locale: str) -> CalculationMode:
     options = list(labels_by_mode.values())
     label = translate(locale, "cli.label.mode")
 
-    choice = _prompt_choice(label, options, labels_by_mode[default], locale)
+    choice = _prompt_choice(label, options, None, locale)
     return modes_by_label[choice]
 
 
@@ -380,15 +384,16 @@ def _prompt_required_power(unit: str, default: float | None, locale: str) -> flo
 def _prompt_target_rpm(default: float | None, locale: str) -> float:
     """Prompt for a required target spindle RPM (fixed-RPM mode).
 
-    A blank or non-numeric entry re-prompts as a validation failure
-    (FR-005, FR-007), unless a default is available (a retained editable
-    default from a prior loop iteration in the same mode).
+    A blank, non-numeric, or non-finite (``inf``/``nan``) entry re-prompts
+    as a validation failure (FR-005, FR-007), unless a default is
+    available (a retained editable default from a prior loop iteration in
+    the same mode).
     """
 
     label = translate(locale, "cli.label.target_rpm")
     while True:
         value = _prompt_number(label, "RPM", default, locale)
-        if value > 0:
+        if math.isfinite(value) and value > 0:
             return value
         print(translate(locale, "cli.prompt.target_rpm.invalid"))
 
@@ -462,10 +467,14 @@ def _resolve_materials_config(materials_config_path: str | None, locale: str) ->
         return
 
     try:
-        # Triggers the full parse/duplicate/validate/convert path for both
-        # materials and tools, exactly as the REPL loop will use them.
+        # Triggers the full parse/duplicate/validate/convert path for
+        # materials and every tool catalog (drilling and milling), exactly
+        # as the REPL loop will use them (FR-007's "at startup" guarantee
+        # covers all config-driven catalogs, not just drilling's).
         list_materials(config_path=materials_config_path)
         list_tools(config_path=materials_config_path)
+        list_end_mill_tools(config_path=materials_config_path)
+        list_face_mill_tools(config_path=materials_config_path)
     except RegistryConfigError as exc:
         print(translate(locale, exc.message_key, **exc.kwargs))
         raise SystemExit(1) from exc
@@ -595,10 +604,11 @@ _MILLING_SUB_OPERATION_OPTION_KEYS = {
 def _prompt_operation(default: MachiningOperation, locale: str) -> MachiningOperation:
     """Prompt for the machining operation (FR-001).
 
-    Mirrors :func:`_prompt_mode` exactly, including its re-prompt-on-invalid
-    behaviour: an unrecognized entry re-prompts with a catalog-sourced
-    message and MUST NOT silently fall back to a default operation
-    (Acceptance Scenario 4). A blank entry accepts the offered default.
+    Structurally similar to :func:`_prompt_mode` for invalid entries: an
+    unrecognized entry re-prompts with a catalog-sourced message and MUST
+    NOT silently fall back to a default operation (Acceptance Scenario 4).
+    Unlike :func:`_prompt_mode` (which has no blank/default option), a
+    blank entry here accepts the offered default.
     """
 
     labels_by_operation = {op: translate(locale, key) for op, key in _OPERATION_OPTION_KEYS.items()}

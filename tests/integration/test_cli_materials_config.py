@@ -27,7 +27,7 @@ def _feed_inputs(monkeypatch, inputs):
 _BASE_REPL_INPUTS = [
     "drilling",  # machining operation (009 FR-001)
     "metric",  # unit system
-    "",  # calculation mode (default: standard)
+    "standard",  # calculation mode -- no blank/default option (FR-001a)
     "Metal",  # material type
     "Mild Steel",  # material
     "Carbide",  # tool
@@ -115,7 +115,7 @@ def test_valid_override_file_lists_new_material(monkeypatch, capsys, tmp_path):
     inputs = [
         "drilling",  # machining operation (009 FR-001)
         "metric",
-        "",
+        "standard",
         "Uncategorized",  # material type
         "Bronze",  # new material appears in the prompt options
         "Carbide",
@@ -134,7 +134,7 @@ def test_engineered_materials_can_be_selected(monkeypatch, capsys):
     inputs = [
         "drilling",  # machining operation (009 FR-001)
         "metric",
-        "",
+        "standard",
         "Wood",  # material type
         "Plywood",
         "Carbide",
@@ -195,7 +195,7 @@ def test_translated_name_shown_for_active_locale(monkeypatch, capsys, tmp_path):
         [
             "drilling",  # machining operation (009 FR-001)
             "metric",
-            "",
+            "standard",
             "Metal",  # material type
             "Acier doux",  # translated label must be selectable
             "Carbide",

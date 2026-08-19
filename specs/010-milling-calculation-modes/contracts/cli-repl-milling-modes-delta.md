@@ -66,14 +66,15 @@ follow-ups:
 
 | Mode | Total prompts | Typed values (non-dismissible) |
 |---|---|---|
-| Standard | 14 (was 13 pre-this-feature) | 12 (unchanged — mode selection has no blank/default option per FR-001a, but the optional power prompt remains dismissible) |
-| Power-constrained | 14 | 13 (available power becomes required, not dismissible) |
-| Fixed-RPM | 15 | 13 (target RPM is required; available power stays optional/dismissible) |
+| Standard | 14 (was 13 pre-this-feature) | 13 (the new mode-selection prompt is itself non-dismissible per FR-001a, so only the optional power prompt remains dismissible) |
+| Power-constrained | 14 | 14 (available power becomes required, not dismissible, and mode selection is always typed) |
+| Fixed-RPM | 15 | 14 (target RPM is required; available power stays optional/dismissible) |
 
-Standard mode's *typed*-value count is unchanged from
-`009-milling-calculations` (SC-004 of this feature); its *total* prompt
-count increases by exactly one (the new mode prompt itself), which is the
-intended, spec.md FR-001a-required change, not a regression. The existing
+Standard mode's *typed*-value count increases by exactly one from
+`009-milling-calculations` (12 -> 13), matching its *total* prompt count
+increase of exactly one (the new mode prompt itself) — both changes are
+the intended, spec.md FR-001a-required consequence of the mode prompt
+having no blank/default option, not a regression. The existing
 `tests/integration/test_cli_prompt_budget.py` MUST be updated to assert a
 per-mode count rather than one fixed total.
 

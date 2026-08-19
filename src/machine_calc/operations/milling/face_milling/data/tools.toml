@@ -4,10 +4,10 @@
 # Same schema and style as `end_milling/data/tools.toml`; factors are
 # relative to the HSS baseline (factor 1.0) stored in
 # `machine_calc.registry`'s material reference values
-# (research.md #3). Face milling is dominated by indexable-insert cutters,
-# so the bundled set starts at carbide rather than HSS, and the highest
-# entry reflects the higher speeds cermet inserts tolerate in finishing
-# passes (Machinery's Handbook / Sandvik Coromant general-purpose ranges).
+# (research.md #3). The bundled set starts at HSS (factor 1.0) and
+# progresses through carbide grades, and the highest entry reflects the
+# higher speeds cermet inserts tolerate in finishing passes (Machinery's
+# Handbook / Sandvik Coromant general-purpose ranges).
 #
 # No `feed_factor` key: feed per tooth is a direct per-calculation input
 # (research.md #4).

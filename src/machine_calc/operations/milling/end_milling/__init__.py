@@ -83,9 +83,9 @@ def calculate_end_milling(
     available_power: float | None = None,
     config_path: str | None = None,
     locale: str = "en",
+    materials_config_path: str | None = None,
     mode: CalculationMode = CalculationMode.STANDARD,
     target_rpm: float | None = None,
-    materials_config_path: str | None = None,
 ) -> CalculationResult:
     """Calculate end-milling parameters (FR-005, FR-011, FR-012).
 
@@ -122,13 +122,13 @@ def calculate_end_milling(
         config_path: Optional path to a configuration file supplying
             validation bounds.
         locale: Locale code for all human-readable messages.
+        materials_config_path: Optional path to a user materials/tools
+            configuration file.
         mode: Which calculation mode to use (``STANDARD``,
             ``POWER_CONSTRAINED``, or ``FIXED_RPM``). Defaults to
             ``STANDARD``, unchanged from ``009-milling-calculations``
             (SC-004).
         target_rpm: Required when ``mode is CalculationMode.FIXED_RPM``.
-        materials_config_path: Optional path to a user materials/tools
-            configuration file.
 
     Returns:
         A :class:`~machine_calc.models.CalculationResult`. On any validation

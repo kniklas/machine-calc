@@ -41,7 +41,18 @@ class TestTypeThenMaterialFlow:
     def test_type_prompt_precedes_material_prompt(self, monkeypatch, capsys):
         _feed(
             monkeypatch,
-            ["drilling", "metric", "", "Metal", "Mild Steel", "Carbide", "10", "25", "", "n"],
+            [
+                "drilling",
+                "metric",
+                "standard",
+                "Metal",
+                "Mild Steel",
+                "Carbide",
+                "10",
+                "25",
+                "",
+                "n",
+            ],
         )
 
         run()
@@ -53,7 +64,8 @@ class TestTypeThenMaterialFlow:
 
     def test_material_prompt_lists_only_the_chosen_category(self, monkeypatch, capsys):
         _feed(
-            monkeypatch, ["drilling", "metric", "", "Wood", "Oak", "Carbide", "10", "25", "", "n"]
+            monkeypatch,
+            ["drilling", "metric", "standard", "Wood", "Oak", "Carbide", "10", "25", "", "n"],
         )
 
         run()
@@ -65,7 +77,7 @@ class TestTypeThenMaterialFlow:
     def test_selecting_metal_excludes_wood_materials(self, monkeypatch, capsys):
         _feed(
             monkeypatch,
-            ["drilling", "metric", "", "Metal", "Titanium", "Carbide", "10", "25", "", "n"],
+            ["drilling", "metric", "standard", "Metal", "Titanium", "Carbide", "10", "25", "", "n"],
         )
 
         run()
@@ -79,7 +91,19 @@ class TestTypeThenMaterialFlow:
 
         _feed(
             monkeypatch,
-            ["drilling", "metric", "", "Wood", "Mild Steel", "Oak", "Carbide", "10", "25", "", "n"],
+            [
+                "drilling",
+                "metric",
+                "standard",
+                "Wood",
+                "Mild Steel",
+                "Oak",
+                "Carbide",
+                "10",
+                "25",
+                "",
+                "n",
+            ],
         )
 
         run()
@@ -94,7 +118,7 @@ class TestTypeThenMaterialFlow:
             [
                 "drilling",
                 "metric",
-                "",
+                "standard",
                 "Ceramic",
                 "Metal",
                 "Mild Steel",
@@ -122,7 +146,7 @@ class TestCategorySwitchingOnLoopRerun:
             [
                 "drilling",  # machining operation (009 FR-001)
                 "metric",
-                "",
+                "standard",
                 "Metal",
                 "Mild Steel",
                 "HSS",
@@ -134,7 +158,7 @@ class TestCategorySwitchingOnLoopRerun:
                 # "Mild Steel"; only the tool changes.
                 "drilling",  # machining operation (009 FR-001)
                 "metric",
-                "",
+                "standard",
                 "",
                 "",
                 "Carbide",
@@ -164,7 +188,7 @@ class TestCategorySwitchingOnLoopRerun:
             [
                 "drilling",  # machining operation (009 FR-001)
                 "metric",
-                "",
+                "standard",
                 "Metal",
                 "Mild Steel",
                 "Carbide",
@@ -174,7 +198,7 @@ class TestCategorySwitchingOnLoopRerun:
                 "y",
                 "drilling",  # machining operation (009 FR-001)
                 "metric",
-                "",
+                "standard",
                 "Wood",
                 "",  # blank must NOT resolve to the remembered "Mild Steel"
                 "Oak",  # an explicit in-category choice is required
@@ -212,7 +236,18 @@ specific_cutting_force = 1400.0
         )
         _feed(
             monkeypatch,
-            ["drilling", "metric", "", "Cement", "Portland Cement", "Carbide", "10", "25", "", "n"],
+            [
+                "drilling",
+                "metric",
+                "standard",
+                "Cement",
+                "Portland Cement",
+                "Carbide",
+                "10",
+                "25",
+                "",
+                "n",
+            ],
         )
 
         run(materials_config_path=config_path)
@@ -237,7 +272,18 @@ specific_cutting_force = 900.0
         )
         _feed(
             monkeypatch,
-            ["drilling", "metric", "", "Composite Fibre", "CFRP", "Carbide", "10", "25", "", "n"],
+            [
+                "drilling",
+                "metric",
+                "standard",
+                "Composite Fibre",
+                "CFRP",
+                "Carbide",
+                "10",
+                "25",
+                "",
+                "n",
+            ],
         )
 
         run(materials_config_path=config_path)
@@ -261,7 +307,18 @@ specific_cutting_force = 750.0
         )
         _feed(
             monkeypatch,
-            ["drilling", "metric", "", "Uncategorized", "Bronze", "Carbide", "10", "25", "", "n"],
+            [
+                "drilling",
+                "metric",
+                "standard",
+                "Uncategorized",
+                "Bronze",
+                "Carbide",
+                "10",
+                "25",
+                "",
+                "n",
+            ],
         )
 
         run(materials_config_path=config_path)
@@ -284,7 +341,18 @@ class TestCategoryLabelLocalization:
         i18n.clear_catalog_cache()
         _feed(
             monkeypatch,
-            ["drilling", "metric", "", "Metal", "Mild Steel", "Carbide", "10", "25", "", "n"],
+            [
+                "drilling",
+                "metric",
+                "standard",
+                "Metal",
+                "Mild Steel",
+                "Carbide",
+                "10",
+                "25",
+                "",
+                "n",
+            ],
         )
 
         run()
@@ -319,7 +387,18 @@ specific_cutting_force = 750.0
         config_path = _write_config(tmp_path, self.CONFIG)
         _feed(
             monkeypatch,
-            ["drilling", "metric", "", "Metal (metal)", "Aluminum", "Carbide", "10", "25", "", "n"],
+            [
+                "drilling",
+                "metric",
+                "standard",
+                "Metal (metal)",
+                "Aluminum",
+                "Carbide",
+                "10",
+                "25",
+                "",
+                "n",
+            ],
         )
 
         run(materials_config_path=config_path)
@@ -333,7 +412,18 @@ specific_cutting_force = 750.0
         config_path = _write_config(tmp_path, self.CONFIG)
         _feed(
             monkeypatch,
-            ["drilling", "metric", "", "Metal (metal)", "Aluminum", "Carbide", "10", "25", "", "n"],
+            [
+                "drilling",
+                "metric",
+                "standard",
+                "Metal (metal)",
+                "Aluminum",
+                "Carbide",
+                "10",
+                "25",
+                "",
+                "n",
+            ],
         )
 
         run(materials_config_path=config_path)
@@ -349,7 +439,18 @@ specific_cutting_force = 750.0
         config_path = _write_config(tmp_path, self.CONFIG)
         _feed(
             monkeypatch,
-            ["drilling", "metric", "", "Metal (Metal)", "Bronze", "Carbide", "10", "25", "", "n"],
+            [
+                "drilling",
+                "metric",
+                "standard",
+                "Metal (Metal)",
+                "Bronze",
+                "Carbide",
+                "10",
+                "25",
+                "",
+                "n",
+            ],
         )
 
         run(materials_config_path=config_path)
@@ -361,7 +462,18 @@ specific_cutting_force = 750.0
     def test_labels_are_not_suffixed_when_there_is_no_collision(self, monkeypatch, capsys):
         _feed(
             monkeypatch,
-            ["drilling", "metric", "", "Metal", "Mild Steel", "Carbide", "10", "25", "", "n"],
+            [
+                "drilling",
+                "metric",
+                "standard",
+                "Metal",
+                "Mild Steel",
+                "Carbide",
+                "10",
+                "25",
+                "",
+                "n",
+            ],
         )
 
         run()
@@ -398,7 +510,18 @@ specific_cutting_force = 400.0
         )
         _feed(
             monkeypatch,
-            ["drilling", "metric", "", "Metal (Metal)", "Bronze", "Carbide", "10", "25", "", "n"],
+            [
+                "drilling",
+                "metric",
+                "standard",
+                "Metal (Metal)",
+                "Bronze",
+                "Carbide",
+                "10",
+                "25",
+                "",
+                "n",
+            ],
         )
 
         run(materials_config_path=config_path)
@@ -431,7 +554,18 @@ specific_cutting_force = 750.0
         )
         _feed(
             monkeypatch,
-            ["drilling", "metric", "", "Metal (-metal)", "Bronze", "Carbide", "10", "25", "", "n"],
+            [
+                "drilling",
+                "metric",
+                "standard",
+                "Metal (-metal)",
+                "Bronze",
+                "Carbide",
+                "10",
+                "25",
+                "",
+                "n",
+            ],
         )
 
         run(materials_config_path=config_path)
@@ -459,7 +593,8 @@ specific_cutting_force = 750.0
 """,
         )
         _feed(
-            monkeypatch, ["drilling", "metric", "", "-", "Bronze", "Carbide", "10", "25", "", "n"]
+            monkeypatch,
+            ["drilling", "metric", "standard", "-", "Bronze", "Carbide", "10", "25", "", "n"],
         )
 
         run(materials_config_path=config_path)
@@ -502,7 +637,7 @@ specific_cutting_force = 750.0
         )
         _feed(
             monkeypatch,
-            ["drilling", "metric", "", "Metal", "Bronze", "Carbide", "10", "25", "", "n"],
+            ["drilling", "metric", "standard", "Metal", "Bronze", "Carbide", "10", "25", "", "n"],
         )
 
         run(materials_config_path=config_path)
@@ -540,7 +675,18 @@ specific_cutting_force = 750.0
         )
         _feed(
             monkeypatch,
-            ["drilling", "metric", "", "{{Alloy}}", "Bronze", "Carbide", "10", "25", "", "n"],
+            [
+                "drilling",
+                "metric",
+                "standard",
+                "{{Alloy}}",
+                "Bronze",
+                "Carbide",
+                "10",
+                "25",
+                "",
+                "n",
+            ],
         )
 
         run(materials_config_path=config_path)
@@ -571,7 +717,7 @@ specific_cutting_force = 750.0
         )
         _feed(
             monkeypatch,
-            ["drilling", "metric", "", "Al{O}Y", "Bronze", "Carbide", "10", "25", "", "n"],
+            ["drilling", "metric", "standard", "Al{O}Y", "Bronze", "Carbide", "10", "25", "", "n"],
         )
 
         run(materials_config_path=config_path)
@@ -601,7 +747,7 @@ specific_cutting_force = 750.0
         )
         _feed(
             monkeypatch,
-            ["drilling", "metric", "", "Al{O}Y", "Bronze", "Carbide", "10", "25", "", "n"],
+            ["drilling", "metric", "standard", "Al{O}Y", "Bronze", "Carbide", "10", "25", "", "n"],
         )
 
         with caplog.at_level(logging.WARNING, logger="machine_calc.i18n"):

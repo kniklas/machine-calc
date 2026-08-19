@@ -1,15 +1,16 @@
 """SC-001 prompt-budget test for the milling REPL flow (T023a, T028).
 
 SC-001 caps a complete end-milling run at **14** prompts for the standard
-mode, of which at most **12** require the user to type a value.
+mode, of which at most **12** required a typed value pre-this-feature.
 ``specs/010-milling-calculation-modes/quickstart.md`` "Per-mode
 prompt-count budget" extends this per-mode (research.md #5): standard mode
-is unchanged (14 prompts / 12 typed); power-constrained mode is 14 prompts
-/ 14 typed (the mode prompt adds one, and the now-required available-power
-prompt converts from optional to typed); fixed-RPM mode is 15 prompts / 14
-typed (the mode prompt and the required target-RPM prompt add two, offset
-by the optional advisory available-power prompt remaining a single-Enter
-default).
+is 14 prompts / 13 typed (the new mode prompt is itself non-dismissible
+per FR-001a, so only the optional power prompt remains dismissible);
+power-constrained mode is 14 prompts / 14 typed (the mode prompt adds one,
+and the now-required available-power prompt converts from optional to
+typed); fixed-RPM mode is 15 prompts / 14 typed (the mode prompt and the
+required target-RPM prompt add two, offset by the optional advisory
+available-power prompt remaining a single-Enter default).
 
 The exact-count assertions below are a deliberate tripwire: a change that
 legitimately adds a prompt must update this test **and** re-check the
@@ -25,13 +26,13 @@ from machine_calc.cli import run
 
 #: SC-001's ceiling for the standard mode (unchanged, SC-004).
 SC001_MAX_PROMPTS = 14
-SC001_MAX_TYPED_VALUES = 12
+SC001_MAX_TYPED_VALUES = 13
 
 _END_MILLING_STANDARD_ANSWERS = [
     "milling",
     "end milling",
     "metric",
-    "",  # calculation mode -- dismissible with a bare Enter (default: standard)
+    "standard",  # calculation mode -- no blank/default option (FR-001a)
     "Metal",
     "Mild Steel",
     "Carbide",
@@ -83,7 +84,7 @@ _FACE_MILLING_STANDARD_ANSWERS = [
     "milling",
     "face milling",
     "metric",
-    "",
+    "standard",  # calculation mode -- no blank/default option (FR-001a)
     "Metal",
     "Mild Steel",
     "Carbide",
@@ -98,7 +99,7 @@ _FACE_MILLING_STANDARD_ANSWERS = [
 
 #: (mode label, answers, expected total prompts, expected typed-value prompts).
 _MODE_CASES = [
-    pytest.param("standard", _END_MILLING_STANDARD_ANSWERS, 14, 12, id="standard"),
+    pytest.param("standard", _END_MILLING_STANDARD_ANSWERS, 14, 13, id="standard"),
     pytest.param(
         "power-constrained", _END_MILLING_POWER_CONSTRAINED_ANSWERS, 14, 14, id="power-constrained"
     ),
@@ -146,9 +147,10 @@ def test_standard_mode_stays_within_the_sc001_ceiling(monkeypatch, capsys):
     assert len(typed) <= SC001_MAX_TYPED_VALUES
 
 
-def test_the_dismissible_prompts_in_standard_mode_are_the_optional_ones(monkeypatch, capsys):
-    """The two non-typed prompts in standard mode must be the *optional*
-    calculation-mode and available-power inputs, not required ones."""
+def test_the_dismissible_prompt_in_standard_mode_is_the_optional_power(monkeypatch, capsys):
+    """The one non-typed prompt in standard mode must be the *optional*
+    available-power input; the calculation-mode prompt is never
+    dismissible (FR-001a)."""
 
     prompts = _run_and_count(monkeypatch, _END_MILLING_STANDARD_ANSWERS)
     capsys.readouterr()
@@ -157,9 +159,8 @@ def test_the_dismissible_prompts_in_standard_mode_are_the_optional_ones(monkeypa
         prompt for prompt, answer in zip(prompts, _END_MILLING_STANDARD_ANSWERS) if answer == ""
     ]
 
-    assert len(dismissed) == 2
-    assert any("Calculation mode" in p for p in dismissed)
-    assert any("Available power" in p for p in dismissed)
+    assert len(dismissed) == 1
+    assert "Available power" in dismissed[0]
 
 
 def test_power_constrained_mode_has_no_dismissible_prompt(monkeypatch, capsys):

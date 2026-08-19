@@ -23,6 +23,7 @@ already-shipped drilling flow (see
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import TypeVar
 
@@ -114,7 +115,7 @@ def _to_tool(
             ),
         ) from exc
 
-    if cutting_speed_factor <= 0:
+    if not math.isfinite(cutting_speed_factor) or cutting_speed_factor <= 0:
         raise RegistryConfigError(
             "error.materials_config.invalid_entry",
             path=source_path,

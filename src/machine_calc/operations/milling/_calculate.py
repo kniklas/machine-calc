@@ -173,9 +173,21 @@ def _resolve_material_and_tool(
 
 
 def _to_metric(value: float, unit_system: UnitSystem) -> float:
-    """Convert a length input to canonical mm when the caller used imperial."""
+    """Convert a length input to canonical mm when the caller used imperial.
 
-    return in_to_mm(value) if unit_system is UnitSystem.IMPERIAL else value
+    Non-numeric, ``None``, and ``bool`` values are passed through
+    unconverted rather than fed to :func:`~machine_calc.units.in_to_mm`,
+    which would either raise (``None``/strings) or silently coerce
+    (``True``/``False``). Leaving them unconverted lets the downstream
+    ``_is_positive_finite_number``-based validators reject them with the
+    documented structured error instead (FR-012).
+    """
+
+    if unit_system is not UnitSystem.IMPERIAL:
+        return value
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return value
+    return in_to_mm(value)
 
 
 def _validate_geometry(

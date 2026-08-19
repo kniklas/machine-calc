@@ -16,7 +16,7 @@ from machine_calc.cli import run
 _REPL_INPUTS = [
     "drilling",  # machining operation (009 FR-001)
     "metric",  # unit system
-    "",  # calculation mode (default: standard)
+    "standard",  # calculation mode -- no blank/default option (FR-001a)
     "Metal",  # material type
     "Mild Steel",  # material
     "Carbide",  # tool

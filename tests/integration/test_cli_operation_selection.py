@@ -14,7 +14,7 @@ from machine_calc.cli import run
 
 _DRILLING_ANSWERS = [
     "metric",
-    "",  # calculation mode (default: standard)
+    "standard",  # calculation mode -- no blank/default option (FR-001a)
     "Metal",
     "Mild Steel",
     "Carbide",

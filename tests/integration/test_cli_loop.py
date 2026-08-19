@@ -12,7 +12,7 @@ def test_loop_allows_changing_tool_and_recalculating(monkeypatch, capsys):
         [
             "drilling",  # machining operation (009 FR-001)
             "metric",
-            "",  # calculation mode (default: standard)
+            "standard",  # calculation mode -- no blank/default option (FR-001a)
             "Metal",  # material type
             "Mild Steel",
             "HSS",
@@ -22,7 +22,7 @@ def test_loop_allows_changing_tool_and_recalculating(monkeypatch, capsys):
             "y",  # run another calculation
             "drilling",  # machining operation (009 FR-001)
             "metric",  # unit system unchanged (default reused)
-            "",  # calculation mode unchanged (default reused)
+            "standard",  # calculation mode -- no blank/default option (FR-001a)
             "",  # material type unchanged (reuse previous default)
             "",  # material unchanged (reuse previous default)
             "Carbide",  # switch drilling tool

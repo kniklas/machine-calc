@@ -89,10 +89,10 @@ Right after choosing the unit system, the REPL asks for a calculation mode::
     stays optional/advisory here too, so an insufficient machine still
     produces a result, with a warning.
 
-Answering ``n`` at the "run another calculation?" prompt and then ``y``
-returns to the operation prompt, where you can pick a different mode; any
-previous mode's power/RPM answer is cleared rather than carried over as a
-stale default.
+Answering ``y`` at the "run another calculation?" prompt returns to the
+operation prompt, where you can pick a different mode; any previous
+mode's power/RPM answer is cleared rather than carried over as a stale
+default.
 
 Reading the results
 -------------------

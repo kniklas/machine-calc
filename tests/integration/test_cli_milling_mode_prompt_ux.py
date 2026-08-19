@@ -21,7 +21,7 @@ def test_invalid_mode_choice_is_reprompted(monkeypatch, capsys):
             "end milling",
             "metric",
             "bogus-mode",  # invalid -> reprompt
-            "",  # blank -> accepts default (standard)
+            "standard",  # explicit mode; blank has no default to accept (FR-001a)
             "Metal",
             "Mild Steel",
             "Carbide",
@@ -42,6 +42,38 @@ def test_invalid_mode_choice_is_reprompted(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "Please choose one of" in out
     assert "recommended" in out
+
+
+def test_blank_mode_choice_is_reprompted(monkeypatch, capsys):
+    """A blank entry at the mode prompt MUST re-prompt, never silently
+    accept a default (spec.md Clarifications 2026-08-19; FR-001a)."""
+
+    inputs = iter(
+        [
+            "milling",
+            "end milling",
+            "metric",
+            "",  # blank -> must reprompt, not silently accept a default
+            "standard",
+            "Metal",
+            "Mild Steel",
+            "Carbide",
+            "10",
+            "2",
+            "5",
+            "0.05",
+            "4",
+            "100",
+            "",
+            "n",
+        ]
+    )
+    monkeypatch.setattr(builtins, "input", lambda _prompt="": next(inputs))
+
+    run()
+
+    out = capsys.readouterr().out
+    assert "Please choose one of" in out
 
 
 def test_blank_required_available_power_is_reprompted_not_a_mode_conflict(monkeypatch, capsys):

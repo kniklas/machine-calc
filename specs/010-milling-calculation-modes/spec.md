@@ -50,9 +50,11 @@ a time.
 **Independent Test**: Can be fully tested by selecting power-constrained
 mode for end-milling or face-milling, supplying an available power below
 the material/tool/geometry combination's normally-required power, and
-verifying the returned spindle speed, feed rate, torque, and required
-power are all reduced consistently so the required power no longer
-exceeds the supplied budget.
+verifying the returned spindle speed and feed rate are reduced
+consistently (with recomputed required power equal to the supplied
+budget, and torque unchanged — cutting torque does not depend on spindle
+speed, research.md #1) so the required power no longer exceeds the
+supplied budget.
 
 **Acceptance Scenarios**:
 

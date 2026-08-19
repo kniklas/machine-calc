@@ -10,8 +10,6 @@ dynamic = ["version"]
 description = "Metal machining calculation library and interactive CLI, covering drilling and milling operations."
 readme = "README.md"
 requires-python = ">=3.9"
-license = "LicenseRef-PolyForm-Noncommercial-1.0.0"
-license-files = ["LICENSE.md"]
 authors = [{ name = "kniklas" }]
 keywords = ["machining", "drilling", "milling", "cnc", "manufacturing", "calculator"]
 classifiers = [

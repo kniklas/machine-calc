@@ -9,7 +9,7 @@ import builtins
 
 from machine_calc.cli import run
 
-_DRILLING = ["metric", "", "Metal", "Mild Steel", "Carbide", "10", "25", ""]
+_DRILLING = ["metric", "standard", "Metal", "Mild Steel", "Carbide", "10", "25", ""]
 _END_MILLING = [
     "end milling",
     "metric",
@@ -129,7 +129,9 @@ def test_reselecting_the_same_flow_retains_previous_answers_as_defaults(monkeypa
             "y",
             "milling",
             "end milling",
-            *([""] * 11),  # unit system through length of cut, all defaulted
+            "",  # unit system defaulted
+            "standard",  # calculation mode -- no blank/default option (FR-001a)
+            *([""] * 9),  # material type through length of cut, all defaulted
             "",  # available power
             "n",
         ],
