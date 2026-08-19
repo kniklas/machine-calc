@@ -150,3 +150,59 @@ def test_power_constrained_tiny_budget_yields_tiny_positive_rpm():
 
     assert result.spindle_speed_rpm > 0
     assert math.isclose(result.power_kw, tiny_budget_kw, rel_tol=1e-9)
+
+
+def test_power_constrained_subnormal_budget_signals_infeasible_not_crash():
+    """A positive-subnormal available_power_kw can make n_adjusted
+    underflow to (near) zero — or otherwise leave a downstream division
+    (e.g. length_of_cut_mm / feed_rate_mm_min) overflowing to inf even
+    though n_adjusted itself stayed finite/positive. Either way this must
+    surface as a non-finite spindle_speed_rpm sentinel — not a
+    ZeroDivisionError crash, nor a result mixing finite and inf/nan
+    fields — so the caller's feasibility check can convert it to
+    INFEASIBLE_POWER_BUDGET."""
+    material = _material()
+    cutting_speed_factor = _cutting_speed_factor()
+
+    result = calculate_power_constrained_milling_metrics(
+        **_GEOMETRY,
+        material=material,
+        cutting_speed_factor=cutting_speed_factor,
+        available_power_kw=5e-324,
+    )
+
+    assert not math.isfinite(result.spindle_speed_rpm)
+
+
+def test_power_constrained_exact_zero_n_adjusted_signals_infeasible_not_crash():
+    """When nominal.power_kw is large enough that
+    available_power_kw / nominal.power_kw underflows to exactly 0.0,
+    n_adjusted itself becomes 0.0 (not merely non-finite downstream) —
+    the earliest guard (before calling
+    calculate_milling_metrics_at_rpm(), which would otherwise divide by
+    this rpm and raise ZeroDivisionError) must catch this exact-zero
+    case."""
+    material = _material()
+    large_geometry = dict(
+        diameter_mm=200,
+        axial_depth_of_cut_mm=50,
+        radial_engagement_mm=180,
+        feed_per_tooth_mm=2,
+        number_of_teeth=20,
+        length_of_cut_mm=1000,
+    )
+    cutting_speed_factor = _cutting_speed_factor()
+
+    nominal = calculate_milling_metrics(
+        **large_geometry, material=material, cutting_speed_factor=cutting_speed_factor
+    )
+    assert nominal.power_kw > 1.0  # sanity: large enough to force the ratio to underflow
+
+    result = calculate_power_constrained_milling_metrics(
+        **large_geometry,
+        material=material,
+        cutting_speed_factor=cutting_speed_factor,
+        available_power_kw=5e-324,
+    )
+
+    assert not math.isfinite(result.spindle_speed_rpm)

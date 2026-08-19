@@ -83,6 +83,11 @@ MESSAGES: dict[str, str] = {
     "error.infeasible_power_budget": (
         "No spindle speed keeps the required power within the supplied " "available power budget."
     ),
+    "error.invalid_available_power": "Available power must be a positive, finite number.",
+    "error.calculation_overflow": (
+        "The supplied inputs produce a result too large to represent; reduce the feed per "
+        "tooth, target spindle speed, or other extreme input and try again."
+    ),
     "warning.feasibility": (
         "Required power ({required_kw:.2f} kW) exceeds the available "
         "power ({available_kw:.2f} kW)."

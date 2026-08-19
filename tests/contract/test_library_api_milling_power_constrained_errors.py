@@ -101,3 +101,20 @@ def test_face_milling_infeasible_error_does_not_raise():
         available_power=-100.0,
     )
     assert result.error.code == "INFEASIBLE_POWER_BUDGET"
+
+
+def test_end_milling_subnormal_available_power_is_infeasible_not_crash():
+    """A positive-subnormal available_power (e.g. 5e-324) can make the
+    adjusted spindle speed underflow, or leave a downstream division
+    overflowing to inf, before it ever reaches this function's own
+    positivity check — must still surface as a structured
+    INFEASIBLE_POWER_BUDGET result, never a ZeroDivisionError crash
+    (FR-015)."""
+    result = calculate_end_milling(
+        **_END_MILLING_ARGS,
+        mode=CalculationMode.POWER_CONSTRAINED,
+        available_power=5e-324,
+    )
+    assert result.error is not None
+    assert result.error.code == "INFEASIBLE_POWER_BUDGET"
+    assert result.spindle_speed_rpm is None

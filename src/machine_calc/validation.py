@@ -166,7 +166,12 @@ def validate_feed_per_tooth_mm(
     No upper bound is applied — feed per tooth is bounded in practice by
     the depth-of-cut and diameter limits it is multiplied against, and the
     spec defines configurable maxima only for diameter, depth/width and
-    length of cut (FR-018).
+    length of cut (FR-018). An extreme-but-otherwise-valid value that would
+    overflow a downstream calculation (e.g. ``feed_rate_mm_min = rpm *
+    feed_per_tooth_mm * number_of_teeth``) is instead rejected post-hoc as
+    ``CALCULATION_OVERFLOW`` by
+    ``operations.milling._calculate._reject_if_overflowed()``, rather than
+    being bounded here.
     """
 
     if not _is_positive_finite_number(feed_per_tooth_mm):
@@ -286,27 +291,68 @@ def validate_mode_arguments(
     2026-07-11 second checklist follow-up):
 
     - ``CalculationMode.STANDARD`` (the default) ignores any supplied
-      ``target_rpm``/``available_power`` — never a conflict.
+      ``target_rpm`` — never a conflict. A supplied ``available_power`` is
+      only used for an advisory feasibility warning, but is still
+      type/finiteness-checked (``INVALID_AVAILABLE_POWER``) so a
+      non-numeric or non-finite value can't reach a downstream conversion
+      or comparison and raise.
     - ``CalculationMode.POWER_CONSTRAINED`` requires ``available_power`` to
       be supplied, and rejects a request that also supplies ``target_rpm``
       (power-constrained mode derives spindle speed; it does not accept
-      one directly) — both cases are ``MODE_CONFLICT``.
+      one directly) — both cases are ``MODE_CONFLICT``. An invalid
+      (non-numeric, non-finite, zero, or negative) ``available_power`` is
+      ``INFEASIBLE_POWER_BUDGET`` since no spindle speed could ever meet
+      it.
     - ``CalculationMode.FIXED_RPM`` requires ``target_rpm`` to be supplied;
       a missing ``target_rpm`` in this mode is reported as
       ``INVALID_TARGET_RPM`` (FR-007) by the caller, not here.
       ``available_power`` remains optional/advisory in this mode (FR-008)
-      and is never a conflict.
+      and is never a conflict, but — like ``STANDARD`` — is still
+      type/finiteness-checked (``INVALID_AVAILABLE_POWER``).
     """
 
     if mode is CalculationMode.STANDARD:
-        return None
+        return _validate_advisory_available_power(available_power, locale)
 
     if mode is CalculationMode.POWER_CONSTRAINED:
         if target_rpm is not None:
             return ErrorInfo("MODE_CONFLICT", translate(locale, "error.mode_conflict"))
         if available_power is None:
             return ErrorInfo("MODE_CONFLICT", translate(locale, "error.mode_conflict"))
+        if not _is_positive_finite_number(available_power):
+            # A supplied-but-invalid budget (non-numeric, bool, non-finite,
+            # zero, or negative) is presence-wise satisfied but can never
+            # be met by any spindle speed, so it is reported as the same
+            # INFEASIBLE_POWER_BUDGET the downstream <= 0 checks in
+            # drilling's/milling's _compute_metrics() already use for a
+            # non-positive budget — rather than reaching hp_to_kw() or a
+            # numeric comparison downstream and raising TypeError, which
+            # would violate the public API's never-raises contract.
+            return ErrorInfo(
+                "INFEASIBLE_POWER_BUDGET", translate(locale, "error.infeasible_power_budget")
+            )
         return None
 
     # mode is CalculationMode.FIXED_RPM
-    return None
+    return _validate_advisory_available_power(available_power, locale)
+
+
+def _validate_advisory_available_power(
+    available_power: float | None, locale: str
+) -> ErrorInfo | None:
+    """Type/finiteness-check an ``available_power`` that is only used
+    advisory-side (STANDARD and FIXED_RPM modes' optional feasibility
+    warning, built in ``_build_result()``).
+
+    Unlike ``POWER_CONSTRAINED``'s hard budget, an invalid value here has
+    no ``INFEASIBLE_POWER_BUDGET`` interpretation — there is no spindle
+    speed being solved for — but left unchecked it would reach
+    ``hp_to_kw()`` (imperial) or a numeric comparison against
+    ``metrics.power_kw`` (metric) downstream and raise ``TypeError`` for a
+    non-numeric value, violating the "never raises" API contract
+    (FR-012/FR-015). ``None`` (not supplied) is always valid.
+    """
+
+    if available_power is None or _is_positive_finite_number(available_power):
+        return None
+    return ErrorInfo("INVALID_AVAILABLE_POWER", translate(locale, "error.invalid_available_power"))

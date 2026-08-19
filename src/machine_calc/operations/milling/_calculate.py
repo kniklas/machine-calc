@@ -326,9 +326,53 @@ def _compute_metrics(
         # returned earlier by _validate_mode_inputs when it is None for
         # this mode).
         assert target_rpm is not None
-        return compute_at_rpm(geometry_mm, resolved_material, resolved_tool, target_rpm)
+        rpm_metrics: MillingMetricsLike = compute_at_rpm(
+            geometry_mm, resolved_material, resolved_tool, target_rpm
+        )
+        return _reject_if_overflowed(rpm_metrics, unit_system, mode, locale)
 
-    return compute(geometry_mm, resolved_material, resolved_tool)
+    standard_metrics: MillingMetricsLike = compute(geometry_mm, resolved_material, resolved_tool)
+    return _reject_if_overflowed(standard_metrics, unit_system, mode, locale)
+
+
+def _reject_if_overflowed(
+    metrics: MillingMetricsLike,
+    unit_system: UnitSystem,
+    mode: CalculationMode,
+    locale: str,
+) -> MillingMetricsLike | CalculationResult:
+    """Guard against an extreme-but-individually-valid input (e.g. an
+    unbounded ``feed_per_tooth``/``target_rpm``, per FR-008/FR-018's
+    explicit no-upper-bound design) producing a non-finite downstream
+    result.
+
+    ``validate_feed_per_tooth_mm()``/``validate_target_rpm()`` deliberately
+    impose no upper bound, so a physically-absurd but "valid" input can
+    still make ``feed_rate_mm_min = spindle_speed_rpm * feed_per_tooth_mm *
+    number_of_teeth`` (or a value derived from it) overflow to ``inf``.
+    Rather than surface a result that mixes finite and ``inf``/``nan``
+    fields, report it as a structured error (FR-012/FR-015 never-raises
+    contract) — mirrors the ``POWER_CONSTRAINED`` branch's own
+    finiteness check above, generalized to the other two modes' metrics.
+    """
+
+    if all(
+        math.isfinite(value)
+        for value in (
+            metrics.spindle_speed_rpm,
+            metrics.feed_rate_mm_min,
+            metrics.material_removal_rate_cm3_min,
+            metrics.machining_time_min,
+            metrics.torque_nm,
+            metrics.power_kw,
+        )
+    ):
+        return metrics
+    return error_result(
+        unit_system,
+        ErrorInfo("CALCULATION_OVERFLOW", translate(locale, "error.calculation_overflow")),
+        mode,
+    )
 
 
 def _build_result(

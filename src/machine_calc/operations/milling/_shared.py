@@ -116,20 +116,26 @@ def calculate_milling_metrics_at_rpm(
     feed_rate_mm_min = spindle_speed_rpm * feed_per_tooth_mm * number_of_teeth
 
     # 4. Material removal rate: Q = (ap * ae * vf) / 1000
-    material_removal_rate_cm3_min = (
-        axial_depth_of_cut_mm * radial_engagement_mm * feed_rate_mm_min
-    ) / MM3_PER_CM3
+    # Divide the (generally modest) engagement product by MM3_PER_CM3
+    # before multiplying by the potentially very large vf (fixed-RPM mode
+    # has no upper target_rpm bound), so the intermediate stays
+    # representable even where ap * ae * vf itself would overflow to inf
+    # despite the final quotient being finite.
+    material_removal_rate_cm3_min = (axial_depth_of_cut_mm * radial_engagement_mm / MM3_PER_CM3) * (
+        feed_rate_mm_min
+    )
 
     # 5. Net cutting power: Pc = (ap * ae * vf * kc) / (60 * 10^6)
+    # Same overflow-avoidance ordering as material removal rate above:
+    # divide by the large POWER_SCALE constant before multiplying by vf.
     power_kw = (
-        axial_depth_of_cut_mm
-        * radial_engagement_mm
+        (axial_depth_of_cut_mm * radial_engagement_mm * material.specific_cutting_force_kc)
+        / POWER_SCALE
         * feed_rate_mm_min
-        * material.specific_cutting_force_kc
-    ) / POWER_SCALE
+    )
 
     # 6. Torque: Mc = (Pc * 9550) / n
-    torque_nm = (power_kw * TORQUE_POWER_CONSTANT) / spindle_speed_rpm
+    torque_nm = power_kw * (TORQUE_POWER_CONSTANT / spindle_speed_rpm)
 
     # 7. Machining time: tc = length_of_cut / vf
     machining_time_min = length_of_cut_mm / feed_rate_mm_min
@@ -262,7 +268,18 @@ def calculate_power_constrained_milling_metrics(
     # speed since torque does not depend on it (research.md #1).
     n_adjusted = nominal.spindle_speed_rpm * (available_power_kw / nominal.power_kw)
 
-    return calculate_milling_metrics_at_rpm(
+    if not math.isfinite(n_adjusted) or n_adjusted <= 0:
+        # An extreme (e.g. positive-subnormal) available_power_kw can make
+        # this ratio underflow to exactly zero, or a pathological nominal
+        # combination could drive it non-finite. Either way,
+        # calculate_milling_metrics_at_rpm() would divide by this rpm and
+        # raise ZeroDivisionError, so bail out before calling it — the
+        # infeasible sentinel below is what the caller
+        # (_calculate._compute_metrics()) already checks
+        # spindle_speed_rpm for.
+        return _infeasible_sentinel()
+
+    metrics = calculate_milling_metrics_at_rpm(
         diameter_mm=diameter_mm,
         axial_depth_of_cut_mm=axial_depth_of_cut_mm,
         radial_engagement_mm=radial_engagement_mm,
@@ -271,4 +288,45 @@ def calculate_power_constrained_milling_metrics(
         length_of_cut_mm=length_of_cut_mm,
         material=material,
         spindle_speed_rpm=n_adjusted,
+    )
+    if not all(
+        math.isfinite(value)
+        for value in (
+            metrics.feed_rate_mm_min,
+            metrics.material_removal_rate_cm3_min,
+            metrics.machining_time_min,
+            metrics.torque_nm,
+            metrics.power_kw,
+        )
+    ):
+        # n_adjusted itself was finite and positive, but a low enough
+        # available_power_kw can still drive it small enough that a
+        # *downstream* division (e.g. length_of_cut_mm / feed_rate_mm_min)
+        # overflows to inf even though n_adjusted did not. Report the same
+        # infeasible sentinel rather than a result with some finite and
+        # some inf/nan fields.
+        return _infeasible_sentinel()
+    return metrics
+
+
+def _infeasible_sentinel() -> MillingMetrics:
+    """Build a :class:`MillingMetrics` that signals an infeasible power budget.
+
+    Only ``spindle_speed_rpm`` is meaningful: it is deliberately ``nan``
+    (fails :func:`math.isfinite`) so the caller
+    (``_calculate._compute_metrics()``), which checks
+    ``spindle_speed_rpm`` for finiteness/positivity, always converts this
+    into a structured ``INFEASIBLE_POWER_BUDGET`` result — even when the
+    underlying failure was actually a *downstream* division overflowing
+    rather than the spindle speed itself being invalid. No other field is
+    ever read by that caller.
+    """
+
+    return MillingMetrics(
+        spindle_speed_rpm=float("nan"),
+        feed_rate_mm_min=float("nan"),
+        material_removal_rate_cm3_min=float("nan"),
+        machining_time_min=float("nan"),
+        torque_nm=float("nan"),
+        power_kw=float("nan"),
     )
