@@ -55,7 +55,7 @@ Initialize (mentally or in a scratch note) two counters for this session:
 
 Also track a boolean:
 - **copilot-review-invoked** — set true only after explicitly requesting
-  Copilot review via the `requested_reviewers` API call (§3 step 6) at
+  Copilot review via the `requested_reviewers` API call (§3 step 7) at
   least once in this session.
 
 At closure, derive from the time log:
@@ -120,20 +120,39 @@ non-suppressed Copilot review comments remain unresolved.
 2. Make the fix. Follow `.github/instructions/python.instructions.md` and
    the priorities in `.github/skills/code-review/SKILL.md` (calculation
    correctness > resource limits > tests > extensibility > style).
-3. Run the smallest targeted test/lint/build command locally that covers
+3. **Local pre-check before pushing** — apply the relevant checklist
+   yourself against the diff, catching mechanically-checkable issues
+   before spending a Copilot review round on them (each round costs
+   ~2-10 min, see §7's anti-pattern on blind sleeps):
+   - Changes under `src/`/`tests/`: re-read `.github/skills/code-review/
+     SKILL.md` §2a, §3, §6a, §6b, §7a against the diff — these sections
+     were written from patterns Copilot has repeatedly found in this
+     repo (silent zero/placeholder substitution on error, CI-gating
+     precedence bugs, resource-limit scoping, derived-key collisions,
+     spec-kit artifact drift).
+   - Changes under `.github/skills/**/*.md` (editing a skill itself, as
+     you may be doing right now): apply
+     `.github/skills/skill-authoring/SKILL.md` — grep the file for every
+     mention of any concept/flag/command you changed, and verify any
+     newly-asserted CLI/API behavior claim in a real shell before writing
+     it down as fact.
+   - This is not a substitute for the remote Copilot review (§5's exit
+     criteria still requires it) — it's a cheap filter to reduce how many
+     rounds you need.
+4. Run the smallest targeted test/lint/build command locally that covers
    the change before pushing (see repo CI job list below) — don't rely on
    CI alone for feedback loop speed.
-4. Commit with a message describing the specific review comment or CI
+5. Commit with a message describing the specific review comment or CI
    failure addressed (not a generic "fix review comments"). Increment the
    review-fix commit counter and append a line to the running summary.
-5. Push: `git push`. Capture the new head SHA (`git rev-parse HEAD`) — it
+6. Push: `git push`. Capture the new head SHA (`git rev-parse HEAD`) — it
    identifies which CI/review run belongs to this specific commit.
-6. Re-request Copilot review if it doesn't auto re-review on push:
+7. Re-request Copilot review if it doesn't auto re-review on push:
    `gh api repos/:owner/:repo/pulls/:number/requested_reviewers -X POST
    -f "reviewers[]=copilot-pull-request-reviewer[bot]"` (a PR comment
    saying `@copilot review` is not reliable — use the API call). Set
    `copilot-review-invoked=true` when this is done.
-7. **Poll for completion — don't blind-sleep a fixed 4-5 minutes.** The
+8. **Poll for completion — don't blind-sleep a fixed 4-5 minutes.** The
    Copilot review surfaces as a pollable GitHub Actions run for the
    pushed commit; required CI jobs are best read via `gh pr checks`
    directly (see below for why). Poll both adaptively instead of
@@ -173,7 +192,7 @@ non-suppressed Copilot review comments remain unresolved.
      being `in_progress`), don't keep waiting out the full 12-minute cap
      assuming it's merely queued — this can mean automatic re-review
      didn't trigger for this push. Immediately issue the
-     `requested_reviewers` call from step 6 (if not already done for this
+     `requested_reviewers` call from step 7 (if not already done for this
      SHA) and keep polling for the newest run it creates.
    - Otherwise keep polling every 20-30s.
    - After ~2.5-3 minutes total (roughly 70-80% of the historical average
@@ -198,7 +217,7 @@ non-suppressed Copilot review comments remain unresolved.
    Copilot Code Review`, so it does appear in `gh run list`. If a future
    GitHub change stops surfacing it there, fall back to `gh api
    repos/:owner/:repo/commits/<sha>/check-runs` instead.)
-8. Re-fetch review threads (§2) to see what's newly resolved/added.
+9. Re-fetch review threads (§2) to see what's newly resolved/added.
 
 ## 4. 10-commit checkpoint
 
