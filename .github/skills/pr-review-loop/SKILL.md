@@ -295,8 +295,11 @@ rm /tmp/pr-aic-summary.md
   driving those waits, so they belong in agent working time, not human
   waiting time.
 - Forgetting to close out a recorded waiting interval (no matching
-  `wait-end`) before computing closure totals, which silently inflates
-  "waiting on human" or drops time from the total entirely.
+  `wait-end`) before computing closure totals. Total wall time is fixed by
+  the loop-start/loop-end timestamps regardless, but an unclosed interval
+  can't be counted toward human-waiting time, so its duration is silently
+  misattributed to agent working time instead (understating the former,
+  overstating the latter).
 - Capturing the loop-start timestamp after the ambiguity confirmation in
   §1, or finalizing total wall time right after closure approval instead
   of after merge/close and cleanup actually finish — both under-measure
