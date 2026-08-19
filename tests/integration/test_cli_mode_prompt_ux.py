@@ -18,6 +18,7 @@ def test_invalid_mode_choice_is_reprompted(monkeypatch, capsys):
             "metric",
             "bogus-mode",  # invalid -> reprompt
             "",  # blank -> accepts default (standard)
+            "Metal",  # material type
             "Mild Steel",
             "Carbide",
             "10",
@@ -40,6 +41,7 @@ def test_switching_mode_on_loop_rerun_clears_previous_mode_values(monkeypatch, c
         [
             "metric",
             "power-constrained",  # first iteration: power-constrained
+            "Metal",  # material type
             "Mild Steel",
             "Carbide",
             "10",
@@ -48,6 +50,7 @@ def test_switching_mode_on_loop_rerun_clears_previous_mode_values(monkeypatch, c
             "y",  # run another calculation
             "metric",
             "fixed-rpm",  # switch mode -> must clear available_power default
+            "",  # material type unchanged
             "",  # material unchanged
             "",  # tool unchanged
             "",  # diameter unchanged

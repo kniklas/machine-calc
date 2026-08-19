@@ -28,6 +28,15 @@ MESSAGES: dict[str, str] = {
     "cli.label.power": "Available power",
     "cli.label.material": "Material",
     "cli.label.tool": "Drilling tool",
+    # --- Material-type (category) selection, specs/008-material-categorization ---
+    # `material_type.<id>` supplies a human-readable, translatable label for a
+    # category id. Unknown ids intentionally have no entry: cli.py falls back to
+    # a title-cased form of the raw id so a category added by data alone still
+    # displays sensibly with no code or catalog change (008 FR-004).
+    "cli.label.material_type": "Material type",
+    "material_type.metal": "Metal",
+    "material_type.wood": "Wood",
+    "material_type.uncategorized": "Uncategorized",
     "cli.prompt.run_again": "Run another calculation? [y/N]: ",
     "cli.result.error": "\nError: {message}\n",
     "cli.result.spindle_speed": "Spindle speed:     {value} RPM",

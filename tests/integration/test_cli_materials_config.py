@@ -27,6 +27,7 @@ def _feed_inputs(monkeypatch, inputs):
 _BASE_REPL_INPUTS = [
     "metric",  # unit system
     "",  # calculation mode (default: standard)
+    "Metal",  # material type
     "Mild Steel",  # material
     "Carbide",  # tool
     "10",  # diameter
@@ -113,6 +114,7 @@ def test_valid_override_file_lists_new_material(monkeypatch, capsys, tmp_path):
     inputs = [
         "metric",
         "",
+        "Uncategorized",  # material type
         "Bronze",  # new material appears in the prompt options
         "Carbide",
         "10",
@@ -130,6 +132,7 @@ def test_engineered_materials_can_be_selected(monkeypatch, capsys):
     inputs = [
         "metric",
         "",
+        "Wood",  # material type
         "Plywood",
         "Carbide",
         "10",
@@ -189,6 +192,7 @@ def test_translated_name_shown_for_active_locale(monkeypatch, capsys, tmp_path):
         [
             "metric",
             "",
+            "Metal",  # material type
             "Acier doux",  # translated label must be selectable
             "Carbide",
             "10",

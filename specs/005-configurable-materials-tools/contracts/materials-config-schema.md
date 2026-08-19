@@ -45,6 +45,7 @@ fr = "..."
 | `reference_feed_per_rev` | Yes | float > 0 | mm/rev if metric/omitted; in/rev if imperial | Converted to canonical mm/rev internally |
 | `specific_cutting_force` | Yes | float > 0 | N/mm² (≡ MPa) if metric/omitted; psi if imperial | Converted to canonical N/mm² internally |
 | `unit_system` | No | `"metric"` \| `"imperial"` | — | Default `"metric"` when omitted (FR-011) |
+| `material_type` | No | non-empty single-line string | — | Free-form type identifier used to group materials in the two-step selection prompt (008 FR-001, FR-004). Default `"uncategorized"` when omitted. **Sticky on override** — see rule 7 |
 | `translations` (sub-table) | No | table of `locale -> string` | — | Locale codes are free-form strings (e.g. `"fr"`, `"de"`); merged per-locale on override (FR-015) |
 
 ## `[[tools]]` entry fields
@@ -79,12 +80,29 @@ fr = "..."
    is **not** an error: it yields the bundled defaults unchanged plus a
    `notice_key` (`notice.materials_config.not_found`) for the caller to
    surface (FR-005).
+7. `material_type`, if present, MUST be a non-empty, single-line string
+   containing no C0/C1 control character and no Unicode line or paragraph
+   separator. Interior spacing is fine — including printable non-ASCII
+   spacing such as a non-breaking space — but tabs, newlines (reachable via
+   TOML multiline strings) and terminal controls such as `U+009B` are not. A type id is
+   offered verbatim as a prompt option, and `input()` only ever returns a
+   single line, so an id spanning lines could never be selected. Any other
+   value (empty string, non-string, control characters) is **not** fatal:
+   a validation issue is
+   recorded and the entry falls back to `"uncategorized"`, matching the
+   warn-and-continue policy used for invalid material numerics. Unlike other
+   fields, `material_type` is **sticky** across a merge: when a user entry
+   overrides a bundled entry without restating `material_type`, the bundled
+   value is carried over. This keeps pre-existing user config files (authored
+   before material types existed) from silently decategorizing built-in
+   materials.
 
 ## Example: bundled `materials.toml` (excerpt, lossless re-encoding of today's `_MATERIALS`)
 
 ```toml
 [[materials]]
 name = "Mild Steel"
+material_type = "metal"
 reference_cutting_speed = 25.0
 reference_feed_per_rev = 0.20
 specific_cutting_force = 1900.0
@@ -92,6 +110,7 @@ unit_system = "metric"
 
 [[materials]]
 name = "Stainless Steel"
+material_type = "metal"
 reference_cutting_speed = 15.0
 reference_feed_per_rev = 0.15
 specific_cutting_force = 2400.0

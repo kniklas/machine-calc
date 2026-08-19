@@ -15,6 +15,7 @@ def test_power_constrained_mode_prompts_for_power_and_labels_result(monkeypatch,
         [
             "metric",  # unit system
             "power-constrained",  # calculation mode
+            "Metal",  # material type
             "Mild Steel",
             "Carbide",
             "10",
@@ -37,6 +38,7 @@ def test_power_constrained_infeasible_budget_shows_error(monkeypatch, capsys):
         [
             "metric",
             "power-constrained",
+            "Metal",  # material type
             "Mild Steel",
             "Carbide",
             "10",

@@ -14,27 +14,26 @@ fixed for the entire REPL loop — it is never re-read mid-session.
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 
-from machine_calc import CalculationMode, UnitSystem, calculate, list_materials, list_tools
+from machine_calc import (
+    CalculationMode,
+    UnitSystem,
+    calculate,
+    list_material_types,
+    list_materials,
+    list_tools,
+)
 from machine_calc.config import Configuration
-from machine_calc.i18n import get_locale, get_raw_locale, translate
+from machine_calc.i18n import get_locale, get_raw_locale, has_message, translate
 from machine_calc.logging_setup import configure_logging
 from machine_calc.operations.drilling.tools import DrillingTool, get_tool
-from machine_calc.registry import WorkpieceMaterial, get_material
-from machine_calc.registry_config import RegistryConfigError, load_and_merge
+from machine_calc.registry import WorkpieceMaterial, get_material, materials_load_notice
+from machine_calc.registry_config import RegistryConfigError
 from machine_calc.units import in_to_mm
 from machine_calc.validation import validate_depth_mm, validate_diameter_mm
 
 _DEFAULT_CONFIG = Configuration()
-
-# Bundled package/resource identifiers, reused (not duplicated) here purely
-# to detect a "missing/unreadable materials-config path" startup notice
-# ahead of the REPL loop (contracts/library-cli-extensions.md "Startup
-# sequence"); the actual parse/merge/validate logic lives in
-# ``registry.py``/``operations/drilling/tools.py``/``registry_config.py``.
-_MATERIALS_BUNDLED_PACKAGE = "machine_calc.data"
-_MATERIALS_BUNDLED_RESOURCE = "materials.toml"
-_MATERIALS_TABLE_KEY = "materials"
 
 UNIT_LABELS = {
     UnitSystem.METRIC: {
@@ -115,6 +114,84 @@ def _display_label(
     return translate(
         message_locale, "cli.label.unit_system_suffix", name=name, unit_system=entry.unit_system
     )
+
+
+def _material_type_label(material_type: str, locale: str) -> str:
+    """Return a human-readable label for a ``material_type`` id (008 FR-001).
+
+    Prefers the ``material_type.<id>`` message-catalog entry (Constitution
+    Principle VIII). Categories introduced by data alone have no catalog
+    entry, which :func:`~machine_calc.i18n.has_message` reports directly, so
+    those fall back to a title-cased form of the raw id. This keeps "add a
+    new category without a code change" (008 FR-004) true for the prompt
+    labels too, while still letting a bundled category be translated.
+    """
+
+    key = f"material_type.{material_type}"
+    # Deliberately *not* `translate(...) != key`: type ids are user data, so
+    # the key is dynamic, and `translate` formats its fallback template — the
+    # key itself — which both collapses doubled braces (`{{alloy}}`) into a
+    # false catalog hit and logs a spurious warning when stray braces make
+    # that formatting raise (`al{o}y`). `has_message` answers the question
+    # directly, before any formatting happens.
+    if has_message(locale, key):
+        return translate(locale, key)
+    # `_prompt_choice` strips the user's input before comparing it to the
+    # offered options, so a label carrying leading/trailing whitespace could
+    # never be typed. Ids such as "-metal" normalise to " Metal", and "-"
+    # normalises to whitespace only, so strip the result and fall back to the
+    # raw id when nothing printable survives (008 FR-006a).
+    fallback = material_type.replace("_", " ").replace("-", " ").title().strip()
+    return fallback or material_type
+
+
+def _prompt_material_type_choice(
+    material_types: list[str],
+    default: str | None,
+    locale: str,
+) -> str:
+    """Prompt for a material type, returning the canonical type id (008 FR-001).
+
+    Step one of the two-step type-then-material selection flow. Uses the
+    same "label dict / reverse-lookup dict" pattern as
+    :func:`_prompt_material_choice` so the user picks a translated label but
+    the caller receives the stable identifier.
+
+    Because type ids are free-form and case-sensitive while labels are not,
+    two distinct ids can render the same label — a user-defined
+    ``material_type = "Metal"`` title-cases to the same ``"Metal"`` as the
+    bundled ``metal`` does via the message catalog. Labels are therefore
+    allocated so that the mapping stays a bijection: a colliding label is
+    suffixed with its canonical id, and if that suffixed form is *itself*
+    already taken (an id such as ``"Metal (Metal)"`` can collide with the
+    suffix generated for ``"Metal"``) a numeric discriminator is appended
+    until the label is unique. No type can be made unreachable by the
+    reverse lookup (008 FR-006a).
+    """
+
+    display = {
+        material_type: _material_type_label(material_type, locale)
+        for material_type in material_types
+    }
+    collisions = Counter(display.values())
+    labels_by_type: dict[str, str] = {}
+    taken: set[str] = set()
+    for material_type, label in display.items():
+        candidate = f"{label} ({material_type})" if collisions[label] > 1 else label
+        if candidate in taken:
+            discriminator = 2
+            while f"{candidate} #{discriminator}" in taken:
+                discriminator += 1
+            candidate = f"{candidate} #{discriminator}"
+        taken.add(candidate)
+        labels_by_type[material_type] = candidate
+    types_by_label = {label: key for key, label in labels_by_type.items()}
+    options = list(labels_by_type.values())
+    default_label = labels_by_type.get(default) if default else None
+    choice_label = _prompt_choice(
+        translate(locale, "cli.label.material_type"), options, default_label, locale
+    )
+    return types_by_label[choice_label]
 
 
 def _prompt_material_choice(
@@ -357,14 +434,9 @@ def _resolve_materials_config(materials_config_path: str | None, locale: str) ->
         print(translate(locale, exc.message_key, **exc.kwargs))
         raise SystemExit(1) from exc
 
-    result = load_and_merge(
-        _MATERIALS_BUNDLED_PACKAGE,
-        _MATERIALS_BUNDLED_RESOURCE,
-        materials_config_path,
-        _MATERIALS_TABLE_KEY,
-    )
-    if result.notice_key:
-        print(translate(locale, result.notice_key, **dict(result.notice_kwargs)))
+    notice_key, notice_kwargs = materials_load_notice(materials_config_path)
+    if notice_key:
+        print(translate(locale, notice_key, **dict(notice_kwargs)))
 
 
 def run(materials_config_path: str | None = None) -> None:
@@ -388,10 +460,11 @@ def run(materials_config_path: str | None = None) -> None:
 
     _resolve_materials_config(materials_config_path, locale)
 
-    materials = list_materials(config_path=materials_config_path)
+    material_types = list_material_types(config_path=materials_config_path)
     tools = list_tools(config_path=materials_config_path)
 
     unit_system = UnitSystem.METRIC
+    material_type: str | None = None
     material: str | None = None
     tool: str | None = None
     diameter: float | None = None
@@ -413,6 +486,13 @@ def run(materials_config_path: str | None = None) -> None:
             target_rpm = None
             available_power = None
         previous_mode = mode
+        # Two-step material selection (008 FR-001, FR-002): pick a category
+        # first, then a material within it. A remembered material from a
+        # different category is silently dropped as a default by
+        # `_prompt_material_choice`, which resolves defaults against the
+        # options it was given (008 FR-011).
+        material_type = _prompt_material_type_choice(material_types, material_type, locale)
+        materials = list_materials(config_path=materials_config_path, material_type=material_type)
         material = _prompt_material_choice(
             materials, materials_config_path, material, locale, display_locale
         )

@@ -16,6 +16,7 @@ def test_fixed_rpm_mode_prompts_for_target_rpm_and_labels_result(monkeypatch, ca
         [
             "metric",  # unit system
             "fixed-rpm",  # calculation mode
+            "Metal",  # material type
             "Mild Steel",
             "Carbide",
             "10",
@@ -39,6 +40,7 @@ def test_fixed_rpm_invalid_target_rpm_is_reprompted(monkeypatch, capsys):
         [
             "metric",
             "fixed-rpm",
+            "Metal",  # material type
             "Mild Steel",
             "Carbide",
             "10",

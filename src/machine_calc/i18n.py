@@ -95,6 +95,33 @@ def get_raw_locale() -> str:
     return os.environ.get(_LOCALE_ENV_VAR, "") or DEFAULT_LOCALE
 
 
+def has_message(locale: str, key: str) -> bool:
+    """Report whether ``key`` resolves to a real catalog entry.
+
+    Uses the same lookup order as :func:`translate` (``locale`` first, then
+    the English catalog) but stops before formatting. Callers building a
+    message key from user-supplied data need this: passing such a key to
+    :func:`translate` and comparing the result against the key cannot
+    reliably detect a miss, because ``translate`` formats the fallback
+    template — which *is* the key — and logs a warning when that formatting
+    fails on stray braces.
+
+    Args:
+        locale: The locale to look the key up in.
+        key: The message-catalog key.
+
+    Returns:
+        ``True`` if the key exists in the locale's catalog or in the English
+        fallback catalog, else ``False``.
+    """
+
+    catalog = _load_catalog(locale)
+    if catalog is not None and key in catalog:
+        return True
+    english = _load_catalog(DEFAULT_LOCALE) or {}
+    return key in english
+
+
 def translate(locale: str, key: str, **kwargs: object) -> str:
     """Look up and format message ``key`` for ``locale``.
 

@@ -72,3 +72,33 @@ def test_translate_falls_back_to_english_for_missing_key():
     # still return a usable string (the key itself) rather than raise.
     result = i18n.translate("en", "does.not.exist")
     assert result == "does.not.exist"
+
+
+class TestHasMessage:
+    """`has_message` answers "is this key in a catalog?" without formatting it."""
+
+    def test_returns_true_for_a_known_key(self):
+        assert i18n.has_message("en", "material_type.metal") is True
+
+    def test_returns_false_for_an_unknown_key(self):
+        assert i18n.has_message("en", "material_type.definitely_not_bundled") is False
+
+    def test_falls_back_to_the_english_catalog(self):
+        """A key missing from the locale but present in English still counts."""
+        assert i18n.has_message("pl", "material_type.metal") is True
+
+    def test_returns_false_for_an_unknown_locale(self):
+        """An unbundled locale falls back to English rather than raising."""
+        assert i18n.has_message("zz", "material_type.metal") is True
+        assert i18n.has_message("zz", "material_type.nope") is False
+
+    def test_does_not_format_the_key_or_warn(self, caplog):
+        """Stray braces in a dynamic key must not reach `str.format()`.
+
+        `translate()` would format the fallback template (the key itself),
+        raise `KeyError`, and log a warning; `has_message` must not.
+        """
+        with caplog.at_level(logging.WARNING, logger="machine_calc.i18n"):
+            assert i18n.has_message("en", "material_type.al{o}y") is False
+
+        assert [record.getMessage() for record in caplog.records] == []

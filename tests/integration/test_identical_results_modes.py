@@ -24,6 +24,7 @@ def test_power_constrained_cli_matches_direct_calculate(monkeypatch, capsys):
         [
             "metric",
             "power-constrained",
+            "Metal",  # material type
             "Mild Steel",
             "Carbide",
             "10",
@@ -59,6 +60,7 @@ def test_fixed_rpm_cli_matches_direct_calculate(monkeypatch, capsys):
         [
             "metric",
             "fixed-rpm",
+            "Metal",  # material type
             "Mild Steel",
             "Carbide",
             "10",

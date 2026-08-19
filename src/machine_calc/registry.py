@@ -19,6 +19,7 @@ from __future__ import annotations
 import functools
 import logging
 import math
+import unicodedata
 from dataclasses import dataclass, field
 
 from machine_calc.registry_config import RawRegistryEntry, load_and_merge
@@ -27,6 +28,22 @@ from machine_calc.units import ft_min_to_m_min, in_to_mm, psi_to_n_per_mm2
 _BUNDLED_PACKAGE = "machine_calc.data"
 _BUNDLED_RESOURCE = "materials.toml"
 _TABLE_KEY = "materials"
+
+#: Fallback category for entries that omit ``material_type`` (008 FR-011).
+#: Keeps pre-008 user-supplied config files loadable unchanged.
+DEFAULT_MATERIAL_TYPE = "uncategorized"
+
+#: Unicode general categories rejected in a ``material_type`` id: ``Cc``
+#: covers the C0 and C1 control ranges (including tab, newline and DEL),
+#: ``Zl``/``Zp`` the line and paragraph separators. Everything else --
+#: including printable non-ASCII spacing -- is a usable single-line id.
+_FORBIDDEN_ID_CATEGORIES = frozenset({"Cc", "Zl", "Zp"})
+
+#: Fields carried over from the bundled entry when a user override omits
+#: them (``registry_config.merge_entries``). Without this, a config file
+#: written before ``material_type`` existed would silently move the
+#: materials it overrides into ``DEFAULT_MATERIAL_TYPE``.
+_STICKY_FIELDS = ("material_type",)
 
 # TOML key -> dataclass field mapping (data-model.md "TOML key -> dataclass
 # field mapping"). Dataclass field names are never renamed; only this
@@ -48,6 +65,12 @@ class WorkpieceMaterial:
 
     Attributes:
         name: Unique display name, e.g. ``"Mild Steel"``.
+        material_type: Category identifier grouping this material in the
+            two-step (type -> material) selection flow, e.g. ``"metal"`` or
+            ``"wood"`` (008 FR-001, FR-005). Free-form rather than a closed
+            enum so a new category can be introduced by data alone
+            (008 FR-004); defaults to :data:`DEFAULT_MATERIAL_TYPE` when the
+            source entry omits the key.
         reference_cutting_speed_m_min: HSS-baseline cutting speed (vc) in
             m/min.
         reference_feed_per_rev_mm: HSS-baseline feed per revolution (fn) in
@@ -68,6 +91,7 @@ class WorkpieceMaterial:
     specific_cutting_force_kc: float
     unit_system: str = "metric"
     translations: dict[str, str] = field(default_factory=dict)
+    material_type: str = DEFAULT_MATERIAL_TYPE
 
     def display_name(self, locale: str) -> str:
         """Return the translated display name for ``locale``, or English fallback.
@@ -146,6 +170,43 @@ def _validate(material: WorkpieceMaterial, source_path: str = _BUNDLED_RESOURCE)
     return tuple(issues)
 
 
+def _parse_material_type(entry: RawRegistryEntry, issues: list[str]) -> str:
+    """Resolve an entry's ``material_type``, appending any issue to ``issues``.
+
+    Follows the registry's established warn-and-continue policy (FR-008): a
+    missing key is not an error (it yields :data:`DEFAULT_MATERIAL_TYPE`),
+    and a present-but-invalid value is recorded as a validation issue while
+    still falling back to the default so the material stays selectable
+    (008 FR-011).
+
+    A value is invalid if it is not a non-empty string, or if it contains a
+    C0/C1 control character or a Unicode line/paragraph separator. TOML
+    multiline strings make the latter reachable
+    (``material_type = \"\"\"metal\\nalloy\"\"\"``), and an id containing a
+    line break would be offered as a prompt option that ``input()`` can
+    never return, making the category and its materials permanently
+    unselectable (008 FR-006a). Controls are rejected rather than merely
+    line breaks because values such as ``U+009B`` are emitted straight into
+    the terminal prompt. Printable non-ASCII spacing (a non-breaking space,
+    say) stays valid, so single-line Unicode ids remain usable.
+    """
+
+    raw = entry.fields.get("material_type")
+    if raw is None:
+        return DEFAULT_MATERIAL_TYPE
+    if not isinstance(raw, str) or not raw.strip():
+        issues.append(f"field 'material_type' must be a non-empty string, got {raw!r}")
+        return DEFAULT_MATERIAL_TYPE
+    value = raw.strip()
+    if any(unicodedata.category(character) in _FORBIDDEN_ID_CATEGORIES for character in value):
+        issues.append(
+            f"field 'material_type' must be a single line without control "
+            f"characters, got {raw!r}"
+        )
+        return DEFAULT_MATERIAL_TYPE
+    return value
+
+
 def _to_material(entry: RawRegistryEntry) -> tuple[WorkpieceMaterial, MaterialValidationRecord]:
     """Convert a merged :class:`RawRegistryEntry` into a `WorkpieceMaterial`.
 
@@ -195,6 +256,7 @@ def _to_material(entry: RawRegistryEntry) -> tuple[WorkpieceMaterial, MaterialVa
         specific_cutting_force_kc=values["specific_cutting_force_kc"],
         unit_system=entry.unit_system,
         translations=dict(entry.translations),
+        material_type=_parse_material_type(entry, issues),
     )
     for field_name in _CANONICAL_NUMERIC_FIELDS:
         value = getattr(material, field_name)
@@ -210,7 +272,9 @@ def _to_material(entry: RawRegistryEntry) -> tuple[WorkpieceMaterial, MaterialVa
 
 
 def _build_registry(config_path: str | None) -> _RegistrySnapshot:
-    result = load_and_merge(_BUNDLED_PACKAGE, _BUNDLED_RESOURCE, config_path, _TABLE_KEY)
+    result = load_and_merge(
+        _BUNDLED_PACKAGE, _BUNDLED_RESOURCE, config_path, _TABLE_KEY, _STICKY_FIELDS
+    )
     registry: dict[str, WorkpieceMaterial] = {}
     validation: dict[str, MaterialValidationRecord] = {}
     for entry in result.entries:
@@ -237,7 +301,7 @@ def _snapshot_for(config_path: str | None) -> _RegistrySnapshot:
     return _build_registry_cached(config_path)
 
 
-def list_materials(config_path: str | None = None) -> list[str]:
+def list_materials(config_path: str | None = None, material_type: str | None = None) -> list[str]:
     """Return the currently registered workpiece material names (FR-004).
 
     Args:
@@ -246,11 +310,69 @@ def list_materials(config_path: str | None = None) -> list[str]:
             Defaults to ``None``, which reproduces the bundled-only,
             pre-``005-configurable-materials-tools`` behavior exactly
             (FR-014).
+        material_type: Optional category filter (008 FR-002), e.g.
+            ``"metal"``. ``None`` (the default) returns every material in
+            registration order, preserving the pre-008 signature and
+            behavior. An unknown category yields an empty list rather than
+            raising, so a stale selection degrades gracefully (008 FR-011).
     """
 
     if config_path is None:
-        return list(MATERIAL_REGISTRY.keys())
-    return list(_snapshot_for(config_path).materials.keys())
+        materials = MATERIAL_REGISTRY
+    else:
+        materials = _snapshot_for(config_path).materials
+    if material_type is None:
+        return list(materials.keys())
+    return [name for name, material in materials.items() if material.material_type == material_type]
+
+
+def materials_load_notice(
+    config_path: str | None = None,
+) -> tuple[str | None, tuple[tuple[str, object], ...]]:
+    """Return the non-fatal load notice for the materials registry, if any.
+
+    Exists so callers never have to re-specify the bundled resource
+    coordinates or the sticky-field tuple themselves. Passing a different
+    ``sticky_fields`` value produces a different ``load_and_merge`` cache
+    key, which would silently reread and reparse both TOML files instead of
+    reusing the load the registry already performed.
+
+    Args:
+        config_path: Optional path to a user-supplied materials TOML file.
+
+    Returns:
+        A ``(notice_key, notice_kwargs)`` pair; ``notice_key`` is ``None``
+        when the load produced no notice.
+    """
+
+    result = load_and_merge(
+        _BUNDLED_PACKAGE, _BUNDLED_RESOURCE, config_path, _TABLE_KEY, _STICKY_FIELDS
+    )
+    return result.notice_key, result.notice_kwargs
+
+
+def list_material_types(config_path: str | None = None) -> list[str]:
+    """Return the registered material-type identifiers (008 FR-001, FR-006).
+
+    Types are derived from the effective material set rather than from a
+    separate hard-coded list, so declaring a new ``material_type`` in a
+    bundled or user-supplied config file registers a new category with no
+    code change (008 FR-004). Order follows each type's first appearance in
+    registration order, which makes the display order configurable by
+    ordering entries in the TOML file (008 FR-010).
+
+    Args:
+        config_path: Optional path to a user-supplied materials/tools
+            configuration file; see :func:`list_materials`.
+    """
+
+    if config_path is None:
+        materials = MATERIAL_REGISTRY
+    else:
+        materials = _snapshot_for(config_path).materials
+    # dict preserves insertion order, giving first-appearance ordering
+    # without a second pass or an explicit `seen` set.
+    return list(dict.fromkeys(material.material_type for material in materials.values()))
 
 
 def get_material(name: str, config_path: str | None = None) -> WorkpieceMaterial | None:

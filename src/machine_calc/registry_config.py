@@ -157,6 +157,7 @@ def parse_toml_entries(toml_text: str, table_key: str, path: str) -> list[RawReg
 def merge_entries(
     bundled: list[RawRegistryEntry],
     user: list[RawRegistryEntry] | None,
+    sticky_fields: tuple[str, ...] = (),
 ) -> list[RawRegistryEntry]:
     """Merge ``user`` entries into ``bundled`` by name (data-model.md "Merge Algorithm").
 
@@ -166,6 +167,16 @@ def merge_entries(
     entry with a new name is appended. ``bundled`` entries untouched by
     ``user`` are returned unchanged, in original order, followed by any
     newly-appended entries in ``user`` order.
+
+    Args:
+        sticky_fields: Field keys exempted from the wholesale-replace rule:
+            if the user entry omits such a key, the bundled entry's value is
+            carried over instead of being dropped. Used for classification
+            metadata rather than reference values — ``material_type``
+            (specs/008-material-categorization) — so that a config file
+            written before that key existed keeps its materials in their
+            original categories instead of silently falling back to
+            ``"uncategorized"``.
     """
 
     if not user:
@@ -183,9 +194,13 @@ def merge_entries(
 
         merged_translations = dict(existing.translations)
         merged_translations.update(user_entry.translations)
+        merged_fields = dict(user_entry.fields)
+        for key in sticky_fields:
+            if key not in merged_fields and key in existing.fields:
+                merged_fields[key] = existing.fields[key]
         merged_by_name[user_entry.name] = RawRegistryEntry(
             name=user_entry.name,
-            fields=dict(user_entry.fields),
+            fields=merged_fields,
             unit_system=user_entry.unit_system,
             translations=merged_translations,
             source_path=user_entry.source_path,
@@ -224,7 +239,11 @@ def _read_user_file(user_path: str | None) -> str | None:
 
 
 def _load_and_merge_uncached(
-    bundled_package: str, bundled_resource: str, user_path: str | None, table_key: str
+    bundled_package: str,
+    bundled_resource: str,
+    user_path: str | None,
+    table_key: str,
+    sticky_fields: tuple[str, ...] = (),
 ) -> MergeResult:
     bundled_text = (
         resources.files(bundled_package).joinpath(bundled_resource).read_text(encoding="utf-8")
@@ -247,15 +266,21 @@ def _load_and_merge_uncached(
     user_entries = parse_toml_entries(user_text, table_key, user_path)
     _check_duplicates(user_entries, kind, user_path)
 
-    merged = merge_entries(bundled_entries, user_entries)
+    merged = merge_entries(bundled_entries, user_entries, sticky_fields)
     return MergeResult(entries=tuple(merged))
 
 
 @functools.cache
 def _load_and_merge_cached(
-    bundled_package: str, bundled_resource: str, user_path: str | None, table_key: str
+    bundled_package: str,
+    bundled_resource: str,
+    user_path: str | None,
+    table_key: str,
+    sticky_fields: tuple[str, ...] = (),
 ) -> MergeResult:
-    return _load_and_merge_uncached(bundled_package, bundled_resource, user_path, table_key)
+    return _load_and_merge_uncached(
+        bundled_package, bundled_resource, user_path, table_key, sticky_fields
+    )
 
 
 def load_and_merge(
@@ -263,6 +288,7 @@ def load_and_merge(
     bundled_resource: str,
     user_path: str | None,
     table_key: str,
+    sticky_fields: tuple[str, ...] = (),
 ) -> MergeResult:
     """Load, merge, and cache the effective (bundled + user) entry list.
 
@@ -277,6 +303,8 @@ def load_and_merge(
             file all fall back to bundled-only (FR-005) with a notice key.
         table_key: The TOML array-of-tables key to parse (``"materials"`` or
             ``"tools"``).
+        sticky_fields: Field keys preserved from the bundled entry when a
+            user override omits them; see :func:`merge_entries`.
 
     Returns:
         A :class:`MergeResult` with the merged entries and an optional
@@ -288,7 +316,9 @@ def load_and_merge(
             (FR-006, FR-007, FR-016).
     """
 
-    return _load_and_merge_cached(bundled_package, bundled_resource, user_path, table_key)
+    return _load_and_merge_cached(
+        bundled_package, bundled_resource, user_path, table_key, sticky_fields
+    )
 
 
 def clear_cache() -> None:
