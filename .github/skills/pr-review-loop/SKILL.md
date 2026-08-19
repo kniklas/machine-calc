@@ -155,6 +155,13 @@ non-suppressed Copilot review comments remain unresolved.
    Poll like this, not with one long fixed sleep:
    - First check after a short delay (~20-30s) — cheap, catches the many
      small-diff cases that finish in under 2 minutes.
+   - If a matching `Running Copilot Code Review` run for this SHA hasn't
+     even appeared yet after ~60-90s (distinct from it appearing and
+     still being `in_progress`), don't keep waiting out the full
+     12-minute cap on the assumption it's merely queued — this can mean
+     automatic re-review didn't trigger for this push. Immediately issue
+     the `requested_reviewers` call from step 6 (if not already done for
+     this SHA) and keep polling for the run it creates.
    - If not both `status: completed` yet, keep polling every 20-30s.
    - After ~2.5-3 minutes total (roughly 70-80% of the historical
      average for this repo), it's fine to space checks out to ~45-60s
@@ -163,14 +170,19 @@ non-suppressed Copilot review comments remain unresolved.
      the user rather than continuing to poll silently — it may indicate
      a stuck run.
    - `status: completed` is not the same as success — check `conclusion`
-     too. A `cancelled`/`timed_out`/`failure` conclusion on either run
-     means don't proceed as if freshly reviewed/CI-verified: report it
-     and re-request the review or re-run CI instead of silently
-     re-fetching stale threads and treating `copilot-review-invoked=true`
-     as sufficient.
-   - Stop polling and proceed the moment both runs show
-     `status: completed` **with a successful `conclusion`** — don't wait
-     out a fixed timer past that point.
+     too. A `cancelled`/`timed_out`/`failure` conclusion on the Copilot
+     review run means don't proceed as if freshly reviewed: report it and
+     re-request the review instead of silently re-fetching stale threads
+     and treating `copilot-review-invoked=true` as sufficient. For `CI`,
+     use the run's completion only as a signal that jobs have finished,
+     not as the pass/fail verdict — `CI` can complete with supporting,
+     non-required jobs (e.g. `performance`, `quality-summary`) failing by
+     design (see §5), so evaluate pass/fail via `gh pr checks` against the
+     required-jobs list, not the aggregate run's own `conclusion`.
+   - Stop polling and proceed once the Copilot review run shows
+     `status: completed` with a successful `conclusion`, and `gh pr
+     checks` shows all *required* jobs passing — don't wait out a fixed
+     timer past that point.
 
    (Verified empirically across PRs #30/#31/#35: this repo's Copilot
    review surfaces as an `event: dynamic` Actions run named `Running
