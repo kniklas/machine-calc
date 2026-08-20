@@ -50,6 +50,43 @@ class CalculationMode(Enum):
     FIXED_RPM = "fixed-rpm"
 
 
+class MachiningOperation(Enum):
+    """The top-level machining operation the user selects in the REPL.
+
+    Drives CLI dispatch only (specs/009-milling-calculations FR-001); it is
+    not an input to any calculation function. Each member routes to its own
+    ``machine_calc.operations.<operation>`` package.
+
+    Attributes:
+        DRILLING: The existing drilling flow (``operations.drilling``),
+            unchanged by the introduction of this enum (FR-002).
+        MILLING: The milling flow, which prompts for a
+            :class:`MillingSubOperation` before any material/tool prompt.
+    """
+
+    DRILLING = "drilling"
+    MILLING = "milling"
+
+
+class MillingSubOperation(Enum):
+    """The milling sub-operation selected after choosing milling.
+
+    Drives CLI dispatch only (specs/009-milling-calculations FR-003).
+    Each member routes to its own sibling package under
+    ``machine_calc.operations.milling`` with its own tool registry, input
+    labelling and validation.
+
+    Attributes:
+        END_MILLING: Peripheral/slotting/pocketing work; the radial
+            engagement input is labelled "radial depth of cut".
+        FACE_MILLING: Surfacing work; the radial engagement input is
+            labelled "width of cut".
+    """
+
+    END_MILLING = "end-milling"
+    FACE_MILLING = "face-milling"
+
+
 @dataclass(frozen=True)
 class ErrorInfo:
     """A structured, machine-readable validation/error result.
@@ -80,6 +117,8 @@ class CalculationResult:
       in minutes regardless of unit system).
     - ``torque``: N*m under METRIC, in-lb under IMPERIAL.
     - ``power_required``: kW under METRIC, HP under IMPERIAL.
+    - ``material_removal_rate``: cm^3/min under METRIC, in^3/min under
+      IMPERIAL. ``None`` for operations that do not report it (drilling).
 
     When ``error`` is set, all numeric fields above MUST be ``None`` — this
     type is always returned, never raised, for expected validation failures
@@ -91,6 +130,13 @@ class CalculationResult:
             on error results (mirrors the requested mode). Defaults to
             ``CalculationMode.STANDARD`` for backward compatibility with
             ``001-metal-drilling-calc`` construction sites.
+        material_removal_rate: Volumetric material removal rate (Q), in
+            cm^3/min under METRIC and in^3/min under IMPERIAL
+            (specs/009-milling-calculations research.md #7). Declared last,
+            after every pre-existing field, so positional construction in
+            existing drilling code and tests keeps working unchanged.
+            Drilling results always leave this ``None``; milling results
+            set it on success and leave it ``None`` on error.
     """
 
     spindle_speed_rpm: float | None
@@ -102,3 +148,4 @@ class CalculationResult:
     feasibility_warning: str | None = None
     error: ErrorInfo | None = None
     mode: CalculationMode = CalculationMode.STANDARD
+    material_removal_rate: float | None = None

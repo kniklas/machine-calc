@@ -14,6 +14,7 @@ from machine_calc.cli import run
 def test_fixed_rpm_mode_prompts_for_target_rpm_and_labels_result(monkeypatch, capsys):
     inputs = iter(
         [
+            "drilling",  # machining operation (009 FR-001)
             "metric",  # unit system
             "fixed-rpm",  # calculation mode
             "Metal",  # material type
@@ -38,6 +39,7 @@ def test_fixed_rpm_mode_prompts_for_target_rpm_and_labels_result(monkeypatch, ca
 def test_fixed_rpm_invalid_target_rpm_is_reprompted(monkeypatch, capsys):
     inputs = iter(
         [
+            "drilling",  # machining operation (009 FR-001)
             "metric",
             "fixed-rpm",
             "Metal",  # material type

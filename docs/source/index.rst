@@ -1,8 +1,8 @@
 machine-calc documentation
 ===========================
 
-Metal machining calculation library and interactive CLI, starting with
-drilling operations.
+Metal machining calculation library and interactive CLI, covering drilling
+(twist drills) and milling (end milling and face milling).
 
 Wood-materials support (hardwood/softwood/engineered) is covered in:
 
@@ -16,9 +16,18 @@ a specific material. See:
 - ``specs/008-material-categorization/spec.md``
 - ``specs/005-configurable-materials-tools/contracts/materials-config-schema.md``
 
+Milling support (end milling and face milling, with operation selection in
+the REPL) is covered in:
+
+- ``specs/009-milling-calculations/spec.md``
+- ``specs/009-milling-calculations/quickstart.md``
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
+
+   milling
+   milling-api
 
 Indices and tables
 ===================

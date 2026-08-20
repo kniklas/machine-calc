@@ -9,6 +9,7 @@ and convert metric results to imperial for display/output when
 from __future__ import annotations
 
 MM_PER_INCH = 25.4
+CM3_PER_IN3 = 16.387064
 NM_PER_IN_LB = 1.0 / 8.850745791327185
 HP_PER_KW = 1.3410220895
 M_PER_FT = 0.3048
@@ -25,6 +26,28 @@ def in_to_mm(value_in: float) -> float:
     """Convert inches to millimeters."""
 
     return value_in * MM_PER_INCH
+
+
+def cm3_min_to_in3_min(value_cm3_min: float) -> float:
+    """Convert a volumetric rate from cm^3/min to in^3/min.
+
+    1 in^3 = 16.387064 cm^3 exactly (derived from the exact
+    1 in = 25.4 mm definition). Used to report a milling material removal
+    rate under ``UnitSystem.IMPERIAL``
+    (specs/009-milling-calculations/research.md #7).
+    """
+
+    return value_cm3_min / CM3_PER_IN3
+
+
+def in3_min_to_cm3_min(value_in3_min: float) -> float:
+    """Convert a volumetric rate from in^3/min to cm^3/min.
+
+    1 in^3 = 16.387064 cm^3 exactly; the inverse of
+    :func:`cm3_min_to_in3_min`.
+    """
+
+    return value_in3_min * CM3_PER_IN3
 
 
 def nm_to_in_lb(value_nm: float) -> float:

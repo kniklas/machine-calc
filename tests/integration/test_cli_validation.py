@@ -12,8 +12,9 @@ from machine_calc.cli import run
 def test_invalid_diameter_is_reprompted(monkeypatch, capsys):
     inputs = iter(
         [
+            "drilling",  # machining operation (009 FR-001)
             "metric",
-            "",  # calculation mode (default: standard)
+            "standard",  # calculation mode -- no blank/default option (FR-001a)
             "Metal",  # material type
             "Mild Steel",
             "Carbide",
@@ -38,8 +39,9 @@ def test_invalid_diameter_is_reprompted(monkeypatch, capsys):
 def test_invalid_material_choice_is_reprompted(monkeypatch, capsys):
     inputs = iter(
         [
+            "drilling",  # machining operation (009 FR-001)
             "metric",
-            "",  # calculation mode (default: standard)
+            "standard",  # calculation mode -- no blank/default option (FR-001a)
             "Metal",  # material type
             "Unknown Material",  # invalid -> reprompt
             "Mild Steel",  # valid
