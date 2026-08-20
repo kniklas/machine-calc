@@ -394,16 +394,17 @@ def _prompt_mode(
 def _prompt_required_power(unit: str, default: float | None, locale: str) -> float:
     """Prompt for a required available-power value (power-constrained mode).
 
-    A blank or non-numeric entry re-prompts as a validation failure (FR-002;
-    spec.md Clarifications 2026-07-11) — never treated as ``MODE_CONFLICT``
-    — unless a default is available (a retained editable default from a
-    prior loop iteration in the same mode), in which case blank accepts it.
+    A blank, non-numeric, or non-finite (``inf``/``nan``) entry re-prompts
+    as a validation failure (FR-002; spec.md Clarifications 2026-07-11) —
+    never treated as ``MODE_CONFLICT`` — unless a default is available (a
+    retained editable default from a prior loop iteration in the same
+    mode), in which case blank accepts it.
     """
 
     label = translate(locale, "cli.label.power_required")
     while True:
         value = _prompt_number(label, unit, default, locale)
-        if value > 0:
+        if math.isfinite(value) and value > 0:
             return value
         print(translate(locale, "cli.prompt.power_required.invalid"))
 
