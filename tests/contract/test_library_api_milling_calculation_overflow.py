@@ -110,3 +110,44 @@ def test_face_milling_subnormal_target_rpm_reports_overflow_not_crash():
     assert result.error is not None
     assert result.error.code == "CALCULATION_OVERFLOW"
     assert result.spindle_speed_rpm is None
+
+
+def test_end_milling_subnormal_axial_depth_of_cut_reports_overflow_not_zero():
+    """``axial_depth_of_cut`` has no configurable lower bound beyond
+    positivity — a positive-subnormal value (e.g. 5e-324) underflows
+    torque_nm/power_kw/material_removal_rate_cm3_min to exactly 0.0
+    while every field stays finite. Since none of these outputs can ever
+    legitimately be zero for validated-positive inputs, a computed zero
+    must be rejected as CALCULATION_OVERFLOW rather than returned as a
+    spuriously "successful" zero-power result (_reject_if_invalid()
+    requires every field to be finite AND strictly positive)."""
+
+    end_milling_args = dict(_END_MILLING_ARGS)
+    end_milling_args["axial_depth_of_cut"] = 5e-324
+
+    result = calculate_end_milling(
+        **end_milling_args,
+        feed_per_tooth=0.05,
+        mode=CalculationMode.STANDARD,
+    )
+    assert result.error is not None
+    assert result.error.code == "CALCULATION_OVERFLOW"
+    assert result.power_required is None
+    assert result.torque is None
+    assert result.material_removal_rate is None
+
+
+def test_face_milling_subnormal_axial_depth_of_cut_reports_overflow_not_zero():
+    face_milling_args = dict(_FACE_MILLING_ARGS)
+    face_milling_args["axial_depth_of_cut"] = 5e-324
+
+    result = calculate_face_milling(
+        **face_milling_args,
+        feed_per_tooth=0.15,
+        mode=CalculationMode.STANDARD,
+    )
+    assert result.error is not None
+    assert result.error.code == "CALCULATION_OVERFLOW"
+    assert result.power_required is None
+    assert result.torque is None
+    assert result.material_removal_rate is None

@@ -365,9 +365,10 @@ def _reject_if_invalid(
     error_code: str,
     error_message_key: str,
 ) -> MillingMetricsLike | CalculationResult:
-    """Guard against a metrics result with any non-finite field.
+    """Guard against a metrics result with any non-finite or non-positive
+    field.
 
-    Two distinct root causes both land here:
+    Three distinct root causes all land here:
 
     - ``feed_per_tooth``/``target_rpm`` deliberately have no upper bound
       (FR-008/FR-018), so a physically-absurd but individually-"valid"
@@ -380,14 +381,20 @@ def _reject_if_invalid(
       nominal power towards zero while ``machining_time_min`` overflows to
       ``inf`` (reported as ``INFEASIBLE_POWER_BUDGET``, matching this
       mode's other invalid-budget cases).
+    - Symmetrically, an extreme-but-individually-"valid" *small* input
+      (e.g. a subnormal ``axial_depth_of_cut_mm``) can underflow one of
+      these outputs to exactly ``0.0`` while every field stays finite —
+      every field here is a product/quotient of strictly positive
+      validated inputs, so none of them can ever legitimately be zero;
+      a computed zero is always underflow, not a real result.
 
-    Either way, a result mixing finite and ``inf``/``nan`` fields would
-    violate the never-raises, structured-error API contract
-    (FR-012/FR-015) if returned as-is.
+    Either way, a result mixing finite and ``inf``/``nan`` fields, or
+    containing a spuriously-zero field, would violate the never-raises,
+    structured-error API contract (FR-012/FR-015) if returned as-is.
     """
 
     if all(
-        math.isfinite(value)
+        math.isfinite(value) and value > 0
         for value in (
             metrics.spindle_speed_rpm,
             metrics.feed_rate_mm_min,
