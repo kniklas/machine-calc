@@ -1,4 +1,4 @@
-Unit system [metric/imperial] (metric): Calculation mode (standard, power-constrained, fixed-rpm): Material type (Metal, Wood): Material (Mild Steel, Stainless Steel, Aluminum, Cast Iron, Brass, Titanium): Drilling tool (HSS, Cobalt, Carbide): Drill diameter (mm): Hole depth (mm): Available power (kW, blank if unknown): 
+Unit system [metric/imperial] (metric): Calculation mode (standard, power-constrained, fixed-rpm) (standard): Material type (Metal, Wood): Material (Mild Steel, Stainless Steel, Aluminum, Cast Iron, Brass, Titanium): Drilling tool (HSS, Cobalt, Carbide): Drill diameter (mm): Hole depth (mm): Available power (kW, blank if unknown): 
 Spindle speed:     795.8 RPM   (recommended)
 Feed rate:         159.2 mm/min
 Machining time:    0.33 min

@@ -363,17 +363,22 @@ _MODE_OPTION_KEYS = {
 }
 
 
-def _prompt_mode(default: CalculationMode, locale: str) -> CalculationMode:
+def _prompt_mode(
+    default: CalculationMode, locale: str, *, allow_blank_default: bool = True
+) -> CalculationMode:
     """Prompt for the calculation mode (FR-001a).
 
-    Re-prompts on an invalid, unrecognized, *or blank* entry, the same as
-    material/tool selection's invalid-entry behavior (base spec FR-010) —
-    it MUST NOT silently fall back to a default mode (spec.md
-    Clarifications 2026-07-11/2026-08-19; the mode prompt has no
-    blank/default option, unlike prompts that retain an editable default).
-    ``default`` is accepted for call-site symmetry with the other
-    ``_prompt_*`` helpers but is deliberately never passed to
-    :func:`_prompt_choice` as a fallback.
+    Re-prompts on an invalid or unrecognized entry, the same as
+    material/tool selection's invalid-entry behavior (base spec FR-010).
+
+    ``allow_blank_default`` distinguishes the two specs sharing this
+    helper: drilling's 002 spec (Clarifications 2026-07-11) treats a blank
+    entry the same as material/tool selection, i.e. it accepts the current
+    ``default``; milling's 010 spec (Clarifications 2026-08-19) instead
+    requires the mode prompt to have no blank/default option at all — an
+    empty entry there MUST be re-prompted, never silently falling back to
+    a default mode. Only milling passes ``allow_blank_default=False``, so
+    drilling's original blank-accepts-current-mode behavior is unaffected.
     """
 
     labels_by_mode = {m: translate(locale, key) for m, key in _MODE_OPTION_KEYS.items()}
@@ -381,7 +386,8 @@ def _prompt_mode(default: CalculationMode, locale: str) -> CalculationMode:
     options = list(labels_by_mode.values())
     label = translate(locale, "cli.label.mode")
 
-    choice = _prompt_choice(label, options, None, locale)
+    default_label = labels_by_mode[default] if allow_blank_default else None
+    choice = _prompt_choice(label, options, default_label, locale)
     return modes_by_label[choice]
 
 
@@ -930,7 +936,7 @@ def _prompt_milling_inputs(
     state.unit_system = _prompt_unit_system(state.unit_system, locale)
     labels = UNIT_LABELS[state.unit_system]
 
-    state.mode = _prompt_mode(state.mode, locale)
+    state.mode = _prompt_mode(state.mode, locale, allow_blank_default=False)
     if state.mode is not state.previous_mode:
         # Loop re-run mode switch (FR-013): clear mode-specific values
         # rather than carrying them over as editable defaults. Shared

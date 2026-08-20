@@ -5,6 +5,12 @@ unrecognized mode entry MUST re-prompt, never silently fall back to a
 default) and FR-013's loop-mode-switch clearing behavior (switching modes
 on a subsequent loop iteration clears the previous mode's target-RPM /
 available-power values rather than carrying them over as defaults).
+
+Drilling's mode prompt (spec 002) treats a blank entry the same as
+material/tool selection: it accepts the current default. This is
+deliberately unlike milling's mode prompt (spec 010, Clarifications
+2026-08-19), which has no blank/default option at all — see
+``test_cli_milling_mode_prompt_ux.py`` for that behavior.
 """
 
 import builtins
@@ -18,7 +24,7 @@ def test_invalid_mode_choice_is_reprompted(monkeypatch, capsys):
             "drilling",  # machining operation (009 FR-001)
             "metric",
             "bogus-mode",  # invalid -> reprompt
-            "standard",  # explicit mode; blank has no default to accept (FR-001a)
+            "",  # blank -> accepts default (standard)
             "Metal",  # material type
             "Mild Steel",
             "Carbide",
@@ -37,16 +43,17 @@ def test_invalid_mode_choice_is_reprompted(monkeypatch, capsys):
     assert "recommended" in out
 
 
-def test_blank_mode_choice_is_reprompted(monkeypatch, capsys):
-    """A blank entry at the mode prompt MUST re-prompt, never silently
-    accept a default (spec.md Clarifications 2026-08-19; FR-001a)."""
+def test_blank_mode_choice_accepts_the_current_default(monkeypatch, capsys):
+    """A blank entry at drilling's mode prompt accepts the current default,
+    the same as material/tool selection (spec 002 Clarifications
+    2026-07-11) — unlike milling's mode prompt, which has no blank/default
+    option (spec 010 Clarifications 2026-08-19)."""
 
     inputs = iter(
         [
             "drilling",  # machining operation (009 FR-001)
             "metric",
-            "",  # blank -> must reprompt, not silently accept a default
-            "standard",
+            "",  # blank -> accepts the current default (standard)
             "Metal",  # material type
             "Mild Steel",
             "Carbide",
@@ -61,7 +68,8 @@ def test_blank_mode_choice_is_reprompted(monkeypatch, capsys):
     run()
 
     out = capsys.readouterr().out
-    assert "Please choose one of" in out
+    assert "Please choose one of" not in out
+    assert "recommended" in out
 
 
 def test_switching_mode_on_loop_rerun_clears_previous_mode_values(monkeypatch, capsys):
