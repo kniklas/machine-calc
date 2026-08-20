@@ -27,9 +27,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   validators, and error codes (`INFEASIBLE_POWER_BUDGET`,
   `INVALID_TARGET_RPM`, `MODE_CONFLICT`) verbatim. Two new error codes are
   introduced for milling-specific edge cases: `INVALID_AVAILABLE_POWER`
-  (a non-numeric, non-finite, or non-positive `available_power` in
-  power-constrained mode) and `CALCULATION_OVERFLOW` (an otherwise-valid
-  extreme input that overflows an intermediate calculation).
+  (a non-numeric, non-finite, or non-positive `available_power` supplied
+  as the optional advisory value in **standard** or **fixed-RPM** mode)
+  and `CALCULATION_OVERFLOW` (an otherwise-valid extreme input that
+  overflows an intermediate calculation). An invalid `available_power` in
+  **power-constrained** mode, where it is a required hard budget rather
+  than advisory, is reported as `INFEASIBLE_POWER_BUDGET` instead, since
+  no spindle speed could ever meet it.
 
 ### Unchanged
 

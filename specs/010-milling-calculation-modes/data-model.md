@@ -103,9 +103,13 @@ milling-specific codes `009-milling-calculations` already defines
 Two new error codes were introduced during implementation for
 milling-specific edge cases not covered by drilling's reused set:
 `INVALID_AVAILABLE_POWER` (a non-numeric, non-finite, or non-positive
-`available_power` in power-constrained mode) and `CALCULATION_OVERFLOW`
-(an otherwise-valid extreme input that overflows an intermediate
-calculation). Both have their own message-catalog entries
+`available_power` supplied as the optional advisory value in **standard**
+or **fixed-RPM** mode) and `CALCULATION_OVERFLOW` (an otherwise-valid
+extreme input that overflows an intermediate calculation). An invalid
+`available_power` in **power-constrained** mode, where it is a required
+hard budget rather than advisory, is reported as `INFEASIBLE_POWER_BUDGET`
+instead (see above), since no spindle speed could ever meet it. Both new
+codes have their own message-catalog entries
 (`error.invalid_available_power`, `error.calculation_overflow`).
 
 ## CalculationResult — reused unchanged

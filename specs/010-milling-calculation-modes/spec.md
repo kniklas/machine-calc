@@ -316,9 +316,10 @@ from the material/tool's own recommended value.
   engine, a new top-level entry point, or a new `CalculationMode` value
   beyond the three drilling already defines.
 - In power-constrained mode, only spindle speed (and its dependent feed
-  rate, machining time, torque, and material removal rate) is adjusted;
-  the underlying material and milling-tool reference values themselves are
-  never altered.
+  rate, machining time, and material removal rate) is adjusted; torque is
+  unaffected, since it does not depend on spindle speed (research.md #1),
+  and the underlying material and milling-tool reference values
+  themselves are never altered.
 - No machine-specific maximum-RPM database or per-machine profile is
   introduced by this feature, consistent with drilling's existing
   equivalent assumption.
@@ -329,8 +330,12 @@ from the material/tool's own recommended value.
 - This feature reuses drilling's existing error codes
   (`INFEASIBLE_POWER_BUDGET`, `INVALID_TARGET_RPM`, `MODE_CONFLICT`) and
   message-catalog entries rather than introducing milling-specific
-  duplicates, since the underlying semantics are identical across
-  operations.
+  *duplicates*, since the underlying semantics are identical across
+  operations. Two new codes for conditions drilling's mode-argument
+  validation didn't previously need to distinguish —
+  `INVALID_AVAILABLE_POWER` and `CALCULATION_OVERFLOW` — were introduced
+  during implementation and are operation-agnostic themselves (see
+  `data-model.md`'s "Error Codes" section and research.md #4).
 - `009-milling-calculations`' explicit decision to omit a calculation-mode
   prompt from milling (documented in its CLI implementation) is
   superseded by this feature for the two new modes; the standard mode's

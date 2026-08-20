@@ -106,22 +106,39 @@ formula source citation, milling module boundary).
   `009-milling-calculations`' shared `_calculate.py` module exists to
   avoid, and would double the surface area for a mode-dispatch bug.
 
-## 4. Reusing drilling's shared infrastructure unchanged
+## 4. Reusing drilling's shared infrastructure, with two additions surfaced during implementation
 
 - **Decision**: `CalculationMode` (`models.py`), `CalculationResult.mode`
-  (`models.py`), `validate_target_rpm()` and `validate_mode_arguments()`
-  (`validation.py`), and the `INFEASIBLE_POWER_BUDGET`/
-  `INVALID_TARGET_RPM`/`MODE_CONFLICT` error codes and their message-catalog
-  entries are all already operation-agnostic (none of their signatures or
-  logic reference drilling specifically) and are reused by milling
-  **without any modification** — confirmed by inspecting their current
-  implementations, which take a `CalculationMode` value and
-  optional-`float` arguments generically.
+  (`models.py`), `validate_target_rpm()` (`validation.py`), and the
+  `INFEASIBLE_POWER_BUDGET`/`INVALID_TARGET_RPM`/`MODE_CONFLICT` error
+  codes and their message-catalog entries are all operation-agnostic
+  (none of their signatures or logic reference drilling specifically) and
+  are reused by milling without modification.
+
+  `validate_mode_arguments()` itself, however, was **extended** during
+  implementation rather than reused unmodified: a non-numeric,
+  non-finite, or non-positive `available_power` reaching a downstream
+  conversion (`hp_to_kw()`) or comparison would otherwise raise
+  `TypeError`, violating the never-raises API contract. This is fixed by
+  type/finiteness-checking `available_power` in all three modes — via the
+  new `INVALID_AVAILABLE_POWER` code for the advisory path
+  (`STANDARD`/`FIXED_RPM`) and via the existing `INFEASIBLE_POWER_BUDGET`
+  code for a *supplied-but-invalid* required budget in
+  `POWER_CONSTRAINED` (an invalid budget can never be met by any spindle
+  speed either way, so it gets the same code as a too-low one). This
+  extension is operation-agnostic — it applies equally to drilling's
+  `calculate()`, which shares the same `validate_mode_arguments()` — so
+  it is not a milling-specific duplicate, just a correctness fix
+  discovered while implementing this feature.
 - **Rationale**: This is exactly what Constitution Principle VI
   (Extensibility by Design) and spec.md's Assumptions call for: this
   feature reuses drilling's existing error codes and message-catalog
-  entries rather than introducing milling-specific duplicates, since the
-  underlying semantics are identical across operations.
+  entries rather than introducing milling-specific duplicates for
+  anything mode-related, since the underlying semantics are identical
+  across operations. The two genuinely new codes
+  (`INVALID_AVAILABLE_POWER`, `CALCULATION_OVERFLOW`) are new-*condition*
+  codes, not milling-specific *duplicates* of drilling's existing ones —
+  see `data-model.md`'s "Error Codes" section.
 - **Alternatives considered**: Introducing milling-specific error codes
   (e.g., `MILLING_INFEASIBLE_POWER_BUDGET`) was rejected — spec.md
   explicitly calls for reusing drilling's codes, and doing so keeps a

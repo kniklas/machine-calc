@@ -62,7 +62,14 @@ def calculate_face_milling(
 - Both functions continue to never raise for expected validation
   failures — this now explicitly includes the three new failure modes
   drilling already defines (`INVALID_TARGET_RPM`, `MODE_CONFLICT`,
-  `INFEASIBLE_POWER_BUDGET`), reused verbatim (research.md #4).
+  `INFEASIBLE_POWER_BUDGET`), reused verbatim (research.md #4), plus two
+  milling-specific codes added during implementation:
+  `INVALID_AVAILABLE_POWER` (a non-numeric, non-finite, or non-positive
+  `available_power` supplied as the optional advisory value in
+  `STANDARD`/`FIXED_RPM` mode — an invalid *required* budget in
+  `POWER_CONSTRAINED` mode is `INFEASIBLE_POWER_BUDGET` instead, per
+  above) and `CALCULATION_OVERFLOW` (an otherwise-valid extreme input
+  that overflows an intermediate calculation, in any mode).
 - Callers that never pass `mode` or `target_rpm` see **zero behavior
   change** from `009-milling-calculations` (SC-004) — this is a strictly
   additive, backward-compatible signature change, exactly as drilling's
