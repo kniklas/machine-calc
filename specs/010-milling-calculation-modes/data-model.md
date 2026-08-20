@@ -89,16 +89,24 @@ into their own named metrics dataclass exactly as their existing
 `009-milling-calculations` FR-014 module boundary (research.md #3). Neither
 sub-operation implements the scaling arithmetic itself.
 
-## New Error Codes — reused unchanged
+## Error Codes
 
-No new error codes. This feature reuses drilling's existing
-`INFEASIBLE_POWER_BUDGET`, `INVALID_TARGET_RPM`, and `MODE_CONFLICT` codes
-and their existing message-catalog entries verbatim (research.md #4), in
-addition to the milling-specific codes `009-milling-calculations` already
-defines (`MISSING_MATERIAL`, `MISSING_TOOL`, `UNUSABLE_MATERIAL`,
+This feature reuses drilling's existing `INFEASIBLE_POWER_BUDGET`,
+`INVALID_TARGET_RPM`, and `MODE_CONFLICT` codes and their existing
+message-catalog entries verbatim (research.md #4), in addition to the
+milling-specific codes `009-milling-calculations` already defines
+(`MISSING_MATERIAL`, `MISSING_TOOL`, `UNUSABLE_MATERIAL`,
 `INVALID_DIAMETER`, `INVALID_DEPTH_OF_CUT`, `INVALID_ENGAGEMENT`,
 `INVALID_FEED_PER_TOOTH`, `INVALID_TOOTH_COUNT`, `INVALID_LENGTH_OF_CUT`,
 `UNSUPPORTED_COMBINATION`), which are unaffected by this feature.
+
+Two new error codes were introduced during implementation for
+milling-specific edge cases not covered by drilling's reused set:
+`INVALID_AVAILABLE_POWER` (a non-numeric, non-finite, or non-positive
+`available_power` in power-constrained mode) and `CALCULATION_OVERFLOW`
+(an otherwise-valid extreme input that overflows an intermediate
+calculation). Both have their own message-catalog entries
+(`error.invalid_available_power`, `error.calculation_overflow`).
 
 ## CalculationResult — reused unchanged
 

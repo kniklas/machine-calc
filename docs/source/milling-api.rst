@@ -64,6 +64,11 @@ to milling: ``INVALID_DEPTH_OF_CUT``, ``INVALID_ENGAGEMENT``,
 ``INVALID_LENGTH_OF_CUT``. Codes reused from drilling's calculation modes
 (``002-constrained-calculation-modes``): ``INFEASIBLE_POWER_BUDGET``,
 ``INVALID_TARGET_RPM``, ``MODE_CONFLICT`` (see "Calculation modes" below).
+Two codes are new in ``010-milling-calculation-modes``:
+``INVALID_AVAILABLE_POWER`` (a non-numeric, non-finite, or non-positive
+``available_power`` in ``POWER_CONSTRAINED`` mode) and
+``CALCULATION_OVERFLOW`` (an otherwise-valid extreme input that overflows
+an intermediate calculation).
 
 Validation runs in a fixed order, so a call with several invalid inputs
 always reports the same first failure. ``material`` and ``tool`` presence are
@@ -83,20 +88,25 @@ arguments as :func:`machine_calc.calculate` (drilling), added by
     ``feasibility_warning`` without altering the result.
 
 ``CalculationMode.POWER_CONSTRAINED``
-    ``available_power`` becomes **required**. If it is at least the
-    STANDARD-mode power requirement the result is a no-op (identical to
-    STANDARD, only ``mode`` differs). Otherwise the spindle speed is reduced
-    so that ``power_required`` matches ``available_power`` exactly (within
+    ``available_power`` becomes **required**. A missing, non-numeric,
+    non-finite, or non-positive ``available_power`` returns
+    ``INVALID_AVAILABLE_POWER``. If it is at least the STANDARD-mode power
+    requirement the result is a no-op (identical to STANDARD, only ``mode``
+    differs). Otherwise the spindle speed is reduced so that
+    ``power_required`` matches ``available_power`` exactly (within
     ``math.isclose(rel_tol=1e-9)``); torque is unaffected, since it does not
     depend on spindle speed. A budget too low to support any feasible
-    spindle speed returns ``INFEASIBLE_POWER_BUDGET``.
+    spindle speed returns ``INFEASIBLE_POWER_BUDGET``. An otherwise-valid
+    extreme input that overflows an intermediate calculation returns
+    ``CALCULATION_OVERFLOW``.
 
 ``CalculationMode.FIXED_RPM``
     ``target_rpm`` becomes **required** and is echoed back exactly as
     ``spindle_speed_rpm``; every dependent field is recomputed at that
     spindle speed. ``available_power`` stays optional/advisory here too. A
     missing, non-numeric, non-positive or non-finite ``target_rpm`` returns
-    ``INVALID_TARGET_RPM``.
+    ``INVALID_TARGET_RPM``. An otherwise-valid extreme input that overflows
+    an intermediate calculation returns ``CALCULATION_OVERFLOW``.
 
 Supplying both ``target_rpm`` and ``POWER_CONSTRAINED`` mode is rejected as
 ``MODE_CONFLICT`` (FR-009) rather than silently picking one.

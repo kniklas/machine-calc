@@ -25,8 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   prompt is shown.
 - Both new modes reuse drilling's existing `CalculationMode` enum,
   validators, and error codes (`INFEASIBLE_POWER_BUDGET`,
-  `INVALID_TARGET_RPM`, `MODE_CONFLICT`) verbatim — no new error codes or
-  message-catalog entries were introduced.
+  `INVALID_TARGET_RPM`, `MODE_CONFLICT`) verbatim. Two new error codes are
+  introduced for milling-specific edge cases: `INVALID_AVAILABLE_POWER`
+  (a non-numeric, non-finite, or non-positive `available_power` in
+  power-constrained mode) and `CALCULATION_OVERFLOW` (an otherwise-valid
+  extreme input that overflows an intermediate calculation).
 
 ### Unchanged
 
