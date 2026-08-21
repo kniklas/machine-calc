@@ -4,6 +4,14 @@ machine-calc documentation
 Metal machining calculation library and interactive CLI, covering drilling
 (twist drills) and milling (end milling and face milling).
 
+Drilling support (twist drills, plus the standard/power-constrained/
+fixed-RPM calculation modes) is covered in:
+
+- ``specs/001-metal-drilling-calc/spec.md``
+- ``specs/001-metal-drilling-calc/quickstart.md``
+- ``specs/002-constrained-calculation-modes/spec.md``
+- ``specs/002-constrained-calculation-modes/quickstart.md``
+
 Wood-materials support (hardwood/softwood/engineered) is covered in:
 
 - ``specs/007-wood-materials-support/spec.md``
@@ -26,6 +34,8 @@ the REPL) is covered in:
    :maxdepth: 2
    :caption: Contents:
 
+   drilling
+   drilling-api
    milling
    milling-api
 

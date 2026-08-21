@@ -1,0 +1,132 @@
+Drilling calculations (user guide)
+===================================
+
+machine-calc calculates parameters for twist-drill **drilling**, alongside
+milling (end milling and face milling). This page covers using it from the
+interactive CLI; see :doc:`drilling-api` for the library API.
+
+Selecting an operation in the REPL
+----------------------------------
+
+Start the REPL with::
+
+    python -m machine_calc
+
+The first question is which machining operation to calculate; drilling is
+the default::
+
+    Machining operation (drilling, milling) (drilling):
+    Unit system [metric/imperial] (metric):
+    Calculation mode (standard, power-constrained, fixed-rpm):
+    Material type (Metal, Wood): Metal
+    Material (Mild Steel, Stainless Steel, ...): Mild Steel
+    Drilling tool (HSS, Cobalt, Carbide): Carbide
+    Drill diameter (mm): 10
+    Hole depth (mm): 25
+
+Pressing Enter at the operation prompt accepts the ``drilling`` default and
+leads to exactly this session; choosing ``milling`` instead switches to the
+milling flow described in :doc:`milling`.
+
+After each result the REPL asks whether to run another calculation.
+Answering yes returns to the operation prompt, so you can switch to milling
+and back freely. Each operation remembers its *own* previous answers as
+defaults, so hopping from drilling to milling and back does not lose your
+drilling inputs.
+
+Drilling inputs
+----------------
+
+After the unit system, calculation mode, material type, material and tool,
+drilling asks for two geometry values:
+
+===========================  =========================================================
+Prompt                       Meaning
+===========================  =========================================================
+Drill diameter                Diameter of the twist drill, in mm / in.
+Hole depth                    Depth of the hole to be drilled, in mm / in.
+===========================  =========================================================
+
+Calculation modes
+-----------------
+
+Right after choosing the unit system, the REPL asks for a calculation mode::
+
+    Calculation mode (standard, power-constrained, fixed-rpm):
+
+``standard``
+    The unconstrained calculation used throughout the rest of this guide.
+    Available power stays optional and only advisory: if the calculated
+    power exceeds it, the result is shown anyway with a warning. Unlike the
+    unit-system prompt above, the mode prompt has no editable default — you
+    must type one of the three options; a blank entry re-prompts instead of
+    silently accepting ``standard``.
+
+``power-constrained``
+    Available power becomes a **required** prompt instead of an optional
+    one. If your machine can already deliver the calculated power the
+    result is unchanged. Otherwise the spindle speed is reduced until the
+    power required matches what you supplied exactly, and the result label
+    reads "adjusted to fit available power" instead of "recommended". A
+    budget too small for any feasible spindle speed is rejected with a
+    re-prompt.
+
+``fixed-rpm``
+    Adds a required "Target spindle speed (RPM)" prompt. The spindle speed
+    in the result is exactly what you entered — labeled "user-specified" —
+    and every other value is recomputed for that speed. Available power
+    stays optional/advisory here too, so an insufficient machine still
+    produces a result, with a warning.
+
+Answering ``y`` at the "run another calculation?" prompt returns to the
+operation prompt, where you can pick a different mode; any previous
+mode's power/RPM answer is cleared rather than carried over as a stale
+default.
+
+Reading the results
+--------------------
+
+A drilling result looks like this::
+
+    Spindle speed:     1350.5 RPM   (recommended)
+    Feed rate:         54.2 mm/min
+    Machining time:    0.42 min
+    Torque:            3.1 N·m
+    Power required:    0.44 kW
+
+These five lines mean the same as they do for milling: spindle speed and
+feed rate describe how the drill is driven, machining time is how long the
+hole takes to cut, and torque/power are what the spindle needs to deliver.
+Drilling does not report a material removal rate — that line is specific to
+milling and never appears in a drilling result.
+
+If you supply an available machine power and the calculated power exceeds
+it, the result is still shown, with a warning line telling you the cut is
+beyond what the machine can deliver.
+
+Limits and validation
+----------------------
+
+Drilling inputs are validated before anything is calculated, and an invalid
+value is re-prompted rather than aborting the session. The bounds are
+configurable (see the configuration documentation); the defaults are:
+
+===============================  ==========  =========================================
+Setting                          Default     Applies to
+===============================  ==========  =========================================
+``max_diameter_mm``              100.0 mm    Drill diameter.
+``max_depth_mm``                 500.0 mm    Hole depth.
+===============================  ==========  =========================================
+
+In addition, both values must be positive, finite numbers.
+
+Assumptions
+-----------
+
+The drilling model uses standard twist-drill machining formulas as
+published in widely-referenced industry sources (Sandvik Coromant's
+"Machining Formulas" reference and Machinery's Handbook), including a
+point-engagement allowance approximated as a fraction of drill diameter to
+account for the drill point's cutting geometry when computing machining
+time. See ``specs/001-metal-drilling-calc/research.md`` for the formulas
+and their sources.
