@@ -1,29 +1,30 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.5.0 → 1.6.0
-Modified principles: none (existing principles I-IX unchanged)
+Version change: 1.6.0 → 1.7.0
+Modified principles: none (existing principles I-X unchanged)
 Added sections:
-  - Principle X (Licensing & Author Rights): new principle establishing the project's
-    dual-license model (free for noncommercial use under the PolyForm Noncommercial
-    License 1.0.0; commercial use requires a separate paid license from the copyright
-    holder) and requiring the license file, package metadata, and README to stay
-    consistent and accurate (per issue #37)
+  - Principle XI (Multi-Agent Coding-Tool Consistency): new principle requiring that
+    per-coding-agent instruction/skill files (Copilot's `.github/agents/`+`.github/prompts/`,
+    Claude Code's `.claude/skills/`, and any future integration such as Cursor) be treated
+    as generated artifacts of Spec Kit's integration mechanism rather than hand-duplicated,
+    independently-diverging files, and be kept in sync via `specify integration
+    install`/`specify integration upgrade` against Spec Kit's upstream template source
+    (per issue #46; follows up on the Claude Code integration added in PR #48)
 Expanded sections: none
 Removed sections: none
 Templates requiring updates:
   ✅ .specify/templates/plan-template.md (Constitution Check gate references principles
     generically; no changes needed)
   ✅ .specify/templates/tasks-template.md (no principle-specific mandatory task category
-    introduced; licensing changes are a one-time doc/metadata task, not a recurring
-    per-feature task category)
+    introduced; this principle governs contributor/tooling process, not feature tasks)
   ✅ .specify/templates/spec-template.md (no principle-specific mandatory sections
     introduced; no changes needed)
-  ✅ .github/copilot-instructions.md (no agent-specific references requiring updates)
+  ✅ .github/copilot-instructions.md (no specific-principle enumeration present to update)
 Follow-up TODOs:
-  - If/when a paid commercial-license process is formalized (pricing, contract terms,
-    payment flow), this principle MUST be amended to reference that concrete process
-    instead of the current "open a GitHub issue" placeholder contact path.
+  - Automating a recurring `specify integration upgrade` check (e.g. a scheduled workflow
+    that opens a PR when installed agents' generated files drift from upstream) is not yet
+    implemented; deferred as a follow-up feature rather than performed by this command.
 -->
 
 # machine-calc Constitution
@@ -264,6 +265,33 @@ commercial use requiring a separate paid license from the copyright holder.
   silent scope creep into permissive terms, or documentation drift between the legal
   text and what the project publicly claims.
 
+### XI. Multi-Agent Coding-Tool Consistency
+This project MUST support development via multiple AI coding agents (currently GitHub
+Copilot and Claude Code, with others such as Cursor anticipated) without maintaining
+hand-duplicated, independently-diverging instruction sets per agent.
+- Per-agent instruction/skill/prompt files (e.g., Copilot's `.github/agents/` and
+  `.github/prompts/`, Claude Code's `.claude/skills/`, and any future integration's
+  equivalent directory) MUST be treated as generated artifacts of the Spec Kit integration
+  mechanism, not as hand-authored, independently-maintained content.
+- Contributors MUST NOT manually copy, paraphrase, or hand-sync one agent's instruction
+  file into another agent's format. A new coding-agent integration MUST be added via
+  `specify integration install <name>`, and existing integrations MUST be refreshed via
+  `specify integration upgrade <name>` against Spec Kit's upstream template source, so
+  every installed agent's instructions remain derived from one canonical upstream source.
+- Project-specific workflow customization MUST live only in Spec Kit's designated
+  customization points (this constitution, `.specify/templates/*`, `.specify/extensions.yml`
+  hooks) — never patched directly into a generated per-agent file — since such edits are
+  silently lost or diverge on the next `specify integration upgrade`.
+- Installed integrations SHOULD be kept up to date on a recurring cadence (manually, or via
+  an automated recurring job that runs `specify integration upgrade` for each installed
+  agent and opens a pull request when generated files change) so agent instructions do not
+  silently drift from the upstream source over time.
+- Rationale: each coding agent requires its own instruction-file format (Copilot's
+  `.github/agents`/`.github/prompts` pair vs. Claude Code's self-contained
+  `.claude/skills/*/SKILL.md`); without a single canonical upstream source and a mechanical
+  regeneration step, these files inevitably duplicate and drift, producing inconsistent
+  agent behavior and an unreviewable, ever-growing maintenance burden (issue #46).
+
 ## Additional Constraints (Quality Gates)
 
 - CI MUST run linting, the full automated test suite, and a package build check on every
@@ -322,4 +350,4 @@ recurring pattern, MUST trigger a proposed constitution amendment rather than re
 ad-hoc exceptions. Use `.specify/memory/constitution.md` as the authoritative source for
 runtime development guidance until a dedicated guidance file is introduced.
 
-**Version**: 1.6.0 | **Ratified**: 2026-07-08 | **Last Amended**: 2026-08-19
+**Version**: 1.7.0 | **Ratified**: 2026-07-08 | **Last Amended**: 2026-08-21
