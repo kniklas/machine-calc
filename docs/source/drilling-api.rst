@@ -95,6 +95,16 @@ reusing this same contract.
     advisory power. A missing, non-numeric, non-positive or non-finite
     ``target_rpm`` returns ``INVALID_TARGET_RPM``.
 
+    .. note::
+        ``validate_target_rpm()`` only checks positivity and finiteness, not
+        a practical lower bound: an extreme subnormal value (e.g.
+        ``5e-324``) currently passes validation but underflows the feed-rate
+        calculation to zero and raises ``ZeroDivisionError`` in
+        ``calculate_drilling_metrics_at_rpm()``, contradicting
+        ``calculate()``'s documented never-raises contract. Tracked as a
+        pre-existing bug in issue #55, not something this drilling
+        documentation PR introduces or fixes.
+
 Supplying both ``target_rpm`` and ``POWER_CONSTRAINED`` mode is rejected as
 ``MODE_CONFLICT`` rather than silently picking one.
 

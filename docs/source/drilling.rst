@@ -72,7 +72,11 @@ Right after choosing the unit system, the REPL asks for a calculation mode::
     power the numeric values are unchanged even though the label switches.
     Otherwise the spindle speed is reduced until the power required
     matches what you supplied exactly. A budget too small for any feasible
-    spindle speed is rejected with a re-prompt.
+    spindle speed is **not** re-prompted at this step — the calculation
+    itself fails with an "infeasible power budget" error, which is
+    displayed in place of a result, and the REPL proceeds to the "run
+    another calculation?" prompt rather than asking for available power
+    again.
 
 ``fixed-rpm``
     Adds a required "Target spindle speed (RPM)" prompt. The spindle speed
@@ -89,13 +93,14 @@ default.
 Reading the results
 --------------------
 
-A drilling result looks like this::
+A drilling result looks like this (10 mm diameter, 25 mm depth, Mild Steel,
+Carbide, standard mode)::
 
-    Spindle speed:     1350.5 RPM   (recommended)
-    Feed rate:         54.2 mm/min
-    Machining time:    0.42 min
-    Torque:            3.1 N·m
-    Power required:    0.44 kW
+    Spindle speed:     1989.4 RPM   (recommended)
+    Feed rate:         437.7 mm/min
+    Machining time:    0.06 min
+    Torque:            10.5 N·m
+    Power required:    2.18 kW
 
 These five lines mean the same as they do for milling: spindle speed and
 feed rate describe how the drill is driven, machining time is how long the
@@ -121,7 +126,8 @@ Setting                          Default     Applies to
 ``max_depth_mm``                 500.0 mm    Hole depth.
 ===============================  ==========  =========================================
 
-In addition, both values must be positive, finite numbers. Library callers
+In addition, both values must be positive and within the bound above.
+Library callers
 can override these bounds via ``calculate()``'s ``config_path`` argument
 (see :doc:`drilling-api`); the CLI does not expose an equivalent flag — its
 only configuration flag, ``--materials-config``, overrides materials/tools,
