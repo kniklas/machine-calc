@@ -288,6 +288,35 @@ def test_compose_pull_request_body_no_blocked_section_when_nothing_blocked():
 # --- main() end-to-end (T012) -------------------------------------------------
 
 
+# --- check_specify_cli_up_to_date (FR-013) -----------------------------------
+
+
+def test_check_specify_cli_up_to_date_no_update():
+    stdout = "Up to date: 1.0.0\n"
+    with patch.object(sai.subprocess, "run", return_value=_completed(0, stdout)):
+        assert sai.check_specify_cli_up_to_date() is None
+
+
+def test_check_specify_cli_up_to_date_update_available():
+    stdout = "Update available: 1.0.0 → v1.0.1\n\nTo upgrade:\n  specify self upgrade\n"
+    with patch.object(sai.subprocess, "run", return_value=_completed(0, stdout)):
+        assert sai.check_specify_cli_up_to_date() == "v1.0.1"
+
+
+def test_check_specify_cli_up_to_date_network_failure_is_inconclusive():
+    stdout = "Installed: 1.0.0\nCould not check latest release: network error\n"
+    with patch.object(sai.subprocess, "run", return_value=_completed(0, stdout)):
+        assert sai.check_specify_cli_up_to_date() is None
+
+
+def _stub_self_check_up_to_date(cmd):
+    """Shared fake_run branch: every main()-level test below must handle
+    the FR-013 `specify self check` call main() now makes first."""
+    if cmd[:3] == ["specify", "self", "check"]:
+        return _completed(0, "Up to date: 1.0.0\n")
+    return None
+
+
 def test_main_no_drift_writes_has_changes_false(tmp_path, monkeypatch):
     output_file = tmp_path / "github_output"
     output_file.write_text("")
@@ -296,6 +325,9 @@ def test_main_no_drift_writes_has_changes_false(tmp_path, monkeypatch):
     status_json = json.dumps({"manifests": {"copilot": {"modified_files": []}}})
 
     def fake_run(cmd, **kwargs):
+        stub = _stub_self_check_up_to_date(cmd)
+        if stub is not None:
+            return stub
         if cmd[:3] == ["specify", "integration", "status"]:
             return _completed(0, status_json)
         if cmd[:3] == ["specify", "integration", "upgrade"]:
@@ -320,6 +352,9 @@ def test_main_drift_found_writes_has_changes_true(tmp_path, monkeypatch):
     status_json = json.dumps({"manifests": {"copilot": {"modified_files": []}}})
 
     def fake_run(cmd, **kwargs):
+        stub = _stub_self_check_up_to_date(cmd)
+        if stub is not None:
+            return stub
         if cmd[:3] == ["specify", "integration", "status"]:
             return _completed(0, status_json)
         if cmd[:3] == ["specify", "integration", "upgrade"]:
@@ -344,7 +379,13 @@ def test_main_failure_exits_nonzero(tmp_path, monkeypatch):
     monkeypatch.setattr(sai, "load_installed_integrations", lambda: ["copilot"])
     status_json = json.dumps({"manifests": {"copilot": {"modified_files": ["x.md"]}}})
 
-    with patch.object(sai.subprocess, "run", return_value=_completed(0, status_json)):
+    def fake_run(cmd, **kwargs):
+        stub = _stub_self_check_up_to_date(cmd)
+        if stub is not None:
+            return stub
+        return _completed(0, status_json)
+
+    with patch.object(sai.subprocess, "run", side_effect=fake_run):
         exit_code = sai.main()
 
     assert exit_code == 1
@@ -371,6 +412,9 @@ def test_main_mixed_blocked_and_changed_still_opens_pr_with_callout(tmp_path, mo
     )
 
     def fake_run(cmd, **kwargs):
+        stub = _stub_self_check_up_to_date(cmd)
+        if stub is not None:
+            return stub
         if cmd[:3] == ["specify", "integration", "status"]:
             return _completed(0, status_json)
         if cmd[:3] == ["specify", "integration", "upgrade"]:
@@ -405,6 +449,9 @@ def test_main_all_blocked_no_changes_fails(tmp_path, monkeypatch):
     )
 
     def fake_run(cmd, **kwargs):
+        stub = _stub_self_check_up_to_date(cmd)
+        if stub is not None:
+            return stub
         if cmd[:3] == ["specify", "integration", "status"]:
             return _completed(0, status_json)
         if cmd[:3] == ["specify", "integration", "upgrade"]:
@@ -414,6 +461,28 @@ def test_main_all_blocked_no_changes_fails(tmp_path, monkeypatch):
         raise AssertionError(f"unexpected command: {cmd}")
 
     with patch.object(sai.subprocess, "run", side_effect=fake_run):
+        exit_code = sai.main()
+
+    assert exit_code == 1
+    assert "has_changes=false" in output_file.read_text()
+
+
+def test_main_stale_cli_fails_without_checking_integrations(tmp_path, monkeypatch):
+    """When a newer specify-cli release exists, main() must fail immediately
+    and never call load_installed_integrations()/run_integration_upgrade()
+    at all - those would only report a false no-drift against the stale,
+    bundled templates (FR-013)."""
+    output_file = tmp_path / "github_output"
+    output_file.write_text("")
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output_file))
+
+    def fail_if_called():
+        raise AssertionError("load_installed_integrations() must not be called")
+
+    monkeypatch.setattr(sai, "load_installed_integrations", fail_if_called)
+    stdout = "Update available: 1.0.0 → v1.0.1\n"
+
+    with patch.object(sai.subprocess, "run", return_value=_completed(0, stdout)):
         exit_code = sai.main()
 
     assert exit_code == 1

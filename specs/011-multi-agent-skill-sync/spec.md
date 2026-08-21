@@ -173,6 +173,19 @@ scheduled run.
   underlying Spec Kit tooling used to perform the sync; upgrading that
   tooling's own version remains a separate, explicit maintainer action
   outside this workflow's scope.
+- **FR-013**: Because the underlying tooling's per-integration templates are
+  bundled inside the pinned tooling version itself rather than fetched
+  independently at sync time (research.md #2 addendum), regenerating
+  integrations with an unchanged pinned tooling version cannot by itself
+  detect that a newer tooling release exists. The workflow MUST therefore
+  separately check, on every run, whether a newer release of the underlying
+  tooling is available; when one is, the workflow MUST fail visibly with a
+  message naming the newer version (FR-012 still applies: the workflow
+  itself MUST NOT act on this by updating the pin) rather than proceeding
+  to check integrations and silently reporting "no drift" against the
+  stale, already-pinned tooling. A transient failure of this check itself
+  (e.g., the upstream release-listing service is unreachable) MUST be
+  treated as inconclusive, not as a reason to fail the run.
 
 ### Key Entities
 
@@ -192,8 +205,10 @@ scheduled run.
 
 - **SC-001**: An installed coding-agent integration's instruction files are
   never more than one week out of date relative to Spec Kit's upstream
-  template source without an open pull request notifying the maintainer of
-  the drift.
+  template source without the maintainer being notified — either via an
+  open pull request (real drift found at the currently-pinned tooling
+  version) or a failed run naming an available newer tooling release
+  (FR-013, when the pin itself is what's stale).
 - **SC-002**: 100% of sync pull requests identify, in their description alone
   (without the reviewer opening the diff), which coding-agent integration(s)
   changed.

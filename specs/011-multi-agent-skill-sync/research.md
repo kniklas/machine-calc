@@ -60,16 +60,37 @@ specify-cli` returns no match); its only installable source is spec-kit's
 GitHub repository. Pinning the same `@vX.Y.Z` git ref this repository is
 already tracking keeps the workflow reproducible and satisfies spec.md
 FR-012 (the sync workflow must not silently change the pinned tooling
-version as a side effect of a routine sync run) — an upstream *template*
-change is picked up by re-running `integration upgrade`, without needing a
-newer `specify` CLI release at all, since the CLI and the templates it
-fetches evolve on separate cadences.
+version as a side effect of a routine sync run).
 
 **Alternatives considered**:
 - `pip install specify-cli`: rejected, package does not exist on PyPI.
 - Floating/unpinned install (`@main` or no ref): rejected, directly
   contradicts FR-012 and would make sync-run behavior non-reproducible
   between runs.
+
+**Addendum (post-PR #50 Copilot review — corrects an earlier factual
+error)**: this decision's original rationale claimed "an upstream template
+change is picked up by re-running `integration upgrade`... since the CLI
+and the templates it fetches evolve on separate cadences." That is **false**
+and has been removed above. Verified directly against the installed
+package: `specify_cli/_assets.py`'s `_locate_core_pack()` docstring states
+the `core_pack` (containing `templates/`) is bundled into the wheel *at
+build time* — "core_pack is a sibling directory of this file" — not fetched
+from a live source at `integration upgrade` time. `specify integration
+upgrade` therefore always regenerates from whatever templates shipped with
+the *currently installed CLI version*; with that version pinned (as this
+decision requires per FR-012), re-running it can only ever surface drift
+**once** — the one-time migration from whatever previously generated the
+committed files to the pinned version's own output — never ongoing drift
+from a newer spec-kit release. Confirmed empirically too: `specify self
+check` against this repository's actual pinned v1.0.0 reported a real
+available update (`v1.0.0 → v1.0.1`) that `integration upgrade` alone would
+never have surfaced. This is what spec.md FR-013 and
+`check_specify_cli_up_to_date()` (using `specify self check`, which *is* a
+genuine live check against GitHub's Releases API — see that function's
+docstring) exist to close: the sync run now fails visibly, naming the newer
+release, instead of silently and indefinitely reporting "no drift" once the
+one-time migration is done.
 
 ## 3. Avoiding duplicate open sync pull requests (FR-011)
 
@@ -192,3 +213,44 @@ avoid unneeded complexity).
   out-of-scope for this feature's MVP; could be added later without
   changing this feature's other decisions if the maintainer finds the email
   notification insufficient.
+
+## 7. Detecting a stale pinned tooling version (FR-013, added post-PR #50 review)
+
+**Decision**: Run `specify self check` (a read-only command that queries
+GitHub's Releases API — `GITHUB_API_LATEST =
+"https://api.github.com/repos/github/spec-kit/releases/latest"` in the
+installed package's `_version.py`) at the start of every sync run, before
+touching any integration. If its output matches `Update available: X → Y`,
+the run fails immediately with `Y` named in the error, and no integration
+is checked. If it reports `Up to date: X`, or fails to reach GitHub at all
+(`Could not check latest release: ...` — the CLI's own documented
+graceful-failure path), the run proceeds to the normal per-integration
+drift check unaffected.
+
+**Rationale**: This decision #2's original rationale for CLI pinning turned
+out to rest on a false premise (decision #2's addendum) — templates are
+bundled inside the pinned CLI, so re-running `integration upgrade` with an
+unchanged pin can never detect a newer spec-kit release. `specify self
+check` is the one command in this CLI that actually performs a live check
+against upstream (everything else this script calls -
+`integration status`/`integration upgrade` - operates entirely on local
+state and the bundled package). Failing the run (rather than silently
+proceeding to a false "no drift") is what makes spec.md SC-001's "never
+more than a week out of date without the maintainer being notified"
+promise actually true, without requiring the workflow to violate FR-012 by
+bumping its own pin.
+
+**Alternatives considered** (the three options presented to and decided by
+the maintainer):
+- **Auto-bump and regenerate**: have the workflow itself update the pinned
+  version (in `.github/workflows/ci.yml` and `.specify/integration.json`)
+  and regenerate files from the new release, bundling the version bump into
+  the sync pull request. Rejected: requires rewriting FR-012 from "never
+  changes the pin" to "the pin's own change must be a reviewable part of
+  the PR," and lets an unattended weekly job unilaterally pull in a new,
+  unreviewed external tool release before a human has chosen to.
+- **Leave the gap undocumented/unaddressed**: keep the original design,
+  where drift detection only ever fires once (right after a human
+  separately bumps the pin some other way). Rejected: leaves spec.md
+  SC-001's core promise silently unmet indefinitely, with nothing to
+  prompt the maintainer to notice or act.

@@ -251,7 +251,7 @@ identical drift-check and pull-request behavior as a scheduled run
 **Purpose**: Validation and quality-bar tasks spanning all three user
 stories.
 
-- [X] T018 Execute all 7 quickstart.md scenarios and confirm actual behavior
+- [X] T018 Execute all quickstart.md scenarios and confirm actual behavior
   matches documented expected outcomes (depends on T001–T017). Scenarios 1-3
   (no-drift, drift-found, locally-modified-blocks) validated for real against
   the live `specify` CLI in a disposable git worktree (not this working tree)
@@ -264,6 +264,13 @@ stories.
   `peter-evans/create-pull-request`'s documented branch-reuse behavior
   (research.md #3) and requires a live GitHub Actions run to fully exercise —
   not independently re-tested here beyond that documented behavior.
+  **Scenario 2a (added post-PR #50 Copilot review, FR-013)**: validated for
+  real — `specify self check` against this repository's actual pinned
+  version reported a genuine available update at review time (`1.0.0 →
+  v1.0.1`) — plus via
+  `test_check_specify_cli_up_to_date_update_available`/
+  `test_main_stale_cli_fails_without_checking_integrations` proving `main()`
+  fails without ever calling `load_installed_integrations()` in that case.
 - [X] T019 [P] Add a short mention of the automated multi-agent sync
   workflow to `README.md` (or a `CONTRIBUTING`-style doc) — optional per
   plan.md's Constitution Check Principle VII note (not required by any FR),
@@ -372,6 +379,31 @@ Task: "Integration test for main() in tests/scripts/test_sync_agent_integrations
    final release
 
 ---
+
+## Phase 7: Post-Review Corrections (PR #50 code review)
+
+- [X] T022 Implement `check_specify_cli_up_to_date()` in
+  `scripts/sync_agent_integrations.py`, wrapping `specify self check`
+  (research.md #7) and returning the newer release tag if one is available;
+  call it first in `main()`, failing the run immediately (before checking
+  any integration) with the newer version named when one is found (FR-013;
+  spec.md SC-001). This closes a genuine architectural gap Copilot's review
+  on PR #50 surfaced: `specify integration upgrade`'s templates are bundled
+  inside the pinned CLI itself, so without this check, drift detection
+  would silently stop working after the pin's one-time initial migration.
+  Unit-tested (`test_check_specify_cli_up_to_date_*`,
+  `test_main_stale_cli_fails_without_checking_integrations`).
+- [X] T023 Fix `run_integration_upgrade()`'s deletion-only-drift blind spot
+  (Copilot review, PR #50): capture `_manifest_tracked_paths(key)` **before**
+  the upgrade too, not only after, and scope the `git status` check to the
+  union of both — a file the upstream *deleted* is absent from the
+  post-upgrade manifest alone, so the original post-only scoping silently
+  missed it. Added `test_run_integration_upgrade_detects_deletion_only_drift`.
+- [X] T024 Pin the `sync-agent-integrations` job's `actions/checkout@v4`
+  step to `ref: main` explicitly (Copilot review, PR #50) — an on-demand
+  `workflow_dispatch` launched from a non-default branch would otherwise
+  checkout that branch, causing `peter-evans/create-pull-request` to default
+  its PR base to it instead of `main`.
 
 ## Notes
 

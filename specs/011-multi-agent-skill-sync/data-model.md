@@ -27,10 +27,17 @@ A single execution of the workflow (scheduled or manually dispatched).
 |---|---|---|
 | `trigger` | one of: `schedule`, `workflow_dispatch` | FR-005 |
 | `integrations` | `Integration[]` | one entry per installed integration (see above) |
-| `outcome` | one of: `no-drift` (FR-004), `pull-request-opened-or-updated` (FR-003/FR-011), `failed` (FR-007) | overall run result |
+| `outcome` | one of: `no-drift` (FR-004), `pull-request-opened-or-updated` (FR-003/FR-011), `failed` (FR-007/FR-013) | overall run result |
 | `specify_cli_version` | string | pinned ref used for this run (research.md #2); recorded for traceability, never changed by the run itself (FR-012) |
 
 **Outcome derivation** (in priority order):
+0. Before any `Integration` is even checked: if `check_specify_cli_up_to_date()`
+   (research.md #7) reports a newer tooling release is available → run
+   `outcome = failed` immediately, naming that release (FR-013). No
+   integration is checked in this case — since `specify integration
+   upgrade` regenerates from templates bundled in the (stale) pinned
+   tooling version, checking them would only ever produce a false
+   `no-drift` result.
 1. If any `Integration.status == failed` (tooling/network error, not a
    modified-file block) → run `outcome = failed`. No pull request is opened
    or updated (edge case: partial success must not open a *silent* partial

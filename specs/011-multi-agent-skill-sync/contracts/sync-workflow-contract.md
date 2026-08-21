@@ -29,14 +29,20 @@ in `.github/workflows/ci.yml`.
 - **`failed`**: the workflow run itself fails (non-zero exit / red status
   check) — visible in the Actions tab and (for `schedule` runs) via GitHub's
   built-in failure-notification email (research.md #6); no pull request is
-  opened or updated for this run (FR-007). A genuine tooling/network error
-  always produces this outcome, regardless of any other integration's
-  result. An integration blocked by a locally-modified file (FR-008)
-  produces this same outcome only when *no other* integration in the run
-  had real changes to PR (data-model.md "Sync Run" outcome derivation); when
-  at least one other integration did, the run is
-  `pull-request-opened-or-updated` instead, and the blocked integration is
-  named in that pull request's body rather than sinking the run.
+  opened or updated for this run. Three distinct causes all produce this
+  outcome, distinguished only by the failure message:
+  - The pinned tooling version itself is stale (a newer release is
+    available) — checked *first*, before any integration (FR-013;
+    research.md #7). No integration is checked in this case.
+  - A genuine tooling/network error regenerating an integration (FR-007) —
+    always produces this outcome, regardless of any other integration's
+    result.
+  - An integration blocked by a locally-modified file (FR-008) — produces
+    this outcome only when *no other* integration in the run had real
+    changes to PR (data-model.md "Sync Run" outcome derivation); when at
+    least one other integration did, the run is
+    `pull-request-opened-or-updated` instead, and the blocked integration is
+    named in that pull request's body rather than sinking the run.
 
 ## Sync Pull Request body contract
 

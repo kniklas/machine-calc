@@ -24,18 +24,36 @@ Validation scenarios for the sync workflow described in
 
 ## Scenario 2 — Upstream drift: run produces a single pull request (FR-001–FR-003, SC-001, SC-002)
 
-1. Simulate upstream drift by editing one line of a generated file under
-   `.claude/skills/speckit-converge/SKILL.md` (or any tracked file) to
-   differ from what `specify integration status --json` recorded, then
-   revert the manifest hash check by re-running the integration's install
-   step, OR — more directly — pin to an older `specify` CLI version, run the
-   sync steps, then re-pin to the current version and re-run: the second run
-   should regenerate the newer content.
+1. Simulate upstream drift the only way that actually works given
+   research.md #2's addendum (per-integration templates are bundled inside
+   the installed CLI, not fetched independently — `specify integration
+   install <key>` on an already-installed integration is a no-op and does
+   **not** establish a usable drift baseline): install an *older* pinned
+   `specify` CLI version first (e.g. the version this repository was
+   previously pinned to before v1.0.0, per git history of
+   `.specify/integration.json`), run the sync steps against it, then switch
+   to the current pinned version and re-run — the second run's regenerated
+   content differs from the first.
 2. Run the sync steps from Scenario 1.
 3. **Expected**: `git status --porcelain` shows changed files for the
    drifted integration. The composed pull-request description names that
    integration per the body contract (contracts/sync-workflow-contract.md
    §"Sync Pull Request body contract" item 1).
+
+## Scenario 2a — Stale pinned tooling version fails visibly (FR-013)
+
+1. Run `specify self check` directly. If it reports `Update available: X →
+   Y`, this scenario is already true of the repository's real current
+   state — skip to step 3. Otherwise, temporarily edit
+   `check_specify_cli_up_to_date()`'s regex match (or monkeypatch
+   `subprocess.run` as the unit tests do) to simulate an available update.
+2. Run `python scripts/sync_agent_integrations.py`.
+3. **Expected**: the run fails (non-zero exit), an `::error::` annotation
+   names the newer version, `has_changes=false` is written, and — critically
+   — **no** `specify integration status`/`upgrade` call is made for any
+   installed integration (contrast with Scenario 2: this is a fail-fast
+   check that runs *before* any integration work, not a per-integration
+   drift result).
 
 ## Scenario 3 — Locally-modified file blocks that integration (FR-007, FR-008)
 

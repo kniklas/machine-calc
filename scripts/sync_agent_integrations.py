@@ -12,6 +12,7 @@ from __future__ import annotations
 import functools
 import json
 import os
+import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -31,6 +32,36 @@ STATUS_MODIFIED_BLOCKED = "modified-blocked"
 STATUS_UPGRADED_NO_CHANGE = "upgraded-no-change"
 STATUS_UPGRADED_WITH_CHANGES = "upgraded-with-changes"
 STATUS_FAILED = "failed"
+
+
+_UPDATE_AVAILABLE_RE = re.compile(r"Update available:\s*\S+\s*→\s*(\S+)")
+
+
+def check_specify_cli_up_to_date() -> str | None:
+    """Run `specify self check` (read-only - it never modifies the
+    installation) and return the newer release tag if one is available,
+    else `None`.
+
+    This is a genuine live check against GitHub's Releases API (unlike
+    `specify integration upgrade`, whose templates are bundled inside the
+    installed CLI package itself - research.md #2 addendum), so it is the
+    only way this workflow can actually detect that upstream has moved on
+    since the pinned version, given FR-012 forbids the workflow from ever
+    bumping that pin itself.
+
+    A network/API failure while checking is treated as inconclusive (the
+    CLI's own graceful-failure path for this command) rather than a sync-run
+    failure - a transient GitHub outage should not block an otherwise
+    healthy integration drift check.
+    """
+    proc = subprocess.run(
+        ["specify", "self", "check"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    match = _UPDATE_AVAILABLE_RE.search(proc.stdout)
+    return match.group(1) if match else None
 
 
 def load_installed_integrations() -> list[str]:
@@ -240,6 +271,24 @@ def write_workflow_output(result: SyncRunOutcome) -> None:
 
 
 def main() -> int:
+    newer_cli_version = check_specify_cli_up_to_date()
+    if newer_cli_version:
+        # Fail-and-notify (spec.md FR-013): this workflow never bumps its
+        # own pinned specify-cli version (FR-012), so a stale pin can only
+        # be surfaced, never silently worked around. No integration checks
+        # run in this case - they would only report a false "no drift"
+        # against the stale, bundled templates (research.md #2 addendum).
+        write_workflow_output(SyncRunOutcome(outcome=OUTCOME_FAILED, integrations=[]))
+        print(
+            f"::error::A newer specify-cli release is available "
+            f"({newer_cli_version}); this workflow never bumps its own "
+            f"pinned version (FR-012). A maintainer must update the pin in "
+            f".github/workflows/ci.yml and .specify/integration.json, then "
+            f"re-run this workflow.",
+            file=sys.stderr,
+        )
+        return 1
+
     results = [run_integration_upgrade(key) for key in load_installed_integrations()]
 
     outcome = derive_run_outcome(results)
