@@ -115,9 +115,13 @@ beyond what the machine can deliver.
 Limits and validation
 ----------------------
 
-Drilling inputs are validated before anything is calculated, and an invalid
-value is re-prompted rather than aborting the session. The interactive CLI
-always validates against these fixed bounds:
+The drill diameter and hole depth are validated before anything is
+calculated, and an invalid value at either prompt is re-prompted rather
+than aborting the session (unlike available power or a power-constrained
+budget — see "Calculation modes" and "Reading the results" above, where an
+invalid/infeasible value instead produces a warning or an error result).
+The interactive CLI always validates diameter and depth against these
+fixed bounds:
 
 ===============================  ==========  =========================================
 Setting                          Default     Applies to

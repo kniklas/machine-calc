@@ -51,8 +51,12 @@ Base error codes (``001-metal-drilling-calc``): ``INVALID_DIAMETER``,
 ``INVALID_DEPTH``, ``MISSING_MATERIAL``, ``MISSING_TOOL``,
 ``UNUSABLE_MATERIAL``. Calculation-mode error codes
 (``002-constrained-calculation-modes``, see "Calculation modes" below):
-``INVALID_TARGET_RPM``, ``MODE_CONFLICT``, ``INFEASIBLE_POWER_BUDGET``,
-``INVALID_AVAILABLE_POWER``.
+``INVALID_TARGET_RPM``, ``MODE_CONFLICT``, ``INFEASIBLE_POWER_BUDGET``.
+``INVALID_AVAILABLE_POWER`` was introduced later, by
+``010-milling-calculation-modes`` (operation-agnostic validation shared
+with milling — see its spec's Key Decisions), but the shared
+``validate_mode_arguments()`` applies it to drilling's ``STANDARD``/
+``FIXED_RPM`` modes too.
 
 Validation runs in a fixed order, so a call with several invalid inputs
 always reports the same first failure: material and tool presence are
@@ -83,7 +87,7 @@ reusing this same contract.
     result is a no-op (identical to STANDARD, only ``mode`` differs) when
     ``available_power`` is at least the STANDARD-mode power requirement,
     **or** within ``math.isclose(rel_tol=1e-9)`` of it even from slightly
-    below — the no-op boundary is that tolerance band, not a hard `>=`
+    below — the no-op boundary is that tolerance band, not a hard ``>=``
     cutoff. Only when the budget falls clearly short of that band is the
     spindle speed actually reduced, algebraically, so that
     ``power_required`` matches ``available_power`` exactly; torque is
