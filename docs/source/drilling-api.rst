@@ -50,7 +50,8 @@ Base error codes (``001-metal-drilling-calc``): ``INVALID_DIAMETER``,
 ``INVALID_DEPTH``, ``MISSING_MATERIAL``, ``MISSING_TOOL``,
 ``UNUSABLE_MATERIAL``. Calculation-mode error codes
 (``002-constrained-calculation-modes``, see "Calculation modes" below):
-``INVALID_TARGET_RPM``, ``MODE_CONFLICT``, ``INFEASIBLE_POWER_BUDGET``.
+``INVALID_TARGET_RPM``, ``MODE_CONFLICT``, ``INFEASIBLE_POWER_BUDGET``,
+``INVALID_AVAILABLE_POWER``.
 
 Validation runs in a fixed order, so a call with several invalid inputs
 always reports the same first failure: material and tool presence are
@@ -69,7 +70,9 @@ reusing this same contract.
 ``CalculationMode.STANDARD`` (default)
     Unconstrained calculation, unchanged from ``001-metal-drilling-calc``.
     ``available_power`` remains optional/advisory: an exceeded budget sets
-    ``feasibility_warning`` without altering the result.
+    ``feasibility_warning`` without altering the result. A supplied but
+    non-numeric, non-finite, or non-positive ``available_power`` returns
+    ``INVALID_AVAILABLE_POWER``; ``None`` (omitted) is always valid.
 
 ``CalculationMode.POWER_CONSTRAINED``
     ``available_power`` becomes **required**: a missing value (``None``)
@@ -87,9 +90,10 @@ reusing this same contract.
 ``CalculationMode.FIXED_RPM``
     ``target_rpm`` becomes **required** and is echoed back exactly as
     ``spindle_speed_rpm``; every dependent field is recomputed at that
-    spindle speed. ``available_power`` stays optional/advisory here too. A
-    missing, non-numeric, non-positive or non-finite ``target_rpm`` returns
-    ``INVALID_TARGET_RPM``.
+    spindle speed. ``available_power`` stays optional/advisory here too,
+    with the same ``INVALID_AVAILABLE_POWER`` check as ``STANDARD`` mode's
+    advisory power. A missing, non-numeric, non-positive or non-finite
+    ``target_rpm`` returns ``INVALID_TARGET_RPM``.
 
 Supplying both ``target_rpm`` and ``POWER_CONSTRAINED`` mode is rejected as
 ``MODE_CONFLICT`` rather than silently picking one.
@@ -115,11 +119,11 @@ Formulas
 --------
 
 ``formulas.py`` implements, in order: cutting speed to spindle speed
-(``calculate_drilling_metrics``), feed rate from feed per revolution and a
-point-engagement allowance for the drill's cutting point, machining time
-from hole depth plus that allowance, torque from the specific cutting force
-(k\ :sub:`c`) and feed per revolution — independent of spindle speed — and
-power from torque and spindle speed
+(``calculate_drilling_metrics``), feed rate from spindle speed and feed per
+revolution, machining time from hole depth plus a point-engagement
+allowance for the drill's cutting point, torque from the specific cutting
+force (k\ :sub:`c`) and feed per revolution — independent of spindle speed
+— and power from torque and spindle speed
 (``calculate_drilling_metrics_at_rpm``). ``calculate_power_constrained_metrics``
 reuses the fact that torque is independent of spindle speed to solve for
 the reduced spindle speed algebraically rather than iteratively. Sources

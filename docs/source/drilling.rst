@@ -17,7 +17,7 @@ the default::
 
     Machining operation (drilling, milling) (drilling):
     Unit system [metric/imperial] (metric):
-    Calculation mode (standard, power-constrained, fixed-rpm):
+    Calculation mode (standard, power-constrained, fixed-rpm) (standard):
     Material type (Metal, Wood): Metal
     Material (Mild Steel, Stainless Steel, ...): Mild Steel
     Drilling tool (HSS, Cobalt, Carbide): Carbide
@@ -52,15 +52,16 @@ Calculation modes
 
 Right after choosing the unit system, the REPL asks for a calculation mode::
 
-    Calculation mode (standard, power-constrained, fixed-rpm):
+    Calculation mode (standard, power-constrained, fixed-rpm) (standard):
 
 ``standard``
     The unconstrained calculation used throughout the rest of this guide.
     Available power stays optional and only advisory: if the calculated
-    power exceeds it, the result is shown anyway with a warning. Unlike the
-    unit-system prompt above, the mode prompt has no editable default — you
-    must type one of the three options; a blank entry re-prompts instead of
-    silently accepting ``standard``.
+    power exceeds it, the result is shown anyway with a warning. Like the
+    unit-system prompt above, the mode prompt has an editable default — a
+    blank entry accepts the current default (``standard`` on the first
+    pass) rather than re-prompting. This differs from milling's mode
+    prompt, which requires an explicit choice every time.
 
 ``power-constrained``
     Available power becomes a **required** prompt instead of an optional
