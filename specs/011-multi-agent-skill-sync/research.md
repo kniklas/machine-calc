@@ -220,12 +220,16 @@ avoid unneeded complexity).
 GitHub's Releases API — `GITHUB_API_LATEST =
 "https://api.github.com/repos/github/spec-kit/releases/latest"` in the
 installed package's `_version.py`) at the start of every sync run, before
-touching any integration. If its output matches `Update available: X → Y`,
-the run fails immediately with `Y` named in the error, and no integration
-is checked. If it reports `Up to date: X`, or fails to reach GitHub at all
-(`Could not check latest release: ...` — the CLI's own documented
-graceful-failure path), the run proceeds to the normal per-integration
-drift check unaffected.
+touching any integration, and classify its result into exactly three
+states (`check_specify_cli_up_to_date()`'s `CliCheckResult`): if its output
+matches `Update available: X → Y`, the run fails immediately with `Y`
+named in the error; if the command exits non-zero, or reports `Could not
+check latest release: ...`/`Could not validate latest release tag...` (the
+CLI's own documented graceful-failure text on exit 0), the run *also* fails
+— with a distinct "could not verify" message — rather than silently
+proceeding; only an explicit `Up to date: X` lets the run proceed to the
+normal per-integration drift check. No integration is checked in either
+failing case.
 
 **Rationale**: This decision #2's original rationale for CLI pinning turned
 out to rest on a false premise (decision #2's addendum) — templates are
@@ -254,3 +258,13 @@ the maintainer):
   separately bumps the pin some other way). Rejected: leaves spec.md
   SC-001's core promise silently unmet indefinitely, with nothing to
   prompt the maintainer to notice or act.
+
+**Addendum (second Copilot review round on PR #50)**: this decision's first
+version treated a network/inconclusive `specify self check` result as
+"proceed normally, assume up to date" rather than failing the run. That
+was itself a second instance of the exact SC-001 gap this decision exists
+to close — an unreachable Releases API would then produce a silent,
+unnotified false "no drift" result, no different in effect from the
+original bundled-templates problem. Corrected as reflected in the Decision
+above: any non-`Up to date` result — confirmed-stale *or* inconclusive —
+now fails the run, distinguished only by message text.

@@ -178,6 +178,29 @@ def test_run_integration_upgrade_detects_deletion_only_drift(monkeypatch):
     assert result.changed_files == [".github/prompts/removed.md"]
 
 
+def test_run_integration_upgrade_git_status_failure_is_reported(monkeypatch):
+    """A failed `git status` commonly returns empty stdout, which must not
+    be misread as 'nothing changed' - that would silently hide a real
+    change (second-round Copilot review)."""
+    status_json = json.dumps({"manifests": {"copilot": {"modified_files": []}}})
+    monkeypatch.setattr(sai, "_manifest_tracked_paths", lambda key: ["x.md"])
+
+    def fake_run(cmd, **kwargs):
+        if cmd[:3] == ["specify", "integration", "status"]:
+            return _completed(0, status_json)
+        if cmd[:3] == ["specify", "integration", "upgrade"]:
+            return _completed(0, "")
+        if cmd[:2] == ["git", "status"]:
+            return _completed(1, "", "fatal: git status failed")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    with patch.object(sai.subprocess, "run", side_effect=fake_run):
+        result = sai.run_integration_upgrade("copilot")
+
+    assert result.status == sai.STATUS_FAILED
+    assert "git status failed" in result.error
+
+
 # --- derive_run_outcome (T007) -----------------------------------------------
 
 
@@ -294,19 +317,33 @@ def test_compose_pull_request_body_no_blocked_section_when_nothing_blocked():
 def test_check_specify_cli_up_to_date_no_update():
     stdout = "Up to date: 1.0.0\n"
     with patch.object(sai.subprocess, "run", return_value=_completed(0, stdout)):
-        assert sai.check_specify_cli_up_to_date() is None
+        result = sai.check_specify_cli_up_to_date()
+    assert result.status == sai.CLI_CHECK_UP_TO_DATE
 
 
 def test_check_specify_cli_up_to_date_update_available():
     stdout = "Update available: 1.0.0 → v1.0.1\n\nTo upgrade:\n  specify self upgrade\n"
     with patch.object(sai.subprocess, "run", return_value=_completed(0, stdout)):
-        assert sai.check_specify_cli_up_to_date() == "v1.0.1"
+        result = sai.check_specify_cli_up_to_date()
+    assert result.status == sai.CLI_CHECK_UPDATE_AVAILABLE
+    assert result.detail == "v1.0.1"
 
 
 def test_check_specify_cli_up_to_date_network_failure_is_inconclusive():
     stdout = "Installed: 1.0.0\nCould not check latest release: network error\n"
     with patch.object(sai.subprocess, "run", return_value=_completed(0, stdout)):
-        assert sai.check_specify_cli_up_to_date() is None
+        result = sai.check_specify_cli_up_to_date()
+    assert result.status == sai.CLI_CHECK_INCONCLUSIVE
+
+
+def test_check_specify_cli_up_to_date_nonzero_exit_is_inconclusive():
+    """An unexpected crash (distinct from the CLI's own documented exit-0
+    graceful-failure text) must also be inconclusive, not silently treated
+    as up to date."""
+    with patch.object(sai.subprocess, "run", return_value=_completed(1, "", "traceback...")):
+        result = sai.check_specify_cli_up_to_date()
+    assert result.status == sai.CLI_CHECK_INCONCLUSIVE
+    assert "traceback" in result.detail
 
 
 def _stub_self_check_up_to_date(cmd):
@@ -481,6 +518,29 @@ def test_main_stale_cli_fails_without_checking_integrations(tmp_path, monkeypatc
 
     monkeypatch.setattr(sai, "load_installed_integrations", fail_if_called)
     stdout = "Update available: 1.0.0 → v1.0.1\n"
+
+    with patch.object(sai.subprocess, "run", return_value=_completed(0, stdout)):
+        exit_code = sai.main()
+
+    assert exit_code == 1
+    assert "has_changes=false" in output_file.read_text()
+
+
+def test_main_inconclusive_cli_check_also_fails_without_checking_integrations(
+    tmp_path, monkeypatch
+):
+    """An inconclusive specify-cli check (e.g. GitHub unreachable) must fail
+    the run exactly like a confirmed-stale one - not be silently treated as
+    'assume up to date' (spec.md SC-001; second-round Copilot review)."""
+    output_file = tmp_path / "github_output"
+    output_file.write_text("")
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output_file))
+
+    def fail_if_called():
+        raise AssertionError("load_installed_integrations() must not be called")
+
+    monkeypatch.setattr(sai, "load_installed_integrations", fail_if_called)
+    stdout = "Installed: 1.0.0\nCould not check latest release: network error\n"
 
     with patch.object(sai.subprocess, "run", return_value=_completed(0, stdout)):
         exit_code = sai.main()

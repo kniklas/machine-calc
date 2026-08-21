@@ -37,10 +37,26 @@ STATUS_FAILED = "failed"
 _UPDATE_AVAILABLE_RE = re.compile(r"Update available:\s*\S+\s*→\s*(\S+)")
 
 
-def check_specify_cli_up_to_date() -> str | None:
+# check_specify_cli_up_to_date() outcome vocabulary (FR-013).
+CLI_CHECK_UP_TO_DATE = "up-to-date"
+CLI_CHECK_UPDATE_AVAILABLE = "update-available"
+CLI_CHECK_INCONCLUSIVE = "inconclusive"
+
+_INCONCLUSIVE_MARKERS = (
+    "Could not check latest release",
+    "Could not validate latest release tag",
+)
+
+
+@dataclass
+class CliCheckResult:
+    status: str
+    detail: str | None = None
+
+
+def check_specify_cli_up_to_date() -> CliCheckResult:
     """Run `specify self check` (read-only - it never modifies the
-    installation) and return the newer release tag if one is available,
-    else `None`.
+    installation) and classify the result.
 
     This is a genuine live check against GitHub's Releases API (unlike
     `specify integration upgrade`, whose templates are bundled inside the
@@ -49,10 +65,13 @@ def check_specify_cli_up_to_date() -> str | None:
     since the pinned version, given FR-012 forbids the workflow from ever
     bumping that pin itself.
 
-    A network/API failure while checking is treated as inconclusive (the
-    CLI's own graceful-failure path for this command) rather than a sync-run
-    failure - a transient GitHub outage should not block an otherwise
-    healthy integration drift check.
+    Anything short of a confirmed `CLI_CHECK_UP_TO_DATE` is
+    `CLI_CHECK_INCONCLUSIVE` - an unexpected non-zero exit, or the CLI's own
+    documented graceful-failure text (e.g. a transient GitHub outage or rate
+    limit) - which the caller MUST treat as a failure too, not silently
+    proceed past: spec.md SC-001 promises the maintainer is *always*
+    notified within a week, and a silently-swallowed "couldn't check" would
+    break that promise exactly as easily as a genuinely stale pin would.
     """
     proc = subprocess.run(
         ["specify", "self", "check"],
@@ -60,8 +79,17 @@ def check_specify_cli_up_to_date() -> str | None:
         capture_output=True,
         text=True,
     )
+    if proc.returncode != 0:
+        return CliCheckResult(
+            status=CLI_CHECK_INCONCLUSIVE,
+            detail=proc.stderr.strip() or proc.stdout.strip() or f"exit code {proc.returncode}",
+        )
     match = _UPDATE_AVAILABLE_RE.search(proc.stdout)
-    return match.group(1) if match else None
+    if match:
+        return CliCheckResult(status=CLI_CHECK_UPDATE_AVAILABLE, detail=match.group(1))
+    if any(marker in proc.stdout for marker in _INCONCLUSIVE_MARKERS):
+        return CliCheckResult(status=CLI_CHECK_INCONCLUSIVE, detail=proc.stdout.strip())
+    return CliCheckResult(status=CLI_CHECK_UP_TO_DATE)
 
 
 def load_installed_integrations() -> list[str]:
@@ -175,6 +203,15 @@ def run_integration_upgrade(key: str) -> IntegrationResult:
             capture_output=True,
             text=True,
         )
+        if diff.returncode != 0:
+            # A failed `git status` commonly returns empty stdout, which
+            # would otherwise be silently misread as "nothing changed" -
+            # exactly the kind of silent false-negative FR-007 forbids.
+            return IntegrationResult(
+                key=key,
+                status=STATUS_FAILED,
+                error=diff.stderr.strip() or "git status failed",
+            )
         changed_files = [line[3:] for line in diff.stdout.splitlines() if line.strip()]
 
     if changed_files:
@@ -271,22 +308,35 @@ def write_workflow_output(result: SyncRunOutcome) -> None:
 
 
 def main() -> int:
-    newer_cli_version = check_specify_cli_up_to_date()
-    if newer_cli_version:
+    cli_check = check_specify_cli_up_to_date()
+    if cli_check.status != CLI_CHECK_UP_TO_DATE:
         # Fail-and-notify (spec.md FR-013): this workflow never bumps its
         # own pinned specify-cli version (FR-012), so a stale pin can only
         # be surfaced, never silently worked around. No integration checks
         # run in this case - they would only report a false "no drift"
         # against the stale, bundled templates (research.md #2 addendum).
+        # An inconclusive check (network/rate-limit/unexpected failure)
+        # fails the run too, with a distinct message - silently proceeding
+        # past "couldn't verify" would break spec.md SC-001's guarantee
+        # exactly as easily as a confirmed-stale pin would.
         write_workflow_output(SyncRunOutcome(outcome=OUTCOME_FAILED, integrations=[]))
-        print(
-            f"::error::A newer specify-cli release is available "
-            f"({newer_cli_version}); this workflow never bumps its own "
-            f"pinned version (FR-012). A maintainer must update the pin in "
-            f".github/workflows/ci.yml and .specify/integration.json, then "
-            f"re-run this workflow.",
-            file=sys.stderr,
-        )
+        if cli_check.status == CLI_CHECK_UPDATE_AVAILABLE:
+            print(
+                f"::error::A newer specify-cli release is available "
+                f"({cli_check.detail}); this workflow never bumps its own "
+                f"pinned version (FR-012). A maintainer must update the pin "
+                f"in .github/workflows/ci.yml and .specify/integration.json, "
+                f"then re-run this workflow.",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                f"::error::Could not verify whether specify-cli is up to "
+                f"date ({cli_check.detail}); treating this as a failure "
+                f"rather than silently proceeding (FR-013). Re-run this "
+                f"workflow once the check succeeds.",
+                file=sys.stderr,
+            )
         return 1
 
     results = [run_integration_upgrade(key) for key in load_installed_integrations()]

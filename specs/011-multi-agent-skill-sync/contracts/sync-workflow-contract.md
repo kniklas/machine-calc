@@ -13,10 +13,13 @@ and reviewers, and the repository's own required-review branch policy.
 | `schedule` (weekly cron, `0 6 * * 1` — research/spec Assumptions) | Runs the full sync check (FR-001–FR-005) |
 | `workflow_dispatch` | Runs the identical sync check on demand (FR-005, User Story 3); no input parameters required |
 
-No other trigger (`push`, `pull_request`, etc.) starts this workflow — it is
-independent of ordinary code-change activity, mirroring the existing
-`dependency-scan` job's `schedule`/`workflow_dispatch`-only trigger pattern
-in `.github/workflows/ci.yml`.
+The `sync-agent-integrations` job lives inside the same shared `ci.yml`
+workflow as every other CI job (research.md #5/#7), so `push` and
+`pull_request` events do start that overall workflow file — they just never
+run *this particular job*, which carries its own `if:
+github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'`
+condition (the inverse of the `if: github.event_name != 'schedule'` guard
+every `pull_request`-only job in that file already uses).
 
 ## Guarantees per run (see data-model.md "Sync Run" for the outcome derivation)
 
@@ -29,11 +32,17 @@ in `.github/workflows/ci.yml`.
 - **`failed`**: the workflow run itself fails (non-zero exit / red status
   check) — visible in the Actions tab and (for `schedule` runs) via GitHub's
   built-in failure-notification email (research.md #6); no pull request is
-  opened or updated for this run. Three distinct causes all produce this
+  opened or updated for this run. Four distinct causes all produce this
   outcome, distinguished only by the failure message:
-  - The pinned tooling version itself is stale (a newer release is
-    available) — checked *first*, before any integration (FR-013;
+  - The pinned tooling version itself is confirmed stale (a newer release
+    is available) — checked *first*, before any integration (FR-013;
     research.md #7). No integration is checked in this case.
+  - The stale-version check itself was inconclusive (network/rate-limit/
+    unexpected failure querying GitHub's Releases API) — also checked
+    first, also before any integration. This is deliberately *not* treated
+    the same as a confirmed "up to date" result: silently proceeding past
+    an unverifiable check would break spec.md SC-001's notification
+    guarantee exactly as easily as a genuinely stale pin would.
   - A genuine tooling/network error regenerating an integration (FR-007) —
     always produces this outcome, regardless of any other integration's
     result.

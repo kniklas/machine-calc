@@ -404,6 +404,34 @@ Task: "Integration test for main() in tests/scripts/test_sync_agent_integrations
   `workflow_dispatch` launched from a non-default branch would otherwise
   checkout that branch, causing `peter-evans/create-pull-request` to default
   its PR base to it instead of `main`.
+- [X] T025 Add `scripts/sync_agent_integrations.py` to the `complexity`
+  job's `check_maintainability.py` invocation in `.github/workflows/ci.yml`
+  (second Copilot review round, PR #50) — the new script was already added
+  to `lint`/`typecheck`/`security` (T002) but the separate Maintainability
+  Index gate (Constitution Principle IX) was missed.
+- [X] T026 Check `git status`'s exit code in `run_integration_upgrade()`
+  (second Copilot review round) — a failed `git status` commonly returns
+  empty stdout, which was being silently misread as "nothing changed";
+  now classified as `STATUS_FAILED`. Added
+  `test_run_integration_upgrade_git_status_failure_is_reported`.
+- [X] T027 Restructure `check_specify_cli_up_to_date()` to return a
+  three-state `CliCheckResult` (`up-to-date`/`update-available`/
+  `inconclusive`) instead of `str | None`, and make `main()` fail the run
+  on *either* a confirmed-stale pin or an inconclusive check (a non-zero
+  exit, or the CLI's own `Could not check latest release`/`Could not
+  validate latest release tag` text) — not just the confirmed-stale case
+  (second Copilot review round). The original design silently treated a
+  network hiccup as "assume up to date," which would break spec.md
+  SC-001's notification guarantee exactly as easily as the bug FR-013
+  itself was written to close. Updated spec.md FR-013, data-model.md,
+  contracts/sync-workflow-contract.md, and research.md #7 to match; added
+  `test_check_specify_cli_up_to_date_nonzero_exit_is_inconclusive` and
+  `test_main_inconclusive_cli_check_also_fails_without_checking_integrations`.
+- [X] T028 Correct contracts/sync-workflow-contract.md's "Triggers" section
+  (second Copilot review round): it read as if `push`/`pull_request` never
+  start "this workflow" at all, when in the actual shared-`ci.yml`
+  implementation they start the workflow file — only this specific job is
+  skipped by its own `if:` condition.
 
 ## Notes
 

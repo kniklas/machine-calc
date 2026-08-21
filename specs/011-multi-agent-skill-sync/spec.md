@@ -183,9 +183,14 @@ scheduled run.
   message naming the newer version (FR-012 still applies: the workflow
   itself MUST NOT act on this by updating the pin) rather than proceeding
   to check integrations and silently reporting "no drift" against the
-  stale, already-pinned tooling. A transient failure of this check itself
-  (e.g., the upstream release-listing service is unreachable) MUST be
-  treated as inconclusive, not as a reason to fail the run.
+  stale, already-pinned tooling. If this check itself cannot reach a
+  conclusive answer (e.g., the upstream release-listing service is
+  unreachable, rate-limited, or the check tooling fails unexpectedly), the
+  workflow MUST ALSO fail visibly — with a message distinguishing "could
+  not verify" from "confirmed stale" — rather than silently proceeding as
+  if no update were available; SC-001's "never more than a week without
+  the maintainer being notified" guarantee would otherwise be broken just
+  as easily by a swallowed inconclusive check as by a genuinely stale pin.
 
 ### Key Entities
 

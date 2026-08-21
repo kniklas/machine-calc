@@ -31,13 +31,18 @@ A single execution of the workflow (scheduled or manually dispatched).
 | `specify_cli_version` | string | pinned ref used for this run (research.md #2); recorded for traceability, never changed by the run itself (FR-012) |
 
 **Outcome derivation** (in priority order):
-0. Before any `Integration` is even checked: if `check_specify_cli_up_to_date()`
-   (research.md #7) reports a newer tooling release is available → run
-   `outcome = failed` immediately, naming that release (FR-013). No
-   integration is checked in this case — since `specify integration
-   upgrade` regenerates from templates bundled in the (stale) pinned
-   tooling version, checking them would only ever produce a false
-   `no-drift` result.
+0. Before any `Integration` is even checked: run `check_specify_cli_up_to_date()`
+   (research.md #7). If its result is `update-available` (a newer tooling
+   release exists) or `inconclusive` (the check itself couldn't reach a
+   conclusive answer — network/rate-limit/unexpected failure) → run
+   `outcome = failed` immediately, with a message distinguishing the two
+   cases (FR-013). Only `up-to-date` lets derivation continue to step 1. No
+   integration is checked in either failing case — since `specify
+   integration upgrade` regenerates from templates bundled in the
+   (possibly-stale) pinned tooling version, checking them would only ever
+   produce a false `no-drift` result, and an inconclusive check must not be
+   silently treated as equivalent to a confirmed-current one (spec.md
+   SC-001).
 1. If any `Integration.status == failed` (tooling/network error, not a
    modified-file block) → run `outcome = failed`. No pull request is opened
    or updated (edge case: partial success must not open a *silent* partial

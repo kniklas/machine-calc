@@ -68,7 +68,7 @@ jobs:
       # surface the script's `mi_summary` $GITHUB_OUTPUT line as a job output
       # below, without a second `radon` invocation (research.md #4).
       - id: mi
-        run: python scripts/check_maintainability.py src/
+        run: python scripts/check_maintainability.py src/ scripts/sync_agent_integrations.py
     outputs:
       mi_summary: ${{ steps.mi.outputs.mi_summary }}
 
