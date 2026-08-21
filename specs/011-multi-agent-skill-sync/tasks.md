@@ -432,6 +432,30 @@ Task: "Integration test for main() in tests/scripts/test_sync_agent_integrations
   start "this workflow" at all, when in the actual shared-`ci.yml`
   implementation they start the workflow file — only this specific job is
   skipped by its own `if:` condition.
+- [X] T029 Fix `check_specify_cli_up_to_date()`'s classification logic
+  (third Copilot review round): it was a blocklist of two known failure
+  strings, silently defaulting to "up to date" for anything else —
+  including a third real exit-0 graceful-failure message
+  (`Current version could not be determined.`) it missed. Inverted to an
+  allowlist: only the literal `Up to date:` success marker counts as
+  confirmed-current (research.md #8).
+- [X] T030 Distinguish a missing per-integration manifest from an empty one
+  in `_manifest_tracked_paths()`/`run_integration_upgrade()` (third
+  Copilot review round) — `specify integration upgrade <key>` exits 0 with
+  "Nothing to upgrade" and makes zero changes when the manifest is absent
+  (an installed-but-never-materialized integration), which was previously
+  silently read as "no drift" (research.md #8).
+- [X] T031 Add `check_shared_infra_modified()` and surface a locally-
+  modified shared `speckit`-tracked file in the pull-request body (third
+  Copilot review round; FR-008 extended) — regenerating any integration
+  also reconciles shared infrastructure tracked separately from that
+  integration's own manifest, which was previously invisible to this
+  workflow entirely (research.md #8).
+- [X] T032 Add a `concurrency: {group: sync-agent-integrations,
+  cancel-in-progress: false}` block to the `sync-agent-integrations` job
+  (third Copilot review round) — an overlapping scheduled + manually-
+  dispatched run could otherwise race pushing the same fixed branch and
+  fail with a stale `--force-with-lease` (research.md #3 addendum).
 
 ## Notes
 

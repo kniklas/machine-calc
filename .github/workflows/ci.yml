@@ -122,6 +122,15 @@ jobs:
     name: sync-agent-integrations
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # Serialize scheduled and manually-dispatched runs: both push the same
+    # fixed branch via create-pull-request's --force-with-lease, so an
+    # overlapping run (e.g. a manual dispatch during the Monday cron) would
+    # otherwise race and one could fail with a stale lease. `queued` (the
+    # default cancel-in-progress: false) waits its turn rather than
+    # abandoning a partially-pushed run.
+    concurrency:
+      group: sync-agent-integrations
+      cancel-in-progress: false
     steps:
       # Explicit ref: a manual workflow_dispatch can be launched against any
       # branch from the Actions UI; without pinning to `main` here, the sync

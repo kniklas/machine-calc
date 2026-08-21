@@ -201,6 +201,53 @@ def test_run_integration_upgrade_git_status_failure_is_reported(monkeypatch):
     assert "git status failed" in result.error
 
 
+def test_run_integration_upgrade_missing_manifest_after_upgrade_fails(monkeypatch):
+    """`specify integration upgrade <key>` exits 0 with "Nothing to
+    upgrade" and makes no changes at all when the manifest is absent (an
+    installed-but-never-materialized integration) - must not be silently
+    read as 'no drift' (third-round Copilot review)."""
+    status_json = json.dumps({"manifests": {"copilot": {"modified_files": []}}})
+    monkeypatch.setattr(sai, "_manifest_tracked_paths", lambda key: None)
+
+    def fake_run(cmd, **kwargs):
+        if cmd[:3] == ["specify", "integration", "status"]:
+            return _completed(0, status_json)
+        if cmd[:3] == ["specify", "integration", "upgrade"]:
+            return _completed(0, "No manifest found for integration 'copilot'. Nothing to upgrade.")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    with patch.object(sai.subprocess, "run", side_effect=fake_run):
+        result = sai.run_integration_upgrade("copilot")
+
+    assert result.status == sai.STATUS_FAILED
+    assert "never actually installed" in result.error
+
+
+# --- check_shared_infra_modified (FR-008, third-round Copilot review) -------
+
+
+def test_check_shared_infra_modified_none_when_clean():
+    status_json = json.dumps({"manifests": {"speckit": {"modified_files": []}}})
+    with patch.object(sai.subprocess, "run", return_value=_completed(0, status_json)):
+        assert sai.check_shared_infra_modified() is None
+
+
+def test_check_shared_infra_modified_returns_first_file():
+    status_json = json.dumps(
+        {"manifests": {"speckit": {"modified_files": [".specify/templates/tasks-template.md"]}}}
+    )
+    with patch.object(sai.subprocess, "run", return_value=_completed(0, status_json)):
+        assert sai.check_shared_infra_modified() == ".specify/templates/tasks-template.md"
+
+
+def test_check_shared_infra_modified_none_when_key_absent():
+    """No `speckit` entry at all (e.g. a mock that only lists per-agent
+    integrations) must not raise - just report nothing modified."""
+    status_json = json.dumps({"manifests": {"copilot": {"modified_files": []}}})
+    with patch.object(sai.subprocess, "run", return_value=_completed(0, status_json)):
+        assert sai.check_shared_infra_modified() is None
+
+
 # --- derive_run_outcome (T007) -----------------------------------------------
 
 
@@ -308,6 +355,21 @@ def test_compose_pull_request_body_no_blocked_section_when_nothing_blocked():
     assert "Not updated" not in body
 
 
+def test_compose_pull_request_body_notes_shared_infra_modification():
+    body = sai.compose_pull_request_body(
+        [_result("copilot", sai.STATUS_UPGRADED_WITH_CHANGES, changed_files=["a"])],
+        shared_infra_modified_file=".specify/templates/tasks-template.md",
+    )
+    assert ".specify/templates/tasks-template.md" in body
+
+
+def test_compose_pull_request_body_no_shared_infra_note_when_unset():
+    body = sai.compose_pull_request_body(
+        [_result("copilot", sai.STATUS_UPGRADED_WITH_CHANGES, changed_files=["a"])]
+    )
+    assert "shared Spec Kit infrastructure" not in body
+
+
 # --- main() end-to-end (T012) -------------------------------------------------
 
 
@@ -344,6 +406,17 @@ def test_check_specify_cli_up_to_date_nonzero_exit_is_inconclusive():
         result = sai.check_specify_cli_up_to_date()
     assert result.status == sai.CLI_CHECK_INCONCLUSIVE
     assert "traceback" in result.detail
+
+
+def test_check_specify_cli_up_to_date_unrecognized_exit_zero_text_is_inconclusive():
+    """An exit-0 message that is neither the success marker nor a
+    previously-known failure string (e.g. the CLI's own "Current version
+    could not be determined." path) must still default to inconclusive,
+    not silently pass as up to date - third-round Copilot review."""
+    stdout = "Current version could not be determined.\nLatest release: v1.0.1\n"
+    with patch.object(sai.subprocess, "run", return_value=_completed(0, stdout)):
+        result = sai.check_specify_cli_up_to_date()
+    assert result.status == sai.CLI_CHECK_INCONCLUSIVE
 
 
 def _stub_self_check_up_to_date(cmd):
@@ -407,6 +480,43 @@ def test_main_drift_found_writes_has_changes_true(tmp_path, monkeypatch):
     assert exit_code == 0
     assert "has_changes=true" in output_content
     assert "copilot" in output_content
+
+
+def test_main_notes_shared_infra_modification_in_pr_body(tmp_path, monkeypatch):
+    """End-to-end proof that a locally-modified shared speckit file reaches
+    the composed PR body through main() (third-round Copilot review)."""
+    output_file = tmp_path / "github_output"
+    output_file.write_text("")
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output_file))
+    monkeypatch.setattr(sai, "load_installed_integrations", lambda: ["copilot"])
+    monkeypatch.setattr(sai, "_manifest_tracked_paths", lambda key: ["x.md"])
+    status_json = json.dumps(
+        {
+            "manifests": {
+                "copilot": {"modified_files": []},
+                "speckit": {"modified_files": [".specify/templates/tasks-template.md"]},
+            }
+        }
+    )
+
+    def fake_run(cmd, **kwargs):
+        stub = _stub_self_check_up_to_date(cmd)
+        if stub is not None:
+            return stub
+        if cmd[:3] == ["specify", "integration", "status"]:
+            return _completed(0, status_json)
+        if cmd[:3] == ["specify", "integration", "upgrade"]:
+            return _completed(0, "")
+        if cmd[:2] == ["git", "status"]:
+            return _completed(0, " M x.md\n")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    with patch.object(sai.subprocess, "run", side_effect=fake_run):
+        exit_code = sai.main()
+
+    output_content = output_file.read_text()
+    assert exit_code == 0
+    assert ".specify/templates/tasks-template.md" in output_content
 
 
 def test_main_failure_exits_nonzero(tmp_path, monkeypatch):

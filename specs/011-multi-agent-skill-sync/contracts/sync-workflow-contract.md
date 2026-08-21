@@ -68,7 +68,14 @@ produces or updates MUST contain, in this order:
    line naming that integration and the specific file, so a reviewer
    understands why that integration's regenerated files were **not** part of
    this pull request (FR-008).
-3. No other structural requirement; free-form additional detail (e.g. the
+3. If a *shared* Spec Kit infrastructure file (tracked separately from any
+   single integration, but reconciled as a side effect of regenerating any
+   installed integration) is locally modified, a note naming that file
+   (FR-008; `check_shared_infra_modified()`) — informational, since a
+   normal (non-`--force`) regeneration silently leaves an existing shared
+   file untouched rather than blocking on it, but the maintainer should
+   still know it has drifted from what Spec Kit itself expects.
+4. No other structural requirement; free-form additional detail (e.g. the
    `specify` CLI version used) is permitted but not contractually required
    by this feature.
 

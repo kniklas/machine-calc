@@ -35,17 +35,13 @@ STATUS_FAILED = "failed"
 
 
 _UPDATE_AVAILABLE_RE = re.compile(r"Update available:\s*\S+\s*→\s*(\S+)")
+_UP_TO_DATE_RE = re.compile(r"Up to date:")
 
 
 # check_specify_cli_up_to_date() outcome vocabulary (FR-013).
 CLI_CHECK_UP_TO_DATE = "up-to-date"
 CLI_CHECK_UPDATE_AVAILABLE = "update-available"
 CLI_CHECK_INCONCLUSIVE = "inconclusive"
-
-_INCONCLUSIVE_MARKERS = (
-    "Could not check latest release",
-    "Could not validate latest release tag",
-)
 
 
 @dataclass
@@ -66,12 +62,19 @@ def check_specify_cli_up_to_date() -> CliCheckResult:
     bumping that pin itself.
 
     Anything short of a confirmed `CLI_CHECK_UP_TO_DATE` is
-    `CLI_CHECK_INCONCLUSIVE` - an unexpected non-zero exit, or the CLI's own
-    documented graceful-failure text (e.g. a transient GitHub outage or rate
-    limit) - which the caller MUST treat as a failure too, not silently
-    proceed past: spec.md SC-001 promises the maintainer is *always*
-    notified within a week, and a silently-swallowed "couldn't check" would
-    break that promise exactly as easily as a genuinely stale pin would.
+    `CLI_CHECK_INCONCLUSIVE` - an unexpected non-zero exit, or *any* CLI
+    output that isn't the explicit `Up to date:` success marker (this
+    includes the CLI's own documented graceful-failure text for a network
+    outage or rate limit, but also anything else not specifically
+    anticipated here, e.g. `Current version could not be determined.` when
+    local version metadata is unavailable) - which the caller MUST treat as
+    a failure too, not silently proceed past: spec.md SC-001 promises the
+    maintainer is *always* notified within a week, and a silently-swallowed
+    "couldn't check" would break that promise exactly as easily as a
+    genuinely stale pin would. Matching on the one known-good success
+    marker (rather than maintaining a blocklist of known-bad ones) means an
+    unanticipated future CLI message defaults to safely inconclusive
+    instead of being misread as confirmed-current.
     """
     proc = subprocess.run(
         ["specify", "self", "check"],
@@ -87,9 +90,9 @@ def check_specify_cli_up_to_date() -> CliCheckResult:
     match = _UPDATE_AVAILABLE_RE.search(proc.stdout)
     if match:
         return CliCheckResult(status=CLI_CHECK_UPDATE_AVAILABLE, detail=match.group(1))
-    if any(marker in proc.stdout for marker in _INCONCLUSIVE_MARKERS):
-        return CliCheckResult(status=CLI_CHECK_INCONCLUSIVE, detail=proc.stdout.strip())
-    return CliCheckResult(status=CLI_CHECK_UP_TO_DATE)
+    if _UP_TO_DATE_RE.search(proc.stdout):
+        return CliCheckResult(status=CLI_CHECK_UP_TO_DATE)
+    return CliCheckResult(status=CLI_CHECK_INCONCLUSIVE, detail=proc.stdout.strip())
 
 
 def load_installed_integrations() -> list[str]:
@@ -133,6 +136,31 @@ def run_integration_status(key: str) -> dict[str, Any]:
     return entry
 
 
+SHARED_INFRA_KEY = "speckit"
+
+
+def check_shared_infra_modified() -> str | None:
+    """Return the first locally-modified shared-infrastructure file, if
+    any, else `None`.
+
+    Every `specify integration upgrade <key>` call also reconciles shared
+    infrastructure tracked by the separate `speckit` manifest - verified in
+    the installed CLI's `integration_upgrade` implementation, which calls
+    `_install_shared_infra_or_exit` unconditionally, not just for the
+    default integration - so a locally-modified shared file is relevant
+    regardless of which specific integration's upgrade happens to run in
+    this loop. `run_integration_status()` already generically reads
+    `manifests.<key>` from the shared, cached global status payload, and
+    `speckit` is itself one of the keys that command reports, so this
+    reuses that helper directly rather than adding a second status-parsing
+    path (FR-008's "surface that fact" duty is not limited to
+    per-integration generated files).
+    """
+    status = run_integration_status(SHARED_INFRA_KEY)
+    modified = status.get("modified_files") or []
+    return modified[0] if modified else None
+
+
 @dataclass
 class IntegrationResult:
     key: str
@@ -142,10 +170,20 @@ class IntegrationResult:
     error: str | None = None
 
 
-def _manifest_tracked_paths(key: str) -> list[str]:
+def _manifest_tracked_paths(key: str) -> list[str] | None:
+    """Return the manifest's tracked file paths, or `None` if the manifest
+    file itself doesn't exist - distinct from a manifest that exists but
+    genuinely tracks zero files. The distinction matters: `specify
+    integration upgrade <key>` exits 0 with "Nothing to upgrade" and makes
+    no changes at all when the manifest is absent (an installed-but-never-
+    materialized integration - e.g. `key` listed in
+    `.specify/integration.json` without ever running `specify integration
+    install <key>`), which `run_integration_upgrade()` must not silently
+    read as "no drift."
+    """
     manifest_path = REPO_ROOT / ".specify" / "integrations" / f"{key}.manifest.json"
     if not manifest_path.exists():
-        return []
+        return None
     data = json.loads(manifest_path.read_text())
     return list(data.get("files", {}).keys())
 
@@ -194,7 +232,23 @@ def run_integration_upgrade(key: str) -> IntegrationResult:
     # absent from the *new* manifest, so relying on the post-upgrade list
     # alone would miss that deletion entirely and misreport it as no drift.
     paths_after = _manifest_tracked_paths(key)
-    tracked_paths = sorted(set(paths_before) | set(paths_after))
+    if paths_after is None:
+        # The manifest still doesn't exist after "upgrading" - `upgrade`
+        # exits 0 with "Nothing to upgrade" against a missing manifest and
+        # makes no changes at all, so this integration was never actually
+        # installed. Silently reporting no drift here would hide a
+        # genuinely broken/incomplete integration entry.
+        return IntegrationResult(
+            key=key,
+            status=STATUS_FAILED,
+            error=(
+                f"no manifest found for integration {key!r} even after "
+                f"upgrade - it is listed in .specify/integration.json but "
+                f"was never actually installed (run `specify integration "
+                f"install {key}` first)"
+            ),
+        )
+    tracked_paths = sorted(set(paths_before or []) | set(paths_after))
     changed_files: list[str] = []
     if tracked_paths:
         diff = subprocess.run(
@@ -225,6 +279,7 @@ def run_integration_upgrade(key: str) -> IntegrationResult:
 class SyncRunOutcome:
     outcome: str
     integrations: list[IntegrationResult]
+    shared_infra_modified_file: str | None = None
 
 
 def derive_run_outcome(integrations: list[IntegrationResult]) -> SyncRunOutcome:
@@ -253,12 +308,19 @@ def derive_run_outcome(integrations: list[IntegrationResult]) -> SyncRunOutcome:
     return SyncRunOutcome(outcome=OUTCOME_NO_DRIFT, integrations=integrations)
 
 
-def compose_pull_request_body(integrations: list[IntegrationResult]) -> str:
+def compose_pull_request_body(
+    integrations: list[IntegrationResult],
+    shared_infra_modified_file: str | None = None,
+) -> str:
     """Produce the pull-request body per contracts/sync-workflow-contract.md
     "Sync Pull Request body contract": changed integrations named first,
     then (only when at least one other integration also changed) a callout
     for any integration blocked by a locally-modified file (FR-008;
-    data-model.md "Sync Pull Request".blocked_integrations).
+    data-model.md "Sync Pull Request".blocked_integrations), then (if set)
+    a note about a locally-modified *shared* infrastructure file
+    (check_shared_infra_modified()) - informational only, since a normal
+    (non-`--force`) upgrade silently skips existing shared files rather
+    than blocking on them, but FR-008 still requires surfacing the fact.
     """
     changed = [r.key for r in integrations if r.status == STATUS_UPGRADED_WITH_CHANGES]
     blocked = [
@@ -280,6 +342,14 @@ def compose_pull_request_body(integrations: list[IntegrationResult]) -> str:
         lines.append("")
         lines.append("**Not updated (locally-modified file detected — review before " "merging):**")
         lines.extend(f"- `{key}`: `{file}`" for key, file in blocked)
+
+    if shared_infra_modified_file:
+        lines.append("")
+        lines.append(
+            "**Note:** shared Spec Kit infrastructure has a locally-modified "
+            f"file (`{shared_infra_modified_file}`) that this sync did not "
+            "touch — review whether that customization is still intended."
+        )
 
     return "\n".join(lines) + "\n"
 
@@ -303,7 +373,11 @@ def write_workflow_output(result: SyncRunOutcome) -> None:
     """
     has_changes = result.outcome == OUTCOME_PR
     _write_github_output("has_changes", "true" if has_changes else "false")
-    body = compose_pull_request_body(result.integrations) if has_changes else ""
+    body = (
+        compose_pull_request_body(result.integrations, result.shared_infra_modified_file)
+        if has_changes
+        else ""
+    )
     _write_github_output("pr_body", body)
 
 
@@ -342,6 +416,7 @@ def main() -> int:
     results = [run_integration_upgrade(key) for key in load_installed_integrations()]
 
     outcome = derive_run_outcome(results)
+    outcome.shared_infra_modified_file = check_shared_infra_modified()
     write_workflow_output(outcome)
 
     failed_run = outcome.outcome == OUTCOME_FAILED

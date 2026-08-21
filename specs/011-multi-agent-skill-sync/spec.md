@@ -158,7 +158,13 @@ scheduled run.
   generated file was preserved rather than overwritten (diff-aware update
   handling), the pull request description MUST surface that fact so the
   maintainer can review why a generated file diverged from its
-  expected regenerate-only status (Constitution Principle XI).
+  expected regenerate-only status (Constitution Principle XI). This
+  applies both to a per-integration generated file and to a *shared*
+  Spec Kit infrastructure file (tracked separately from any single
+  integration's own manifest) that regenerating any installed integration
+  also reconciles — a locally-modified shared file MUST be named in the
+  pull request description whenever one is opened, even though it does not
+  by itself block that integration's own regeneration.
 - **FR-009**: The workflow's own configuration (schedule, trigger conditions)
   MUST live in version-controlled workflow configuration, not in an
   undocumented external scheduler.

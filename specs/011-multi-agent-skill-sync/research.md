@@ -114,6 +114,15 @@ project.
 - A fresh, timestamped branch per run (e.g. `sync/2026-08-21-...`). Rejected:
   directly produces the duplicate-open-PR problem FR-011 forbids.
 
+**Addendum (third Copilot review round on PR #50)**: the fixed branch alone
+doesn't fully prevent a *race* between two runs pushing it concurrently
+(`create-pull-request@v6` pushes with `--force-with-lease`, so an
+overlapping scheduled + manually-dispatched run could fail with a stale
+lease). Closed by adding a `concurrency: {group:
+sync-agent-integrations, cancel-in-progress: false}` block to the job in
+`.github/workflows/ci.yml`, so a second run queues behind the first rather
+than racing it — a native GitHub Actions mechanism, not custom logic.
+
 ## 4. Authenticating the workflow so its pull requests actually run required CI checks
 
 **Decision**: Use a dedicated repository secret holding a fine-grained
@@ -268,3 +277,46 @@ unnotified false "no drift" result, no different in effect from the
 original bundled-templates problem. Corrected as reflected in the Decision
 above: any non-`Up to date` result — confirmed-stale *or* inconclusive —
 now fails the run, distinguished only by message text.
+
+## 8. Third Copilot review round on PR #50: remaining robustness gaps
+
+Three further gaps, verified directly against the installed `specify-cli`'s
+source before fixing (not just the review's own description of them):
+
+- **`check_specify_cli_up_to_date()`'s classification logic was itself a
+  blocklist of two known failure strings**, falling through to "up to
+  date" for anything else — missing a third exit-0 graceful-failure
+  message (`Current version could not be determined.`, from
+  `_version.py`'s `self_check`, when local version metadata is
+  unavailable). Fixed by inverting to an allowlist: only the literal
+  `Up to date:` success marker (confirmed in source:
+  `console.print(f"[green]Up to date:[/green] {installed}")`) counts as
+  confirmed-current; everything else — including any future CLI message
+  not anticipated here — defaults to `CLI_CHECK_INCONCLUSIVE`.
+- **A missing per-integration manifest was silently treated as "zero
+  tracked files"**, indistinguishable from a manifest that genuinely
+  tracks nothing. Verified in source
+  (`specify_cli/integrations/_migrate_commands.py`,
+  `integration_upgrade`): when the manifest file doesn't exist,
+  `specify integration upgrade <key>` prints `No manifest found for
+  integration '<key>'. Nothing to upgrade.` and exits **0** without
+  creating one — an installed-but-never-materialized integration (`key`
+  listed in `.specify/integration.json` without ever running `specify
+  integration install <key>`). `_manifest_tracked_paths()` now returns
+  `None` (not `[]`) for a missing manifest, and `run_integration_upgrade()`
+  fails the integration if it is *still* missing after the upgrade call.
+- **Regenerating any integration also reconciles shared Spec Kit
+  infrastructure tracked by a separate `speckit` manifest, not just the
+  files listed in that integration's own manifest.** Verified in source:
+  `integration_upgrade` calls `_install_shared_infra_or_exit(...)`
+  unconditionally (every call, not only for the "default" integration as
+  initially assumed from the review comment's wording) — but its default
+  (non-`--force`) overwrite policy is "only add missing files; existing
+  ones are skipped" (`_install_shared_infra`'s own docstring), so a
+  locally-modified shared file is never actually at risk of being
+  clobbered by a routine sync run. `check_shared_infra_modified()` (reusing
+  `run_integration_status()` against the `speckit` key, since `specify
+  integration status --json` already reports it alongside every installed
+  integration) surfaces this as an informational PR-body note per FR-008's
+  "surface that fact" duty — not a blocking condition, since nothing is
+  actually at risk of being overwritten.
