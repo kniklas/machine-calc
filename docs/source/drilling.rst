@@ -127,6 +127,17 @@ Setting                          Default     Applies to
 ===============================  ==========  =========================================
 
 In addition, both values must be positive and within the bound above.
+
+.. note::
+    ``validate_diameter_mm()``/``validate_depth_mm()`` do not currently
+    reject ``NaN``: their bound check compares against the maximum, and
+    every comparison against ``NaN`` is false, so a ``NaN`` value (which
+    ``_prompt_number()`` also happily parses from literal ``nan`` input)
+    silently passes validation and reaches the calculation instead of
+    being re-prompted. ``+inf``/``-inf`` *are* correctly rejected, since
+    they exceed the bound. Tracked as a pre-existing bug in issue #56, not
+    something this drilling documentation PR introduces or fixes.
+
 Library callers
 can override these bounds via ``calculate()``'s ``config_path`` argument
 (see :doc:`drilling-api`); the CLI does not expose an equivalent flag — its
