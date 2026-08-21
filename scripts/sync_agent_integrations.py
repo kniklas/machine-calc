@@ -154,14 +154,27 @@ class SyncRunOutcome:
 
 def derive_run_outcome(integrations: list[IntegrationResult]) -> SyncRunOutcome:
     """Priority-ordered derivation per data-model.md "Sync Run":
-    failed > modified-blocked > upgraded-with-changes > no-drift.
+    failed > upgraded-with-changes > modified-blocked > no-drift.
+
+    A generic tooling/network failure (`failed`) always aborts the run: it
+    is not a safe, disclosed condition, so no partial pull request is ever
+    opened over it (spec.md's partial-failure edge case). A locally-modified
+    file (`modified-blocked`) is different in kind - it is the CLI's own
+    deliberate, expected safety mechanism (research.md #1) - so it does not
+    by itself block a pull request for *other* integrations that did have
+    real changes; it is instead surfaced transparently in that same pull
+    request's body (FR-008; compose_pull_request_body()). Only when nothing
+    at all changed (every integration is either blocked or already
+    up to date) does a modified-blocked integration make the run `failed`,
+    since there would otherwise be nothing to actually put in a pull
+    request.
     """
     if any(r.status == STATUS_FAILED for r in integrations):
         return SyncRunOutcome(outcome=OUTCOME_FAILED, integrations=integrations)
-    if any(r.status == STATUS_MODIFIED_BLOCKED for r in integrations):
-        return SyncRunOutcome(outcome=OUTCOME_FAILED, integrations=integrations)
     if any(r.status == STATUS_UPGRADED_WITH_CHANGES for r in integrations):
         return SyncRunOutcome(outcome=OUTCOME_PR, integrations=integrations)
+    if any(r.status == STATUS_MODIFIED_BLOCKED for r in integrations):
+        return SyncRunOutcome(outcome=OUTCOME_FAILED, integrations=integrations)
     return SyncRunOutcome(outcome=OUTCOME_NO_DRIFT, integrations=integrations)
 
 
@@ -220,30 +233,32 @@ def write_workflow_output(result: SyncRunOutcome) -> None:
 
 
 def main() -> int:
-    results = []
-    for key in load_installed_integrations():
-        run_integration_status(key)  # primes the shared status cache
-        results.append(run_integration_upgrade(key))
+    results = [run_integration_upgrade(key) for key in load_installed_integrations()]
 
     outcome = derive_run_outcome(results)
     write_workflow_output(outcome)
 
-    if outcome.outcome == OUTCOME_FAILED:
-        for r in results:
-            if r.status == STATUS_MODIFIED_BLOCKED:
-                print(
-                    f"::error::Integration '{r.key}' blocked: locally-modified "
-                    f"file {r.blocked_file!r} detected (run `specify integration "
-                    f"status --json` for details)",
-                    file=sys.stderr,
-                )
-            elif r.status == STATUS_FAILED:
-                print(
-                    f"::error::Integration '{r.key}' failed: {r.error}",
-                    file=sys.stderr,
-                )
-        return 1
-    return 0
+    failed_run = outcome.outcome == OUTCOME_FAILED
+    for r in results:
+        if r.status == STATUS_MODIFIED_BLOCKED:
+            # A blocked integration doesn't fail the run by itself when at
+            # least one other integration still has real changes to PR
+            # (derive_run_outcome); it's a warning there, not an error,
+            # since it's already disclosed in the PR body (FR-008).
+            level = "error" if failed_run else "warning"
+            print(
+                f"::{level}::Integration '{r.key}' blocked: locally-modified "
+                f"file {r.blocked_file!r} detected (run `specify integration "
+                f"status --json` for details)",
+                file=sys.stderr,
+            )
+        elif r.status == STATUS_FAILED:
+            print(
+                f"::error::Integration '{r.key}' failed: {r.error}",
+                file=sys.stderr,
+            )
+
+    return 1 if failed_run else 0
 
 
 if __name__ == "__main__":

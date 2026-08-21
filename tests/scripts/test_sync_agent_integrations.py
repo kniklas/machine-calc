@@ -174,11 +174,36 @@ def test_derive_run_outcome_pull_request():
     assert outcome.outcome == sai.OUTCOME_PR
 
 
-def test_derive_run_outcome_modified_blocked_is_failed():
+def test_derive_run_outcome_mixed_blocked_and_changed_is_still_pull_request():
+    """A blocked integration doesn't sink a run that has real changes to PR
+    elsewhere - it's disclosed transparently in that PR's body instead
+    (FR-008), not treated as a silent partial-failure omission."""
     outcome = sai.derive_run_outcome(
         [
             _result("copilot", sai.STATUS_UPGRADED_WITH_CHANGES, changed_files=["a"]),
             _result("claude", sai.STATUS_MODIFIED_BLOCKED, blocked_file="x.md"),
+        ]
+    )
+    assert outcome.outcome == sai.OUTCOME_PR
+
+
+def test_derive_run_outcome_all_blocked_with_no_changes_is_failed():
+    """When nothing at all changed, a blocked integration has no PR to be
+    disclosed in, so the run is failed instead of a pointless empty PR."""
+    outcome = sai.derive_run_outcome(
+        [
+            _result("copilot", sai.STATUS_MODIFIED_BLOCKED, blocked_file="x.md"),
+            _result("claude", sai.STATUS_UPGRADED_NO_CHANGE),
+        ]
+    )
+    assert outcome.outcome == sai.OUTCOME_FAILED
+
+
+def test_derive_run_outcome_failed_takes_priority_over_upgraded_with_changes():
+    outcome = sai.derive_run_outcome(
+        [
+            _result("copilot", sai.STATUS_FAILED, error="boom"),
+            _result("claude", sai.STATUS_UPGRADED_WITH_CHANGES, changed_files=["a"]),
         ]
     )
     assert outcome.outcome == sai.OUTCOME_FAILED
@@ -289,6 +314,75 @@ def test_main_failure_exits_nonzero(tmp_path, monkeypatch):
     status_json = json.dumps({"manifests": {"copilot": {"modified_files": ["x.md"]}}})
 
     with patch.object(sai.subprocess, "run", return_value=_completed(0, status_json)):
+        exit_code = sai.main()
+
+    assert exit_code == 1
+    assert "has_changes=false" in output_file.read_text()
+
+
+def test_main_mixed_blocked_and_changed_still_opens_pr_with_callout(tmp_path, monkeypatch):
+    """End-to-end proof that a blocked integration alongside a genuinely
+    changed one reaches OUTCOME_PR through main() (not just through
+    compose_pull_request_body() called directly) - closing the gap where
+    the blocked-callout branch was previously unreachable in production."""
+    output_file = tmp_path / "github_output"
+    output_file.write_text("")
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output_file))
+    monkeypatch.setattr(sai, "load_installed_integrations", lambda: ["copilot", "claude"])
+    monkeypatch.setattr(sai, "_manifest_tracked_paths", lambda key: ["x.md"])
+    status_json = json.dumps(
+        {
+            "manifests": {
+                "copilot": {"modified_files": []},
+                "claude": {"modified_files": [".claude/skills/y.md"]},
+            }
+        }
+    )
+
+    def fake_run(cmd, **kwargs):
+        if cmd[:3] == ["specify", "integration", "status"]:
+            return _completed(0, status_json)
+        if cmd[:3] == ["specify", "integration", "upgrade"]:
+            return _completed(0, "")
+        if cmd[:2] == ["git", "status"]:
+            return _completed(0, " M x.md\n")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    with patch.object(sai.subprocess, "run", side_effect=fake_run):
+        exit_code = sai.main()
+
+    output_content = output_file.read_text()
+    assert exit_code == 0
+    assert "has_changes=true" in output_content
+    assert "`copilot`" in output_content
+    assert "Not updated" in output_content
+    assert ".claude/skills/y.md" in output_content
+
+
+def test_main_all_blocked_no_changes_fails(tmp_path, monkeypatch):
+    output_file = tmp_path / "github_output"
+    output_file.write_text("")
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output_file))
+    monkeypatch.setattr(sai, "load_installed_integrations", lambda: ["copilot", "claude"])
+    status_json = json.dumps(
+        {
+            "manifests": {
+                "copilot": {"modified_files": ["x.md"]},
+                "claude": {"modified_files": []},
+            }
+        }
+    )
+
+    def fake_run(cmd, **kwargs):
+        if cmd[:3] == ["specify", "integration", "status"]:
+            return _completed(0, status_json)
+        if cmd[:3] == ["specify", "integration", "upgrade"]:
+            return _completed(0, "")
+        if cmd[:2] == ["git", "status"]:
+            return _completed(0, "")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    with patch.object(sai.subprocess, "run", side_effect=fake_run):
         exit_code = sai.main()
 
     assert exit_code == 1

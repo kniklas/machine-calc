@@ -33,13 +33,20 @@ A single execution of the workflow (scheduled or manually dispatched).
 **Outcome derivation** (in priority order):
 1. If any `Integration.status == failed` (tooling/network error, not a
    modified-file block) → run `outcome = failed`. No pull request is opened
-   or updated (edge case: partial success must not open a partial PR).
-2. Else if any `Integration.status == modified-blocked` → run `outcome =
-   failed`, and the failure report names the blocked integration(s) and
-   file(s) (FR-008). This is a distinct, nameable failure reason from case 1
-   (research.md #1), not a generic tooling error.
-3. Else if any `Integration.status == upgraded-with-changes` → run `outcome
-   = pull-request-opened-or-updated`.
+   or updated (edge case: partial success must not open a *silent* partial
+   PR over a genuine tooling failure).
+2. Else if any `Integration.status == upgraded-with-changes` → run `outcome
+   = pull-request-opened-or-updated`, even when another integration in the
+   same run is `modified-blocked`: a blocked integration is a safe,
+   expected, disclosed condition (research.md #1), not a silent omission —
+   it is named transparently in that same pull request's body instead of
+   sinking the whole run (FR-008; contracts/sync-workflow-contract.md "Sync
+   Pull Request body contract").
+3. Else if any `Integration.status == modified-blocked` (and none
+   `upgraded-with-changes`) → run `outcome = failed`, and the failure report
+   names the blocked integration(s) and file(s) (FR-008). There is nothing
+   to actually put in a pull request in this case, so a visible failed run
+   is used instead of an empty, pointless one.
 4. Else (`clean` or `upgraded-no-change` for every integration) → run
    `outcome = no-drift`.
 

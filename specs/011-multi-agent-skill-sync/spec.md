@@ -104,10 +104,14 @@ scheduled run.
 ### Edge Cases
 
 - What happens when the sync check succeeds for one installed integration but
-  fails for another in the same run? The run MUST be treated as failed overall
+  fails (FR-007's meaning: a tooling/network error, not a locally-modified
+  file) for another in the same run? The run MUST be treated as failed overall
   and MUST NOT open a partial pull request containing only the successful
   integration's changes — a silently-omitted failing integration would hide a
-  real regression.
+  real regression. This does not apply to a locally-modified-file block
+  (FR-008): that condition is disclosed, not silent, so it does not by itself
+  prevent a pull request for other integrations that did have real changes in
+  the same run — only an all-blocked-with-nothing-else-changed run is failed.
 - What happens when a previous sync pull request is still open and unmerged
   when the next scheduled run finds further drift? The workflow MUST NOT open a
   second, duplicate sync pull request while one is already open; it updates the
