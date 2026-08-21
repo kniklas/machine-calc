@@ -23,6 +23,7 @@ the default::
     Drilling tool (HSS, Cobalt, Carbide): Carbide
     Drill diameter (mm): 10
     Hole depth (mm): 25
+    Available power (kW, blank if unknown):
 
 Pressing Enter at the operation prompt accepts the ``drilling`` default and
 leads to exactly this session; choosing ``milling`` instead switches to the
@@ -65,12 +66,13 @@ Right after choosing the unit system, the REPL asks for a calculation mode::
 
 ``power-constrained``
     Available power becomes a **required** prompt instead of an optional
-    one. If your machine can already deliver the calculated power the
-    result is unchanged. Otherwise the spindle speed is reduced until the
-    power required matches what you supplied exactly, and the result label
-    reads "adjusted to fit available power" instead of "recommended". A
-    budget too small for any feasible spindle speed is rejected with a
-    re-prompt.
+    one, and the result label always reads "adjusted to fit available
+    power" instead of "recommended" — regardless of whether an adjustment
+    actually happened. If your machine can already deliver the calculated
+    power the numeric values are unchanged even though the label switches.
+    Otherwise the spindle speed is reduced until the power required
+    matches what you supplied exactly. A budget too small for any feasible
+    spindle speed is rejected with a re-prompt.
 
 ``fixed-rpm``
     Adds a required "Target spindle speed (RPM)" prompt. The spindle speed
@@ -109,8 +111,8 @@ Limits and validation
 ----------------------
 
 Drilling inputs are validated before anything is calculated, and an invalid
-value is re-prompted rather than aborting the session. The bounds are
-configurable (see the configuration documentation); the defaults are:
+value is re-prompted rather than aborting the session. The interactive CLI
+always validates against these fixed bounds:
 
 ===============================  ==========  =========================================
 Setting                          Default     Applies to
@@ -119,7 +121,11 @@ Setting                          Default     Applies to
 ``max_depth_mm``                 500.0 mm    Hole depth.
 ===============================  ==========  =========================================
 
-In addition, both values must be positive, finite numbers.
+In addition, both values must be positive, finite numbers. Library callers
+can override these bounds via ``calculate()``'s ``config_path`` argument
+(see :doc:`drilling-api`); the CLI does not expose an equivalent flag — its
+only configuration flag, ``--materials-config``, overrides materials/tools,
+not these geometry bounds.
 
 Assumptions
 -----------
