@@ -1,6 +1,33 @@
 <!--
 Sync Impact Report
 ==================
+Version change: 1.7.0 → 1.8.0
+Modified principles: none (existing principles I-XI unchanged)
+Added sections: none
+Expanded sections:
+  - Governance: amended the amendment-propagation clause. Upstream Spec Kit's own
+    `/speckit-constitution` command was regenerated (PR #52, syncing to spec-kit v1.0.1) with
+    a "Scope Guard" that deliberately limits its own scope to `.specify/memory/constitution.md`
+    alone and no longer propagates changes into `.specify/templates/*`/agent guidance files
+    within the same command invocation — surfaced by GitHub Copilot's review of PR #52, which
+    correctly flagged that the prior "propagation ... in the same change" wording could no
+    longer be satisfied by the tool that wording assumed would satisfy it. The clause now
+    requires propagation to be verified as an explicit follow-up step (e.g. `/speckit-analyze`
+    or manual reconciliation) rather than assuming any single command bundles it automatically,
+    consistent with Principle XI (dependent templates/agent files are regenerated via the Spec
+    Kit integration mechanism, never hand-patched by any one command).
+Removed sections: none
+Templates requiring updates:
+  ✅ .specify/templates/plan-template.md (no changes needed)
+  ✅ .specify/templates/tasks-template.md (no changes needed)
+  ✅ .specify/templates/spec-template.md (no changes needed)
+  ✅ .github/copilot-instructions.md (no changes needed)
+Follow-up TODOs: none
+-->
+
+<!--
+Sync Impact Report (previous amendment)
+==================
 Version change: 1.6.0 → 1.7.0
 Modified principles: none (existing principles I-X unchanged)
 Added sections:
@@ -337,7 +364,15 @@ hand-duplicated, independently-diverging instruction sets per agent.
 This constitution supersedes all other informal practices for this repository. Amendments
 require: (1) a documented rationale for the change, (2) a version bump per the policy below,
 and (3) propagation of any dependent changes to `.specify/templates/*` and agent guidance
-files in the same change.
+files, verified as an explicit follow-up step rather than assumed to happen automatically
+within the amending change itself. Spec Kit's own `/speckit-constitution` command
+deliberately limits its own scope to this file alone (its "Scope Guard") and does not
+propagate changes into dependent templates or agent guidance — those remain generated
+artifacts of the Spec Kit integration mechanism, never hand-patched directly (Principle XI).
+Concretely: after amending this constitution, run `/speckit-analyze` (or an equivalent
+cross-artifact consistency check) against any affected or representative spec before
+considering the amendment complete, and reconcile `.specify/templates/*`/agent guidance
+content manually if it no longer matches.
 
 Versioning policy (semantic versioning applied to governance):
 - MAJOR: Backward-incompatible removal or redefinition of a principle.
@@ -350,4 +385,4 @@ recurring pattern, MUST trigger a proposed constitution amendment rather than re
 ad-hoc exceptions. Use `.specify/memory/constitution.md` as the authoritative source for
 runtime development guidance until a dedicated guidance file is introduced.
 
-**Version**: 1.7.0 | **Ratified**: 2026-07-08 | **Last Amended**: 2026-08-21
+**Version**: 1.8.0 | **Ratified**: 2026-07-08 | **Last Amended**: 2026-08-22
