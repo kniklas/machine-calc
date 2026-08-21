@@ -134,9 +134,11 @@ In addition, both values must be positive and within the bound above.
     every comparison against ``NaN`` is false, so a ``NaN`` value (which
     ``_prompt_number()`` also happily parses from literal ``nan`` input)
     silently passes validation and reaches the calculation instead of
-    being re-prompted. ``+inf``/``-inf`` *are* correctly rejected, since
-    they exceed the bound. Tracked as a pre-existing bug in issue #56, not
-    something this drilling documentation PR introduces or fixes.
+    being re-prompted. ``+inf``/``-inf`` *are* correctly rejected today,
+    but not both by the same check: ``+inf`` fails the maximum-bound
+    comparison, while ``-inf`` fails the earlier ``<= 0`` positivity
+    check. Tracked as a pre-existing bug in issue #56, not something this
+    drilling documentation PR introduces or fixes.
 
 Library callers
 can override these bounds via ``calculate()``'s ``config_path`` argument

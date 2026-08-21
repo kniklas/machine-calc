@@ -34,7 +34,8 @@ Length inputs (``diameter``, ``depth``) are interpreted in the caller's
 ``unit_system``: mm under ``METRIC`` and inches under ``IMPERIAL``. They are
 converted to canonical millimetres internally and the results converted
 back, so a metric call and the equivalent imperial call describe the same
-physical hole.
+physical hole. ``available_power`` follows the same per-``unit_system``
+convention: kW under ``METRIC``, HP under ``IMPERIAL``.
 
 Results and errors
 -------------------
@@ -78,12 +79,15 @@ reusing this same contract.
     ``available_power`` becomes **required**: a missing value (``None``)
     returns ``MODE_CONFLICT``, the same as also supplying ``target_rpm`` in
     this mode. A *supplied but invalid* (non-numeric, non-finite, zero, or
-    negative) ``available_power`` returns ``INFEASIBLE_POWER_BUDGET``. If
-    it is at least the STANDARD-mode power requirement the result is a
-    no-op (identical to STANDARD, only ``mode`` differs). Otherwise the
-    spindle speed is reduced so that ``power_required`` matches
-    ``available_power`` exactly (within ``math.isclose(rel_tol=1e-9)``);
-    torque is unaffected, since it does not depend on spindle speed — this
+    negative) ``available_power`` returns ``INFEASIBLE_POWER_BUDGET``. The
+    result is a no-op (identical to STANDARD, only ``mode`` differs) when
+    ``available_power`` is at least the STANDARD-mode power requirement,
+    **or** within ``math.isclose(rel_tol=1e-9)`` of it even from slightly
+    below — the no-op boundary is that tolerance band, not a hard `>=`
+    cutoff. Only when the budget falls clearly short of that band is the
+    spindle speed actually reduced, algebraically, so that
+    ``power_required`` matches ``available_power`` exactly; torque is
+    unaffected, since it does not depend on spindle speed — this
     closed-form, non-iterative derivation is what makes the adjustment a
     single algebraic step rather than a search.
 
