@@ -5,11 +5,15 @@ on:
     branches: [main]
   pull_request:
   schedule:
-    # Weekly dependency-vulnerability scan, independent of pull request
-    # activity (spec.md FR-005; specs/003-ci-quality-security-gates).
+    # Weekly dependency-vulnerability scan (spec.md FR-005;
+    # specs/003-ci-quality-security-gates) and multi-agent skill sync
+    # (specs/011-multi-agent-skill-sync), both independent of pull request
+    # activity.
     - cron: "0 6 * * 1"
-  # Allows manually re-running the scan (e.g. T033's post-merge validation,
-  # or confirming a fix after a disclosed CVE) without waiting for the cron.
+  # Allows manually re-running the scan/sync (e.g. T033's post-merge
+  # validation, confirming a fix after a disclosed CVE, or an on-demand
+  # skill-sync check per specs/011-multi-agent-skill-sync FR-005) without
+  # waiting for the cron.
   workflow_dispatch:
 
 env:
@@ -38,8 +42,12 @@ jobs:
       # Cyclomatic complexity (FR-001) is enforced here via ruff's C90/mccabe
       # rule, not in a separate job (specs/003-ci-quality-security-gates
       # contracts/ci-checks-contract.md).
-      - run: ruff check src/ tests/
-      - run: black --check src/ tests/
+      # scripts/sync_agent_integrations.py is named explicitly (not the whole
+      # scripts/ dir) so this doesn't also pull the pre-existing, unrelated
+      # scripts/check_maintainability.py into scope (specs/011-multi-agent-
+      # skill-sync tasks.md T002; Constitution Principle IX).
+      - run: ruff check src/ tests/ scripts/sync_agent_integrations.py
+      - run: black --check src/ tests/ scripts/sync_agent_integrations.py
 
   complexity:
     name: complexity
@@ -74,7 +82,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: pip install -e ".[dev]"
-      - run: mypy src/machine_calc
+      # scripts/sync_agent_integrations.py is named explicitly, same rationale
+      # as the `lint` job above (specs/011-multi-agent-skill-sync T002).
+      - run: mypy src/machine_calc scripts/sync_agent_integrations.py
 
   security:
     name: security
@@ -86,7 +96,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: pip install -e ".[dev]"
-      - run: bandit -r src -ll
+      # scripts/sync_agent_integrations.py is named explicitly, same rationale
+      # as the `lint` job above (specs/011-multi-agent-skill-sync T002).
+      - run: bandit -r src scripts/sync_agent_integrations.py -ll
 
   dependency-scan:
     name: dependency-scan
@@ -98,6 +110,52 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: pip install -e ".[dev]"
       - run: pip-audit
+
+  # Weekly (same schedule as dependency-scan above) check that every
+  # installed coding-agent integration (Copilot, Claude Code, ...) still
+  # matches Spec Kit's upstream template source; opens a pull request only
+  # when real drift is found (specs/011-multi-agent-skill-sync;
+  # Constitution Principle XI). Runs only on `schedule`/`workflow_dispatch`,
+  # never on `push`/`pull_request`, since it is independent of ordinary
+  # code-change activity (contracts/sync-workflow-contract.md "Triggers").
+  sync-agent-integrations:
+    name: sync-agent-integrations
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      # Pinned to the same spec-kit version this repository already tracks
+      # (.specify/integration.json); never self-upgraded by this job (FR-012;
+      # research.md #2).
+      - run: pip install uv
+      - run: >-
+          uv tool install specify-cli
+          --from "git+https://github.com/github/spec-kit.git@v1.0.0"
+      - id: sync
+        run: |
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.local/bin:$PATH"
+          python scripts/sync_agent_integrations.py
+      # No `permissions:` override here: this job relies solely on the
+      # workflow-level least-privilege default (`contents: read`) plus the
+      # dedicated PAT below - it is never granted merge/auto-approve
+      # capability, so opened pull requests go through the repository's
+      # normal required review exactly like any other pull request (FR-006).
+      - if: steps.sync.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          # A dedicated PAT, not the default GITHUB_TOKEN: pull requests
+          # opened with the default token never trigger this repository's
+          # other `pull_request`-scoped required checks (research.md #4),
+          # which would leave this PR without CI signal for reviewers.
+          token: ${{ secrets.SYNC_PR_TOKEN }}
+          branch: chore/sync-agent-integrations
+          commit-message: "chore: sync agent integrations from upstream"
+          title: "chore: sync agent integrations from upstream"
+          body: ${{ steps.sync.outputs.pr_body }}
 
   test:
     name: test

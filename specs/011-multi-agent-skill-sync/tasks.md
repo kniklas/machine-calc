@@ -34,14 +34,14 @@ status`/`upgrade`, and deriving the Sync Run outcome — data-model.md).
 code paths, and close the one gap it doesn't cover automatically
 (`/speckit-analyze` finding C1 — Constitution Principle IX).
 
-- [ ] T001 Confirm `pytest`'s `testpaths = ["tests"]` (`pyproject.toml`)
+- [X] T001 Confirm `pytest`'s `testpaths = ["tests"]` (`pyproject.toml`)
   auto-discovers a new `tests/scripts/` directory with no config change, and
   confirm `scripts/sync_agent_integrations.py` needs no `pyproject.toml`
   change to stay outside `[tool.coverage.run]`'s `source = ["machine_calc"]`
   or `[tool.mypy]`'s `files = ["src/machine_calc"]` default (T002 below adds
   it to CI's lint/typecheck/security *commands* explicitly instead — those
   are separate from `pyproject.toml`'s own scoping defaults)
-- [ ] T002 [P] Extend `.github/workflows/ci.yml`'s `lint`, `typecheck`, and
+- [X] T002 [P] Extend `.github/workflows/ci.yml`'s `lint`, `typecheck`, and
   `security` job commands to explicitly include
   `scripts/sync_agent_integrations.py` by exact file path — i.e.
   `ruff check src/ tests/ scripts/sync_agent_integrations.py`,
@@ -68,17 +68,17 @@ modified-blocked > upgraded-with-changes > no-drift).
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T003 Create `scripts/sync_agent_integrations.py` with
+- [X] T003 Create `scripts/sync_agent_integrations.py` with
   `load_installed_integrations() -> list[str]`, reading
   `.specify/integration.json`'s `installed_integrations` field (FR-010;
   data-model.md "Integration".key) — this is what lets a future integration
   be picked up with zero workflow/script changes
-- [ ] T004 Add `run_integration_status(key: str) -> dict` to
+- [X] T004 Add `run_integration_status(key: str) -> dict` to
   `scripts/sync_agent_integrations.py`, wrapping `specify integration
   status --json` and parsing its JSON output to extract that integration's
   `modified_files`/`missing_files` (research.md #1) (depends on T003; same
   file as T003, sequential)
-- [ ] T005 Add `run_integration_upgrade(key: str) -> IntegrationResult` to
+- [X] T005 Add `run_integration_upgrade(key: str) -> IntegrationResult` to
   `scripts/sync_agent_integrations.py`, wrapping `specify integration
   upgrade <key> --script py` (never `--force`, per FR-012's "don't silently
   discard a hand-edit" intent), capturing the exit code/stderr to
@@ -87,13 +87,13 @@ modified-blocked > upgraded-with-changes > no-drift).
   that integration's manifest paths afterward to collect `changed_files`
   (data-model.md "Integration") (depends on T003; same file as T003/T004,
   sequential)
-- [ ] T006 Implement `derive_run_outcome(integrations: list[IntegrationResult]) -> SyncRunOutcome`
+- [X] T006 Implement `derive_run_outcome(integrations: list[IntegrationResult]) -> SyncRunOutcome`
   in `scripts/sync_agent_integrations.py` per data-model.md "Sync Run"'s
   priority-ordered derivation: any `failed` → `failed`; else any
   `modified-blocked` → `failed` (distinct message, research.md #1); else any
   `upgraded-with-changes` → `pull-request-opened-or-updated`; else
   `no-drift` (depends on T004, T005; same file, sequential)
-- [ ] T007 Unit tests for `load_installed_integrations()`,
+- [X] T007 Unit tests for `load_installed_integrations()`,
   `run_integration_status()`, `run_integration_upgrade()` (with
   `subprocess` mocked), and `derive_run_outcome()` in
   `tests/scripts/test_sync_agent_integrations.py`, covering all four
@@ -121,19 +121,19 @@ files. Trigger it again immediately after (no further drift); verify the
 second run makes no changes and opens no pull request (quickstart.md
 Scenarios 1–2).
 
-- [ ] T008 [US1] Add `write_workflow_output(outcome: SyncRunOutcome) -> None`
+- [X] T008 [US1] Add `write_workflow_output(outcome: SyncRunOutcome) -> None`
   to `scripts/sync_agent_integrations.py`, writing `has_changes=true/false`
   to `$GITHUB_OUTPUT` so the workflow can conditionally invoke the
   PR-creation step (FR-004; contracts/sync-workflow-contract.md "no-drift"
   guarantee) (depends on T006; same file, sequential)
-- [ ] T009 [US1] Add a `main()` CLI entry point to
+- [X] T009 [US1] Add a `main()` CLI entry point to
   `scripts/sync_agent_integrations.py` that iterates every integration from
   `load_installed_integrations()`, calls `run_integration_status()` then
   `run_integration_upgrade()` for each, calls `derive_run_outcome()` and
   `write_workflow_output()`, and exits non-zero when the outcome is `failed`
   (FR-007; contracts/sync-workflow-contract.md "failed" guarantee) (depends
   on T006, T008; same file, sequential)
-- [ ] T010 [US1] Add a `sync-agent-integrations` job to the existing
+- [X] T010 [US1] Add a `sync-agent-integrations` job to the existing
   `.github/workflows/ci.yml` (reusing its already-declared top-level
   `schedule`/`workflow_dispatch` triggers rather than a new sibling
   workflow file), guarded with `if: github.event_name == 'schedule' ||
@@ -146,7 +146,7 @@ Scenarios 1–2).
   and run `python scripts/sync_agent_integrations.py` (depends on T009;
   same file as T002, but T002's edits are to different job blocks —
   sequential to avoid an unnecessary merge, not a real conflict)
-- [ ] T011 [US1] Add the `peter-evans/create-pull-request` step to the
+- [X] T011 [US1] Add the `peter-evans/create-pull-request` step to the
   `sync-agent-integrations` job from T010, gated on the script's
   `has_changes` output, targeting the fixed branch
   `chore/sync-agent-integrations` (research.md #3; FR-011
@@ -156,7 +156,7 @@ Scenarios 1–2).
   limitation (default-token PRs never trigger this repo's
   `pull_request`-scoped required checks) (depends on T010; same file as
   T010, sequential)
-- [ ] T012 [P] [US1] Integration test in
+- [X] T012 [P] [US1] Integration test in
   `tests/scripts/test_sync_agent_integrations.py` exercising `main()`
   end-to-end with `subprocess` mocked, covering both the no-drift case (exit
   0, `has_changes=false`) and the drift-found case (exit 0,
@@ -181,7 +181,7 @@ description lists changed integrations; confirm it cannot merge without
 review, identically to any other pull request (quickstart.md Scenarios 3,
 7).
 
-- [ ] T013 [US2] Add `compose_pull_request_body(integrations: list[IntegrationResult]) -> str`
+- [X] T013 [US2] Add `compose_pull_request_body(integrations: list[IntegrationResult]) -> str`
   to `scripts/sync_agent_integrations.py`, producing the body per
   contracts/sync-workflow-contract.md's "Sync Pull Request body contract"
   (changed integrations named first; then, only when at least one other
@@ -189,18 +189,18 @@ review, identically to any other pull request (quickstart.md Scenarios 3,
   `modified-blocked` integration and its specific file — data-model.md
   "Sync Pull Request".blocked_integrations) (depends on T006; same file as
   Phase 2/3 tasks, sequential)
-- [ ] T014 [US2] Extend `write_workflow_output()` (T008) to also write the
+- [X] T014 [US2] Extend `write_workflow_output()` (T008) to also write the
   composed body from `compose_pull_request_body()` to `$GITHUB_OUTPUT`, and
   wire that output into the `peter-evans/create-pull-request` step's
   `body:` input (T011) in `.github/workflows/ci.yml` (depends on T013, T011;
   `.github/workflows/ci.yml` portion is same file as T010/T011, sequential)
-- [ ] T015 [P] [US2] Unit tests for `compose_pull_request_body()` in
+- [X] T015 [P] [US2] Unit tests for `compose_pull_request_body()` in
   `tests/scripts/test_sync_agent_integrations.py`: multiple changed
   integrations are all named without needing the diff (SC-002); the
   blocked-integration callout appears only when at least one other
   integration in the same run also changed (depends on T013; different file
   from T014's workflow-YAML portion)
-- [ ] T016 [US2] Review the `sync-agent-integrations` job (T010–T011) and
+- [X] T016 [US2] Review the `sync-agent-integrations` job (T010–T011) and
   add an inline comment confirming no `permissions:` block or step grants
   merge/auto-approve capability, so the least-privilege default and normal
   required review apply exactly as they do to every other pull request
@@ -224,7 +224,7 @@ Story 3; FR-005).
 identical drift-check and pull-request behavior as a scheduled run
 (quickstart.md Scenario 6).
 
-- [ ] T017 [US3] Confirm the `sync-agent-integrations` job's `if:` guard
+- [X] T017 [US3] Confirm the `sync-agent-integrations` job's `if:` guard
   (T010) treats `schedule` and `workflow_dispatch` identically — no
   additional conditional branches on `github.event_name` anywhere in the
   job that would skip a step only for manual runs — and that
@@ -240,16 +240,27 @@ identical drift-check and pull-request behavior as a scheduled run
 **Purpose**: Validation and quality-bar tasks spanning all three user
 stories.
 
-- [ ] T018 Execute all 7 quickstart.md scenarios and confirm actual behavior
-  matches documented expected outcomes (depends on T001–T017)
-- [ ] T019 [P] Add a short mention of the automated multi-agent sync
+- [X] T018 Execute all 7 quickstart.md scenarios and confirm actual behavior
+  matches documented expected outcomes (depends on T001–T017). Scenarios 1-3
+  (no-drift, drift-found, locally-modified-blocks) validated for real against
+  the live `specify` CLI in a disposable git worktree (not this working tree)
+  — confirmed correct `has_changes`/`pr_body` output, exit codes, and that a
+  blocked integration never invokes `upgrade`. Scenario 5 (new-integration
+  pickup) confirmed via no hard-coded integration names in the script.
+  Scenarios 6-7 (manual-trigger parity, review still required) confirmed by
+  inspection of the job's `if:` guard and lack of elevated `permissions:`
+  (same evidence as T017/T016). Scenario 4 (duplicate-PR avoidance) relies on
+  `peter-evans/create-pull-request`'s documented branch-reuse behavior
+  (research.md #3) and requires a live GitHub Actions run to fully exercise —
+  not independently re-tested here beyond that documented behavior.
+- [X] T019 [P] Add a short mention of the automated multi-agent sync
   workflow to `README.md` (or a `CONTRIBUTING`-style doc) — optional per
   plan.md's Constitution Check Principle VII note (not required by any FR),
   but low-cost and improves discoverability for future contributors
-- [ ] T020 Run `pytest` and confirm the new `tests/scripts/` tests pass and
+- [X] T020 Run `pytest` and confirm the new `tests/scripts/` tests pass and
   the existing `--cov=machine_calc --cov-fail-under=90` gate is unaffected
   (depends on T007, T012, T015)
-- [ ] T021 Add an inline comment on the new `sync-agent-integrations` job in
+- [X] T021 Add an inline comment on the new `sync-agent-integrations` job in
   `.github/workflows/ci.yml` citing `specs/011-multi-agent-skill-sync`,
   matching this file's existing convention of citing spec numbers next to
   the CI logic they implement (e.g. the `complexity` job's

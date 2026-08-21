@@ -295,6 +295,16 @@ whose "require a pull request" rule has a bypass scoped only to the repository o
 See `specs/003-ci-quality-security-gates/contracts/ci-checks-contract.md` for the full
 contract.
 
+### Multi-agent skill sync
+
+A separate, non-PR-blocking `sync-agent-integrations` job (same file, weekly cron plus
+on-demand `workflow_dispatch`) regenerates every installed coding-agent integration
+(currently GitHub Copilot's `.github/agents/`+`.github/prompts/`, Claude Code's
+`.claude/skills/`) from Spec Kit's upstream template source, and opens a pull request
+only when something actually drifted. This keeps per-agent instructions from being
+hand-duplicated or silently going stale, per `.specify/memory/constitution.md`
+Principle XI — see `specs/011-multi-agent-skill-sync` for the full design.
+
 ### Documented exceptions instead of silent suppressions
 
 If a finding is a genuine false positive or an accepted, understood risk, suppress it
