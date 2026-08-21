@@ -17,6 +17,18 @@ published automatically to GitHub Pages on every merge to `main`.
 > [`specs/001-metal-drilling-calc/tasks.md`](specs/001-metal-drilling-calc/tasks.md)
 > (Polish phase) and will replace this placeholder README.
 
+## License
+
+`machine-calc` is **free for noncommercial use** (personal, hobby, research,
+education, evaluation, etc.) under the
+[PolyForm Noncommercial License 1.0.0](LICENSE.md). Any commercial use —
+using the software inside a for-profit business, in a paid product or
+service, or any other revenue-generating context — requires a separate,
+paid commercial license from the copyright holder. To request one, open an
+issue: <https://github.com/kniklas/machine-calc/issues/new>. See
+[`LICENSE.md`](LICENSE.md) for the full terms; all rights not expressly
+granted there, including all commercial rights, are reserved.
+
 ## Install (development)
 
 ```bash

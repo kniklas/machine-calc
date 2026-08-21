@@ -1,44 +1,29 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.4.0 → 1.5.0
-Modified principles: Principle VII (Documentation & Publishing) - expanded, not redefined
-Added sections: none (new bullet + rationale text under existing Principle VII)
-Expanded sections:
-  - Principle VII (Documentation & Publishing): added a requirement that README.md
-    display auto-updating build-status and test-coverage badges/icons near the top of
-    the file (part of specs/003-ci-quality-security-gates), not just a textual coverage
-    figure as previously required
+Version change: 1.5.0 → 1.6.0
+Modified principles: none (existing principles I-IX unchanged)
+Added sections:
+  - Principle X (Licensing & Author Rights): new principle establishing the project's
+    dual-license model (free for noncommercial use under the PolyForm Noncommercial
+    License 1.0.0; commercial use requires a separate paid license from the copyright
+    holder) and requiring the license file, package metadata, and README to stay
+    consistent and accurate (per issue #37)
+Expanded sections: none
 Removed sections: none
 Templates requiring updates:
   ✅ .specify/templates/plan-template.md (Constitution Check gate references principles
     generically; no changes needed)
   ✅ .specify/templates/tasks-template.md (no principle-specific mandatory task category
-    introduced; badge requirement folds into existing docs/README tasks)
+    introduced; licensing changes are a one-time doc/metadata task, not a recurring
+    per-feature task category)
   ✅ .specify/templates/spec-template.md (no principle-specific mandatory sections
     introduced; no changes needed)
   ✅ .github/copilot-instructions.md (no agent-specific references requiring updates)
 Follow-up TODOs:
-  - specs/003-ci-quality-security-gates/tasks.md MUST get a new task adding the actual
-    build-status and coverage badges to README.md (this amendment fixes the requirement,
-    not yet the implementation); see that feature's Phase 9 section.
-  - README.md must document unit test coverage once the package skeleton exists.
-  - GitHub Actions workflows (lint, type-check, complexity, security/CodeQL, test/coverage,
-    build, docs, PyPI publish) to be created during implementation; none exist yet as of
-    this amendment.
-  - Branch protection on `main` MUST be updated to add the new complexity/type-check/
-    security jobs as required status checks once the corresponding workflow is created.
-  - Concrete threshold values (e.g., `ruff` `max-complexity`, `xenon` grade letters) MUST
-    be finalized and recorded in `pyproject.toml`/CI config during the next `/speckit.plan`
-    that touches CI tooling; this amendment fixes the required tools/metrics, not the
-    exact numeric thresholds.
-  - specs/001-metal-drilling-calc/plan.md structure should reflect a per-operation
-    module boundary (e.g., an `operations/drilling` module) so future operations
-    (turning, milling) can be added per this amendment without refactoring shared code.
-  - The concrete i18n mechanism (e.g., gettext `.po`/`.mo` vs. a simple JSON/YAML
-    per-locale catalog) MUST be selected during `/speckit.plan` for the first
-    feature that introduces user-facing messages; not yet decided as of this
-    amendment.
+  - If/when a paid commercial-license process is formalized (pricing, contract terms,
+    payment flow), this principle MUST be amended to reference that concrete process
+    instead of the current "open a GitHub issue" placeholder contact path.
 -->
 
 # machine-calc Constitution
@@ -248,6 +233,37 @@ human review.
   measurable, comparable over time, and enforceable without depending on reviewer
   availability, expertise, or memory.
 
+### X. Licensing & Author Rights
+This project is distributed under a dual-license model: free for noncommercial use, with
+commercial use requiring a separate paid license from the copyright holder.
+- The repository MUST include a `LICENSE.md` at the root containing the full text of the
+  [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0)
+  plus a "Required Notice" copyright line and a commercial-use addendum; any change to the
+  licensing terms MUST update `LICENSE.md` as the single source of truth (no license text
+  duplicated or paraphrased elsewhere in a way that could drift out of sync).
+- "Noncommercial use" (personal, hobby, research, education, evaluation, and other
+  non-revenue-generating use per the PolyForm Noncommercial definitions) MUST remain free
+  and unrestricted; any use inside a for-profit business, in a paid product/service, or
+  any other revenue-generating context is commercial use and is NOT licensed under
+  `LICENSE.md` — it requires a separate, explicitly negotiated paid commercial license
+  from the copyright holder.
+- All rights not expressly granted to noncommercial users — including all commercial
+  rights — are reserved by the copyright holder; no contribution, dependency, or generated
+  artifact MAY be merged if it would relicense, sublicense, or otherwise weaken this
+  reservation without an explicit constitution amendment.
+- Package metadata (`pyproject.toml`'s `license`/`license-files`) and any user-facing
+  documentation (README, generated Sphinx docs) MUST accurately reflect the current
+  licensing terms and MUST NOT claim an OSI-approved or fully open-source license while
+  this noncommercial restriction is in effect.
+- A visible path for commercial-license inquiries (e.g., a GitHub issue link) MUST be
+  documented in `LICENSE.md` and the README so prospective commercial users have a clear,
+  low-friction way to request a paid license.
+- Rationale: stating licensing terms as a constitutional principle — not just as inert
+  legal text — ensures every future spec/plan/tasks cycle and code review treats the
+  licensing model as a binding project constraint, preventing accidental relicensing,
+  silent scope creep into permissive terms, or documentation drift between the legal
+  text and what the project publicly claims.
+
 ## Additional Constraints (Quality Gates)
 
 - CI MUST run linting, the full automated test suite, and a package build check on every
@@ -306,4 +322,4 @@ recurring pattern, MUST trigger a proposed constitution amendment rather than re
 ad-hoc exceptions. Use `.specify/memory/constitution.md` as the authoritative source for
 runtime development guidance until a dedicated guidance file is introduced.
 
-**Version**: 1.5.0 | **Ratified**: 2026-07-08 | **Last Amended**: 2026-07-21
+**Version**: 1.6.0 | **Ratified**: 2026-07-08 | **Last Amended**: 2026-08-19
