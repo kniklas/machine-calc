@@ -77,7 +77,9 @@ Validation scenarios for the sync workflow described in
 
 ## Scenario 6 — Manual trigger matches scheduled behavior (FR-005, User Story 3)
 
-1. `gh workflow run <sync-workflow-file>.yml`
+1. `gh workflow run ci.yml` (the `sync-agent-integrations` job lives inside
+   the existing `.github/workflows/ci.yml`, not a separate workflow file —
+   plan.md Project Structure)
 2. **Expected**: the triggered run performs the identical drift-check and
    pull-request behavior described in Scenarios 1–4 above; there is no
    behavioral difference from a `schedule`-triggered run other than the

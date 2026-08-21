@@ -142,7 +142,10 @@ tests/
                                          # (Technical Context "Testing"; not part of the
                                          # machine_calc coverage-gated source tree)
 
-# NOT modified:
+# NOT modified by this feature's own code/design (the one expected exception
+# is .specify/feature.json, spec-kit's own per-checkout "current feature"
+# pointer, updated by /speckit-specify as a matter of course - not part of
+# this feature's design surface):
 #   src/machine_calc/**                 # This feature touches no application/library code
 #   .specify/**                         # Generated/managed by the `specify` CLI itself
 #     (per Constitution Principle XI); this feature drives that CLI, it does not

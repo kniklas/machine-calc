@@ -63,8 +63,13 @@ code paths, and close the one gap it doesn't cover automatically
 **Purpose**: The core script logic every user story depends on: reading
 which integrations are installed, running `specify integration
 status`/`upgrade` per integration, and classifying the overall run outcome
-per data-model.md's "Sync Run" priority-ordered derivation (failed >
-modified-blocked > upgraded-with-changes > no-drift).
+per data-model.md's "Sync Run" priority-ordered derivation. **Note (post-PR
+#50 Copilot review correction):** the order actually implemented is `failed
+> upgraded-with-changes > modified-blocked > no-drift` — a mixed run (one
+integration blocked, another genuinely changed) still opens a PR naming
+both, rather than the originally-planned "any blocked always fails" order
+described in T006 below; see data-model.md and
+contracts/sync-workflow-contract.md for the corrected, current contract.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
@@ -89,10 +94,16 @@ modified-blocked > upgraded-with-changes > no-drift).
   sequential)
 - [X] T006 Implement `derive_run_outcome(integrations: list[IntegrationResult]) -> SyncRunOutcome`
   in `scripts/sync_agent_integrations.py` per data-model.md "Sync Run"'s
-  priority-ordered derivation: any `failed` → `failed`; else any
-  `modified-blocked` → `failed` (distinct message, research.md #1); else any
-  `upgraded-with-changes` → `pull-request-opened-or-updated`; else
-  `no-drift` (depends on T004, T005; same file, sequential)
+  priority-ordered derivation, **as corrected after PR #50's Copilot
+  review** (originally planned as any `modified-blocked` → `failed`
+  unconditionally, which made the blocked-callout branch of
+  `compose_pull_request_body()` unreachable and contradicted FR-008): any
+  `failed` → `failed`; else any `upgraded-with-changes` →
+  `pull-request-opened-or-updated` (even if another integration in the same
+  run is `modified-blocked` — it is named in that PR's body instead of
+  sinking the run, research.md #1); else any `modified-blocked` (with
+  nothing else changed) → `failed`; else `no-drift` (depends on T004, T005;
+  same file, sequential)
 - [X] T007 Unit tests for `load_installed_integrations()`,
   `run_integration_status()`, `run_integration_upgrade()` (with
   `subprocess` mocked), and `derive_run_outcome()` in

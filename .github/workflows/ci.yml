@@ -123,7 +123,14 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     steps:
+      # Explicit ref: a manual workflow_dispatch can be launched against any
+      # branch from the Actions UI; without pinning to `main` here, the sync
+      # branch/PR create-pull-request opens would target whatever branch was
+      # dispatched from instead of `main`, breaking schedule/manual parity
+      # (contracts/sync-workflow-contract.md "Triggers").
       - uses: actions/checkout@v4
+        with:
+          ref: main
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}

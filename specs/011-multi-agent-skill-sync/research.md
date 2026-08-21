@@ -24,7 +24,7 @@ repository is pinned to per `.specify/integration.json`):
   points to. There is no separate "check for upstream updates" command —
   running the upgrade and diffing the working tree afterward **is** the
   drift check.
-- Critically, `specify integration upgrade` **blocks entirely** or a given
+- Critically, `specify integration upgrade` **blocks entirely** for a given
   integration's regeneration (rather than silently overwriting) when
   `status`'s local-integrity check finds a modified file, unless `--force`
   is passed (confirmed via `specify integration upgrade --help`: "Compares

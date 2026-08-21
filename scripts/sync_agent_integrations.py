@@ -115,6 +115,8 @@ def run_integration_upgrade(key: str) -> IntegrationResult:
             blocked_file=modified_files[0],
         )
 
+    paths_before = _manifest_tracked_paths(key)
+
     proc = subprocess.run(
         ["specify", "integration", "upgrade", key, "--script", "py"],
         cwd=REPO_ROOT,
@@ -128,7 +130,12 @@ def run_integration_upgrade(key: str) -> IntegrationResult:
             error=proc.stderr.strip() or proc.stdout.strip(),
         )
 
-    tracked_paths = _manifest_tracked_paths(key)
+    # Union of the manifest's tracked paths before and after the upgrade: a
+    # path removed by the upgrade (upstream deleted a generated file) is
+    # absent from the *new* manifest, so relying on the post-upgrade list
+    # alone would miss that deletion entirely and misreport it as no drift.
+    paths_after = _manifest_tracked_paths(key)
+    tracked_paths = sorted(set(paths_before) | set(paths_after))
     changed_files: list[str] = []
     if tracked_paths:
         diff = subprocess.run(

@@ -147,6 +147,37 @@ def test_run_integration_upgrade_no_change(monkeypatch):
     assert result.changed_files == []
 
 
+def test_run_integration_upgrade_detects_deletion_only_drift(monkeypatch):
+    """A file present in the manifest *before* the upgrade but absent
+    *after* it (upstream deleted a generated file) must still be detected -
+    scoping git status to only the post-upgrade manifest's paths would miss
+    it entirely and misreport the run as no drift."""
+    status_json = json.dumps({"manifests": {"copilot": {"modified_files": []}}})
+    manifest_calls = iter(
+        [
+            [".github/prompts/x.md", ".github/prompts/removed.md"],  # before
+            [".github/prompts/x.md"],  # after: removed.md is gone
+        ]
+    )
+    monkeypatch.setattr(sai, "_manifest_tracked_paths", lambda key: next(manifest_calls))
+
+    def fake_run(cmd, **kwargs):
+        if cmd[:3] == ["specify", "integration", "status"]:
+            return _completed(0, status_json)
+        if cmd[:3] == ["specify", "integration", "upgrade"]:
+            return _completed(0, "")
+        if cmd[:2] == ["git", "status"]:
+            assert ".github/prompts/removed.md" in cmd
+            return _completed(0, " D .github/prompts/removed.md\n")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    with patch.object(sai.subprocess, "run", side_effect=fake_run):
+        result = sai.run_integration_upgrade("copilot")
+
+    assert result.status == sai.STATUS_UPGRADED_WITH_CHANGES
+    assert result.changed_files == [".github/prompts/removed.md"]
+
+
 # --- derive_run_outcome (T007) -----------------------------------------------
 
 
