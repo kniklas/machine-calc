@@ -1,17 +1,19 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "machine-calc"
-version = "0.2.0"
-description = "Metal machining calculation library and interactive CLI, starting with drilling operations."
+# Single source of truth (Constitution IV): the version lives in
+# src/machine_calc/__init__.py and is read statically from there.
+dynamic = ["version"]
+description = "Metal machining calculation library and interactive CLI, covering drilling and milling operations."
 readme = "README.md"
 requires-python = ">=3.9"
 license = "LicenseRef-PolyForm-Noncommercial-1.0.0"
 license-files = ["LICENSE.md"]
 authors = [{ name = "kniklas" }]
-keywords = ["machining", "drilling", "cnc", "manufacturing", "calculator"]
+keywords = ["machining", "drilling", "milling", "cnc", "manufacturing", "calculator"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
@@ -31,7 +33,8 @@ dev = [
     "pytest>=7.4",
     "pytest-cov>=4.1",
     "ruff>=0.4",
-    "black>=24.0",
+    "black>=26.3.1; python_version >= '3.10'",
+    "black<26; python_version < '3.10'",
     "setuptools>=83.0.0",
     "sphinx>=7.0",
     "mypy>=1.10",
@@ -43,11 +46,19 @@ dev = [
 [project.scripts]
 machine-calc = "machine_calc.__main__:main"
 
+[tool.setuptools.dynamic]
+version = { attr = "machine_calc.__version__" }
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-machine_calc = ["data/*.toml", "operations/drilling/data/*.toml"]
+machine_calc = [
+    "data/*.toml",
+    "operations/drilling/data/*.toml",
+    "operations/milling/end_milling/data/*.toml",
+    "operations/milling/face_milling/data/*.toml",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

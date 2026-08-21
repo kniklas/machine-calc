@@ -4,13 +4,15 @@
 [![codecov](https://codecov.io/gh/kniklas/machine-calc/branch/main/graph/badge.svg)](https://codecov.io/gh/kniklas/machine-calc)
 
 A Python library and interactive command-line tool for metal machining
-calculations, starting with twist-drill drilling parameters (spindle speed,
-feed rate, machining time, torque, and required power).
+calculations. It covers **drilling** (twist drills) and **milling** (end
+milling and face milling), reporting spindle speed, feed rate, machining
+time, torque and required power — plus material removal rate for milling.
 
 📖 **[Full generated documentation (Sphinx)](https://kniklas.github.io/machine-calc/)** —
 published automatically to GitHub Pages on every merge to `main`.
 
-> **Status**: Early implementation (drilling calculation engine + CLI MVP).
+> **Status**: Early implementation (drilling + milling calculation engines
+> and CLI).
 > Full end-user/developer documentation and CI/CD automation are tracked in
 > [`specs/001-metal-drilling-calc/tasks.md`](specs/001-metal-drilling-calc/tasks.md)
 > (Polish phase) and will replace this placeholder README.
@@ -50,6 +52,52 @@ result = calculate(
 print(result)
 ```
 
+### Milling
+
+End milling and face milling have their own entry points, since their inputs
+differ from drilling's:
+
+```python
+from machine_calc import calculate_end_milling, calculate_face_milling
+
+# End milling: a slot/profile cut, described by axial and radial depth of cut.
+result = calculate_end_milling(
+    diameter=10,               # cutter diameter, mm (METRIC) or in (IMPERIAL)
+    axial_depth_of_cut=2,
+    radial_depth_of_cut=5,
+    feed_per_tooth=0.05,       # mm/tooth or in/tooth
+    number_of_teeth=4,
+    length_of_cut=100,
+    material="Mild Steel",
+    tool="Carbide",
+)
+print(result.material_removal_rate)  # cm3/min (METRIC) or in3/min (IMPERIAL)
+
+# Face milling: a facing pass, described by axial depth and width of cut.
+result = calculate_face_milling(
+    diameter=50,
+    axial_depth_of_cut=1.5,
+    width_of_cut=40,
+    feed_per_tooth=0.15,
+    number_of_teeth=5,
+    length_of_cut=200,
+    material="Mild Steel",
+    tool="Carbide",
+)
+```
+
+Milling has its own tool catalogs, listed with `list_end_mill_tools()` and
+`list_face_mill_tools()`. Drilling results always leave
+`material_removal_rate` as `None`.
+
+Both entry points also accept the same `mode`/`target_rpm`/`available_power`
+arguments as drilling's `calculate()` (see "Constrained calculation modes"
+below) — for example `calculate_end_milling(..., mode=CalculationMode.FIXED_RPM,
+target_rpm=3000)`.
+
+See `specs/009-milling-calculations/quickstart.md` and
+`specs/010-milling-calculation-modes/quickstart.md` for full scenarios.
+
 ### Constrained calculation modes
 
 Two opt-in modes are available alongside the default `STANDARD` mode:
@@ -80,10 +128,25 @@ scenarios, including error handling (`INFEASIBLE_POWER_BUDGET`,
 python -m machine_calc
 ```
 
-The REPL prompts for a calculation mode (`standard`, `power-constrained`,
+The REPL first asks which **machining operation** to calculate, and — when
+you choose `milling` — which sub-operation:
+
+```text
+Machining operation (drilling, milling) (drilling): milling
+Milling operation (end milling, face milling) (end milling): face milling
+```
+
+Choosing `drilling` leads to exactly the drilling session as before. After
+each result you can run another calculation and pick a different operation;
+each operation remembers its own previous answers as defaults.
+
+For drilling, the REPL prompts for a calculation mode (`standard`, `power-constrained`,
 `fixed-rpm`) right after the unit-system prompt; `power-constrained` then
 asks for a required available power, and `fixed-rpm` asks for a required
-target spindle speed (with an optional advisory available power).
+target spindle speed (with an optional advisory available power). Milling's
+REPL sessions (both end milling and face milling) prompt for the same
+calculation mode at the same point in the sequence, right after the
+unit-system prompt and before material selection.
 
 ### Material selection is two-step
 

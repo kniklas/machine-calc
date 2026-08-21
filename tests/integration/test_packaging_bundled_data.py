@@ -40,6 +40,8 @@ def test_wheel_contains_bundled_materials_and_tools_toml(tmp_path):
     names = zipfile.ZipFile(wheels[0]).namelist()
     assert any(n.endswith("data/materials.toml") for n in names), names
     assert any(n.endswith("drilling/data/tools.toml") for n in names), names
+    assert any(n.endswith("end_milling/data/tools.toml") for n in names), names
+    assert any(n.endswith("face_milling/data/tools.toml") for n in names), names
 
 
 def test_packaged_materials_include_hardwood_softwood_and_engineered(tmp_path):

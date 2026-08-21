@@ -3,10 +3,11 @@
 One :class:`~tests.performance.harness.PerformanceTestCase` per currently
 existing public calculation function (FR-001, SC-002: 100% coverage of
 ``machine_calc.calculate``, ``calculate_drilling_metrics``,
-``calculate_drilling_metrics_at_rpm``, ``calculate_power_constrained_metrics``),
-each invoked with a representative, realistic, happy-path input (data-model.md's
-validation rule: inputs must not trigger the target's own input-validation
-error path).
+``calculate_drilling_metrics_at_rpm``, ``calculate_power_constrained_metrics``,
+and — since specs/009-milling-calculations — ``calculate_end_milling`` and
+``calculate_face_milling``), each invoked with a representative, realistic,
+happy-path input (data-model.md's validation rule: inputs must not trigger
+the target's own input-validation error path).
 
 Skipped by default (see ``tests/performance/conftest.py``); run explicitly
 via::
@@ -19,7 +20,7 @@ from __future__ import annotations
 
 import pytest
 
-from machine_calc import calculate
+from machine_calc import calculate, calculate_end_milling, calculate_face_milling
 from machine_calc.operations.drilling.formulas import (
     calculate_drilling_metrics,
     calculate_drilling_metrics_at_rpm,
@@ -68,6 +69,42 @@ CASES: list[harness.PerformanceTestCase] = [
         name="calculate_power_constrained_metrics",
         target=calculate_power_constrained_metrics,
         call_args=(10, 25, _MATERIAL, _TOOL, 0.5),
+        time_budget_seconds=budgets.TIME_BUDGET_SECONDS,
+        memory_budget_bytes=budgets.MEMORY_BUDGET_BYTES,
+    ),
+    # Milling cases (009 T049). Same 10mm/mild-steel/carbide posture as the
+    # drilling cases above, using the representative inputs from
+    # specs/009-milling-calculations/quickstart.md so the measured work
+    # matches what a real REPL session performs.
+    harness.PerformanceTestCase(
+        name="calculate_end_milling",
+        target=calculate_end_milling,
+        call_kwargs={
+            "diameter": 10.0,
+            "axial_depth_of_cut": 2.0,
+            "radial_depth_of_cut": 5.0,
+            "feed_per_tooth": 0.05,
+            "number_of_teeth": 4,
+            "length_of_cut": 100.0,
+            "material": "Mild Steel",
+            "tool": "Carbide",
+        },
+        time_budget_seconds=budgets.TIME_BUDGET_SECONDS,
+        memory_budget_bytes=budgets.MEMORY_BUDGET_BYTES,
+    ),
+    harness.PerformanceTestCase(
+        name="calculate_face_milling",
+        target=calculate_face_milling,
+        call_kwargs={
+            "diameter": 50.0,
+            "axial_depth_of_cut": 1.5,
+            "width_of_cut": 40.0,
+            "feed_per_tooth": 0.15,
+            "number_of_teeth": 5,
+            "length_of_cut": 200.0,
+            "material": "Mild Steel",
+            "tool": "Carbide",
+        },
         time_budget_seconds=budgets.TIME_BUDGET_SECONDS,
         memory_budget_bytes=budgets.MEMORY_BUDGET_BYTES,
     ),

@@ -66,6 +66,24 @@ def test_power_constrained_valid_combination_has_no_conflict():
 
 
 @pytest.mark.parametrize(
+    "bad_power", ["bad", True, False, float("nan"), float("inf"), float("-inf"), 0, -5.0]
+)
+def test_power_constrained_rejects_non_finite_or_non_positive_available_power(bad_power):
+    """A supplied-but-invalid budget can never be met by any spindle
+    speed, so it is reported as INFEASIBLE_POWER_BUDGET (matching the
+    downstream <= 0 checks in drilling's/milling's _compute_metrics())
+    rather than reaching hp_to_kw() or a numeric comparison downstream and
+    raising TypeError, which would violate the public API's never-raises
+    contract."""
+
+    error = validate_mode_arguments(
+        CalculationMode.POWER_CONSTRAINED, available_power=bad_power, target_rpm=None
+    )
+    assert error is not None
+    assert error.code == "INFEASIBLE_POWER_BUDGET"
+
+
+@pytest.mark.parametrize(
     "available_power,target_rpm",
     [
         (None, None),
@@ -98,3 +116,29 @@ def test_fixed_rpm_mode_never_conflicts_on_available_power(available_power, targ
         CalculationMode.FIXED_RPM, available_power=available_power, target_rpm=target_rpm
     )
     assert error is None
+
+
+@pytest.mark.parametrize("bad_power", ["bad", True, False, float("nan"), float("inf"), 0, -5.0])
+@pytest.mark.parametrize(
+    "mode,target_rpm",
+    [(CalculationMode.STANDARD, None), (CalculationMode.FIXED_RPM, 1200)],
+)
+def test_advisory_available_power_rejects_non_finite_or_non_numeric(mode, target_rpm, bad_power):
+    """STANDARD/FIXED_RPM only use available_power for an advisory
+    feasibility warning (never a hard constraint), but an invalid value
+    (non-numeric, bool, non-finite, zero, or negative) must still be
+    rejected here — otherwise it would reach hp_to_kw() or a numeric
+    comparison against metrics.power_kw downstream and raise TypeError,
+    violating the public API's never-raises contract."""
+    error = validate_mode_arguments(mode, available_power=bad_power, target_rpm=target_rpm)
+    assert error is not None
+    assert error.code == "INVALID_AVAILABLE_POWER"
+
+
+@pytest.mark.parametrize(
+    "mode,target_rpm",
+    [(CalculationMode.STANDARD, None), (CalculationMode.FIXED_RPM, 1200)],
+)
+def test_advisory_available_power_accepts_none_or_valid_number(mode, target_rpm):
+    assert validate_mode_arguments(mode, available_power=None, target_rpm=target_rpm) is None
+    assert validate_mode_arguments(mode, available_power=5.5, target_rpm=target_rpm) is None
