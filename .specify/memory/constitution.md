@@ -1,6 +1,37 @@
 <!--
 Sync Impact Report
 ==================
+Version change: 1.8.0 → 1.9.0
+Modified principles: Principle XI (Multi-Agent Coding-Tool Consistency) — added a scoped
+  exception bullet (see below); the principle's core anti-duplication MUST clauses are
+  otherwise unchanged.
+Added sections: none
+Expanded sections:
+  - Principle XI: added an "Exception — genuinely shared, hand-authored skills" bullet.
+    A repo-specific skill that is hand-authored outside the Spec Kit integration mechanism
+    (i.e., not produced by `specify integration install`/`specify integration upgrade`) but
+    genuinely useful to more than one coding agent MAY live as one canonical file in a
+    single agent's own skill directory; every other agent's directory MAY reference it only
+    via a symlink to that canonical file, never a hand-copied/independently-edited
+    duplicate. Motivated by this repo's own `.github/skills/*` (Copilot-facing, hand-
+    authored skills such as `pr-review-loop`, `code-review`, `pypi-package-builder`,
+    `skill-authoring`) becoming reusable from Claude Code via `.claude/skills/*` symlinks —
+    the principle's literal prior wording forbade this even though a symlink cannot
+    independently diverge from its target and so cannot produce the drift the principle
+    exists to prevent. Rationale paragraph expanded with one sentence explaining why the
+    exception preserves the principle's guarantee rather than weakening it.
+Removed sections: none
+Templates requiring updates:
+  ✅ .specify/templates/plan-template.md (no changes needed)
+  ✅ .specify/templates/tasks-template.md (no changes needed)
+  ✅ .specify/templates/spec-template.md (no changes needed)
+  ✅ .github/copilot-instructions.md (no changes needed)
+Follow-up TODOs: none
+-->
+
+<!--
+Sync Impact Report (previous amendment)
+==================
 Version change: 1.7.0 → 1.8.0
 Modified principles: none (existing principles I-XI unchanged)
 Added sections: none
@@ -23,35 +54,6 @@ Templates requiring updates:
   ✅ .specify/templates/spec-template.md (no changes needed)
   ✅ .github/copilot-instructions.md (no changes needed)
 Follow-up TODOs: none
--->
-
-<!--
-Sync Impact Report (previous amendment)
-==================
-Version change: 1.6.0 → 1.7.0
-Modified principles: none (existing principles I-X unchanged)
-Added sections:
-  - Principle XI (Multi-Agent Coding-Tool Consistency): new principle requiring that
-    per-coding-agent instruction/skill files (Copilot's `.github/agents/`+`.github/prompts/`,
-    Claude Code's `.claude/skills/`, and any future integration such as Cursor) be treated
-    as generated artifacts of Spec Kit's integration mechanism rather than hand-duplicated,
-    independently-diverging files, and be kept in sync via `specify integration
-    install`/`specify integration upgrade` against Spec Kit's upstream template source
-    (per issue #46; follows up on the Claude Code integration added in PR #48)
-Expanded sections: none
-Removed sections: none
-Templates requiring updates:
-  ✅ .specify/templates/plan-template.md (Constitution Check gate references principles
-    generically; no changes needed)
-  ✅ .specify/templates/tasks-template.md (no principle-specific mandatory task category
-    introduced; this principle governs contributor/tooling process, not feature tasks)
-  ✅ .specify/templates/spec-template.md (no principle-specific mandatory sections
-    introduced; no changes needed)
-  ✅ .github/copilot-instructions.md (no specific-principle enumeration present to update)
-Follow-up TODOs:
-  - Automating a recurring `specify integration upgrade` check (e.g. a scheduled workflow
-    that opens a PR when installed agents' generated files drift from upstream) is not yet
-    implemented; deferred as a follow-up feature rather than performed by this command.
 -->
 
 # machine-calc Constitution
@@ -300,6 +302,16 @@ hand-duplicated, independently-diverging instruction sets per agent.
   `.github/prompts/`, Claude Code's `.claude/skills/`, and any future integration's
   equivalent directory) MUST be treated as generated artifacts of the Spec Kit integration
   mechanism, not as hand-authored, independently-maintained content.
+- Exception — genuinely shared, hand-authored skills: a skill that predates or otherwise
+  falls outside the Spec Kit integration mechanism, and that is genuinely useful to more
+  than one coding agent (e.g., a repo-specific review or workflow skill under
+  `.github/skills/<name>/SKILL.md`), MAY be hand-authored as a single canonical file living
+  in one agent's own directory. Every other agent's directory MAY reference that skill only
+  via a symlink to the canonical file — never a hand-copied, paraphrased, or independently-
+  edited duplicate — so the skill remains one physical file with no possibility of drift.
+  This exception does NOT extend to any file actually produced by `specify integration
+  install`/`specify integration upgrade`: those remain governed exactly as the bullet above
+  requires, and hand-patching them (symlinked or otherwise) is still forbidden.
 - Contributors MUST NOT manually copy, paraphrase, or hand-sync one agent's instruction
   file into another agent's format. A new coding-agent integration MUST be added via
   `specify integration install <name>`, and existing integrations MUST be refreshed via
@@ -317,7 +329,11 @@ hand-duplicated, independently-diverging instruction sets per agent.
   `.github/agents`/`.github/prompts` pair vs. Claude Code's self-contained
   `.claude/skills/*/SKILL.md`); without a single canonical upstream source and a mechanical
   regeneration step, these files inevitably duplicate and drift, producing inconsistent
-  agent behavior and an unreviewable, ever-growing maintenance burden (issue #46).
+  agent behavior and an unreviewable, ever-growing maintenance burden (issue #46). The
+  symlink exception preserves this same guarantee for repo-specific skills that are not
+  themselves Spec Kit template output: a symlink is definitionally a single file, not a
+  copy, so it cannot independently diverge from its target the way a hand-duplicated file
+  can — the drift this principle exists to prevent is structurally impossible for it.
 
 ## Additional Constraints (Quality Gates)
 
@@ -385,4 +401,4 @@ recurring pattern, MUST trigger a proposed constitution amendment rather than re
 ad-hoc exceptions. Use `.specify/memory/constitution.md` as the authoritative source for
 runtime development guidance until a dedicated guidance file is introduced.
 
-**Version**: 1.8.0 | **Ratified**: 2026-07-08 | **Last Amended**: 2026-08-22
+**Version**: 1.9.0 | **Ratified**: 2026-07-08 | **Last Amended**: 2026-08-22
