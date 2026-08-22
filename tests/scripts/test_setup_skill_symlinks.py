@@ -8,6 +8,7 @@ setup), so the module under test is imported directly by path.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -141,6 +142,99 @@ def test_sync_one_never_clobbers_a_real_directory(dirs):
     assert "CONFLICT" in message
     assert not real_dir.is_symlink()
     assert (real_dir / "unrelated.txt").exists()
+
+
+def test_sync_one_backslash_target_still_reads_as_ok(dirs):
+    """A Windows checkout that *did* materialize a real symlink stores the
+    target as `os.readlink()` returns it; the correctness check must not
+    depend on `os.path.relpath()`'s separator style (backslash on Windows,
+    forward slash on POSIX) matching that verbatim.
+    """
+    source, dest = dirs
+    _make_skill(source, "pr-review-loop")
+    sss.sync_one("pr-review-loop", check_only=False)
+    expected = os.readlink(dest / "pr-review-loop")
+    backslash_style = expected.replace("/", "\\")
+
+    assert sss._normalize_target(backslash_style) == sss._normalize_target(expected)
+
+
+def test_sync_one_replaces_windows_placeholder_file(dirs):
+    """git checks a symlink blob out as a plain-text file containing the
+    target string when `core.symlinks=false` (the common Windows default
+    without Developer Mode) - this must be recognized and replaced with a
+    real symlink, not reported as an unrelated-content conflict.
+    """
+    source, dest = dirs
+    _make_skill(source, "pr-review-loop")
+    expected_target = sss._relative_target("pr-review-loop")
+    placeholder = dest / "pr-review-loop"
+    placeholder.write_text(expected_target)  # exactly what git checkout produces
+
+    ok, message = sss.sync_one("pr-review-loop", check_only=False)
+
+    assert ok is True
+    assert "placeholder" in message.lower()
+    assert placeholder.is_symlink()
+    assert (placeholder / "SKILL.md").read_text() == "---\nname: pr-review-loop\n---\n"
+
+
+def test_sync_one_check_only_reports_placeholder_without_replacing(dirs):
+    source, dest = dirs
+    _make_skill(source, "pr-review-loop")
+    expected_target = sss._relative_target("pr-review-loop")
+    placeholder = dest / "pr-review-loop"
+    placeholder.write_text(expected_target)
+
+    ok, message = sss.sync_one("pr-review-loop", check_only=True)
+
+    assert ok is False
+    assert "PLACEHOLDER" in message
+    assert not placeholder.is_symlink()
+    assert placeholder.read_text() == expected_target
+
+
+def test_sync_one_unrelated_file_content_is_still_a_conflict(dirs):
+    """A regular file that happens to exist at the destination but whose
+    content is *not* the expected symlink target must not be mistaken for
+    a placeholder - it may be a contributor's own unrelated file.
+    """
+    source, dest = dirs
+    _make_skill(source, "pr-review-loop")
+    unrelated = dest / "pr-review-loop"
+    unrelated.write_text("this is not a symlink placeholder")
+
+    ok, message = sss.sync_one("pr-review-loop", check_only=False)
+
+    assert ok is False
+    assert "CONFLICT" in message
+    assert unrelated.read_text() == "this is not a symlink placeholder"
+
+
+def test_sync_one_wrong_target_fix_failure_leaves_original_symlink_intact(dirs, monkeypatch):
+    """If `os.symlink()` fails while fixing a wrong-target symlink (e.g. a
+    Windows privilege error), the pre-existing symlink must not be
+    destroyed - the caller should see FAILED, not silently lose both the
+    old and new symlink.
+    """
+    source, dest = dirs
+    _make_skill(source, "pr-review-loop")
+    _make_skill(source, "skill-authoring")
+    (dest / "pr-review-loop").symlink_to(source / "skill-authoring")
+
+    def _raise(*_args, **_kwargs):
+        raise OSError("simulated: privilege not held")
+
+    monkeypatch.setattr(sss.os, "symlink", _raise)
+
+    ok, message = sss.sync_one("pr-review-loop", check_only=False)
+
+    assert ok is False
+    assert "FAILED" in message
+    assert "Windows" in message
+    # The original (wrong-target) symlink must still be there, untouched.
+    assert (dest / "pr-review-loop").is_symlink()
+    assert (dest / "pr-review-loop").resolve() == (source / "skill-authoring").resolve()
 
 
 # --- main ------------------------------------------------------------------

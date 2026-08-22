@@ -312,10 +312,11 @@ directory) are genuinely useful from Claude Code too — e.g. `pr-review-loop`,
 `pypi-package-builder`, `skill-authoring`. Rather than hand-copying them into
 `.claude/skills/` (which would duplicate and drift, exactly what
 `.specify/memory/constitution.md` Principle XI forbids), each one is
-symlinked from `.claude/skills/<name>` to the canonical
-`.github/skills/<name>/SKILL.md` — one physical file, referenced from two
-places, so it can't diverge (Principle XI's "genuinely shared, hand-authored
-skills" exception, v1.9.0).
+symlinked from `.claude/skills/<name>` to the canonical skill directory
+`.github/skills/<name>/` (which holds `SKILL.md` and any supporting
+files) — one physical directory, referenced from two places, so it can't
+diverge (Principle XI's "genuinely shared, hand-authored skills"
+exception, v1.9.0).
 
 `code-review` is deliberately **not** symlinked: it collides with Claude
 Code's own bundled `/code-review` skill, and a same-named project skill

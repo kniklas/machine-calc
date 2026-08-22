@@ -2,14 +2,17 @@
 """Symlink genuinely shared, hand-authored skills from `.github/skills/`
 (GitHub Copilot's skill directory) into `.claude/skills/` (Claude Code's),
 per Constitution Principle XI's "genuinely shared, hand-authored skills"
-exception (v1.9.0): each skill stays a single canonical file under
-`.github/skills/<name>/SKILL.md`, referenced elsewhere only via a symlink,
-never a hand-copied duplicate.
+exception (v1.9.0): each skill stays a single canonical directory under
+`.github/skills/<name>/` (containing `SKILL.md` and any supporting files),
+referenced elsewhere only via a symlink to that directory, never a
+hand-copied duplicate.
 
 Safe to re-run: an already-correct symlink is left untouched, a symlink
-pointing at the wrong target is corrected, and a real file/directory
-already at the destination is never overwritten (reported as a conflict
-instead, since it may be a contributor's unrelated content).
+pointing at the wrong target is corrected, a plain-text placeholder file
+left by a Windows checkout without symlink support is replaced with a
+real symlink, and a real file/directory already at the destination that
+isn't one of those is never overwritten (reported as a conflict instead,
+since it may be a contributor's unrelated content).
 
 Usage: python scripts/setup_skill_symlinks.py [--check]
 
@@ -22,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -56,6 +60,20 @@ def _relative_target(name: str) -> str:
     return os.path.relpath(SOURCE_DIR / name, DEST_DIR)
 
 
+def _normalize_target(target: str) -> tuple[str, ...]:
+    """Split a symlink-target-like path into normalized components.
+
+    `os.path.relpath()` returns backslash-separated paths on Windows, while
+    a symlink target stored in a git blob (and returned by `os.readlink()`
+    on POSIX, and by a Windows checkout that *did* materialize a real
+    symlink) uses forward slashes - a raw string comparison between the two
+    would report a perfectly valid Windows checkout as wrong. Also strips
+    surrounding whitespace/newlines, so a plain-text placeholder file's
+    trailing newline doesn't cause a false mismatch either.
+    """
+    return tuple(part for part in re.split(r"[\\/]+", target.strip()) if part not in ("", "."))
+
+
 def _windows_symlink_hint(error: OSError) -> str:
     static_hint = (
         "On Windows, creating symlinks requires either Developer Mode "
@@ -67,6 +85,101 @@ def _windows_symlink_hint(error: OSError) -> str:
     return f"    Could not create the symlink ({error}). {static_hint}"
 
 
+def _create_symlink_safely(dest: Path, target: str) -> OSError | None:
+    """Create a symlink at `dest` pointing to `target` without destroying
+    whatever (if anything) is currently at `dest` unless creation actually
+    succeeds: the new symlink is created at a temporary path first, then
+    atomically swapped into place with `os.replace()`, which renames the
+    directory entry itself (not its referent) on both POSIX and Windows.
+
+    Returns `None` on success, or the `OSError` on failure - in the
+    failure case `dest` is left exactly as it was before the call, so a
+    caller replacing an existing (if wrong) symlink never ends up with
+    neither the old nor the new one.
+    """
+
+    tmp_dest = dest.with_name(dest.name + ".tmp-symlink")
+    if tmp_dest.exists() or tmp_dest.is_symlink():
+        tmp_dest.unlink()
+    try:
+        os.symlink(target, tmp_dest)
+    except OSError as exc:
+        return exc
+    os.replace(tmp_dest, dest)
+    return None
+
+
+def _matches_placeholder(dest: Path, expected_target: str) -> bool:
+    """True if `dest` is a plain-text file whose content is exactly the
+    expected symlink target - the shape `git checkout` produces for a
+    symlink blob when `core.symlinks` is `false` (the common Windows
+    default without Developer Mode / an elevated clone), rather than
+    materializing a real symlink.
+    """
+
+    if not dest.is_file():
+        return False
+    try:
+        content = dest.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError):
+        return False
+    return _normalize_target(content) == _normalize_target(expected_target)
+
+
+def _sync_existing_symlink(
+    dest: Path, name: str, expected_target: str, *, check_only: bool
+) -> tuple[bool, str]:
+    """Handle `sync_one()` when `dest` already is a symlink (correct, wrong
+    target, or pointing at a since-removed skill). Extracted to keep
+    `sync_one()` within the configured cyclomatic-complexity threshold.
+    """
+
+    actual_target = os.readlink(dest)
+    if (
+        _normalize_target(actual_target) == _normalize_target(expected_target)
+        and (SOURCE_DIR / name / "SKILL.md").is_file()
+    ):
+        return True, f"ok      {name} (already linked)"
+    if check_only:
+        return False, f"WRONG   {name} (points to {actual_target!r}, expected {expected_target!r})"
+    error = _create_symlink_safely(dest, expected_target)
+    if error is not None:
+        return False, f"FAILED  {name}\n{_windows_symlink_hint(error)}"
+    return True, f"fixed   {name} (was pointing to {actual_target!r})"
+
+
+def _sync_existing_non_symlink(
+    dest: Path, name: str, expected_target: str, *, check_only: bool
+) -> tuple[bool, str]:
+    """Handle `sync_one()` when `dest` exists but is not a symlink: either a
+    Windows plain-text placeholder (recoverable) or a real file/directory
+    (never clobbered). Extracted for the same reason as the sibling
+    `_sync_existing_symlink()` above.
+    """
+
+    if not _matches_placeholder(dest, expected_target):
+        # A real file/directory, not a symlink and not a placeholder: never
+        # clobber it, it may be a contributor's own unrelated content.
+        return False, (
+            f"CONFLICT {name} (a real file/directory already exists at {dest}, not touching it)"
+        )
+
+    # git materialized the symlink blob as a plain-text file instead of a
+    # real symlink (core.symlinks=false at checkout, notably on Windows
+    # without Developer Mode) - this is exactly the recoverable case this
+    # script exists for, not a conflict.
+    if check_only:
+        return False, (
+            f"PLACEHOLDER {name} (checked out as a plain-text file, not a real "
+            "symlink - would replace)"
+        )
+    dest.unlink()
+    error = _create_symlink_safely(dest, expected_target)
+    if error is not None:
+        return False, f"FAILED  {name}\n{_windows_symlink_hint(error)}"
+    return True, f"fixed   {name} (was a plain-text placeholder, not a real symlink)"
+
+
 def sync_one(name: str, *, check_only: bool) -> tuple[bool, str]:
     """Return (is_ok, message). is_ok is True if the destination already
     is, or was just made, a correct symlink to the source skill.
@@ -76,32 +189,18 @@ def sync_one(name: str, *, check_only: bool) -> tuple[bool, str]:
     expected_target = _relative_target(name)
 
     if dest.is_symlink():
-        actual_target = os.readlink(dest)
-        if actual_target == expected_target and (SOURCE_DIR / name / "SKILL.md").is_file():
-            return True, f"ok      {name} (already linked)"
-        if check_only:
-            return False, (
-                f"WRONG   {name} (points to {actual_target!r}, expected {expected_target!r})"
-            )
-        dest.unlink()
-        os.symlink(expected_target, dest)
-        return True, f"fixed   {name} (was pointing to {actual_target!r})"
+        return _sync_existing_symlink(dest, name, expected_target, check_only=check_only)
 
     if dest.exists():
-        # A real file/directory, not a symlink: never clobber it, it may be
-        # a contributor's own unrelated content.
-        return False, (
-            f"CONFLICT {name} (a real file/directory already exists at {dest}, not touching it)"
-        )
+        return _sync_existing_non_symlink(dest, name, expected_target, check_only=check_only)
 
     if check_only:
         return False, f"MISSING {name} (would create -> {expected_target})"
 
     DEST_DIR.mkdir(parents=True, exist_ok=True)
-    try:
-        os.symlink(expected_target, dest)
-    except OSError as exc:
-        return False, f"FAILED  {name}\n{_windows_symlink_hint(exc)}"
+    error = _create_symlink_safely(dest, expected_target)
+    if error is not None:
+        return False, f"FAILED  {name}\n{_windows_symlink_hint(error)}"
     return True, f"created {name} -> {expected_target}"
 
 
