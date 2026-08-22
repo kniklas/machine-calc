@@ -1,10 +1,41 @@
 <!--
 Sync Impact Report
 ==================
+Version change: 1.9.0 → 1.9.1
+Modified principles: Principle XI (Multi-Agent Coding-Tool Consistency) — wording-only
+  clarification within the v1.9.0 "genuinely shared, hand-authored skills" exception
+  bullet; no normative change.
+Added sections: none
+Expanded sections: none
+Wording clarifications:
+  - Principle XI's exception bullet and rationale sentence said the shared skill is a
+    single canonical "file" referenced via a symlink "to the canonical file", and that it
+    "remains one physical file with no possibility of drift". The actual mechanism (and
+    this repo's own `scripts/setup_skill_symlinks.py` implementation, merged on the same
+    branch) symlinks the whole skill *directory* (`.github/skills/<name>/`, holding
+    `SKILL.md` plus any supporting files) — a file-level symlink at `.claude/skills/<name>`
+    would not even be discoverable, since Claude Code looks for
+    `.claude/skills/<name>/SKILL.md`. Reworded the three occurrences of "file"/"canonical
+    file" to "directory"/"canonical directory" so the text accurately describes what is
+    shared, and so a future contributor doesn't read "one physical file" as meaning only
+    `SKILL.md` is shared while supporting files under the directory are not. What is
+    permitted/required/forbidden is unchanged.
+Removed sections: none
+Templates requiring updates:
+  ✅ .specify/templates/plan-template.md (no changes needed)
+  ✅ .specify/templates/tasks-template.md (no changes needed)
+  ✅ .specify/templates/spec-template.md (no changes needed)
+  ✅ .github/copilot-instructions.md (no changes needed)
+Follow-up TODOs: none
+-->
+
+<!--
+Sync Impact Report (previous amendment)
+==================
 Version change: 1.8.0 → 1.9.0
 Modified principles: Principle XI (Multi-Agent Coding-Tool Consistency) — added a scoped
-  exception bullet (see below); the principle's core anti-duplication MUST clauses are
-  otherwise unchanged.
+  exception bullet; the principle's core anti-duplication MUST clauses are otherwise
+  unchanged.
 Added sections: none
 Expanded sections:
   - Principle XI: added an "Exception — genuinely shared, hand-authored skills" bullet.
@@ -19,34 +50,9 @@ Expanded sections:
     the principle's literal prior wording forbade this even though a symlink cannot
     independently diverge from its target and so cannot produce the drift the principle
     exists to prevent. Rationale paragraph expanded with one sentence explaining why the
-    exception preserves the principle's guarantee rather than weakening it.
-Removed sections: none
-Templates requiring updates:
-  ✅ .specify/templates/plan-template.md (no changes needed)
-  ✅ .specify/templates/tasks-template.md (no changes needed)
-  ✅ .specify/templates/spec-template.md (no changes needed)
-  ✅ .github/copilot-instructions.md (no changes needed)
-Follow-up TODOs: none
--->
-
-<!--
-Sync Impact Report (previous amendment)
-==================
-Version change: 1.7.0 → 1.8.0
-Modified principles: none (existing principles I-XI unchanged)
-Added sections: none
-Expanded sections:
-  - Governance: amended the amendment-propagation clause. Upstream Spec Kit's own
-    `/speckit-constitution` command was regenerated (PR #52, syncing to spec-kit v1.0.1) with
-    a "Scope Guard" that deliberately limits its own scope to `.specify/memory/constitution.md`
-    alone and no longer propagates changes into `.specify/templates/*`/agent guidance files
-    within the same command invocation — surfaced by GitHub Copilot's review of PR #52, which
-    correctly flagged that the prior "propagation ... in the same change" wording could no
-    longer be satisfied by the tool that wording assumed would satisfy it. The clause now
-    requires propagation to be verified as an explicit follow-up step (e.g. `/speckit-analyze`
-    or manual reconciliation) rather than assuming any single command bundles it automatically,
-    consistent with Principle XI (dependent templates/agent files are regenerated via the Spec
-    Kit integration mechanism, never hand-patched by any one command).
+    exception preserves the principle's guarantee rather than weakening it. (The "file" vs
+    "directory" wording in this summary is corrected by the v1.9.1 report above; the
+    original v1.9.0 amendment text below is left as historical record.)
 Removed sections: none
 Templates requiring updates:
   ✅ .specify/templates/plan-template.md (no changes needed)
@@ -305,13 +311,14 @@ hand-duplicated, independently-diverging instruction sets per agent.
 - Exception — genuinely shared, hand-authored skills: a skill that predates or otherwise
   falls outside the Spec Kit integration mechanism, and that is genuinely useful to more
   than one coding agent (e.g., a repo-specific review or workflow skill under
-  `.github/skills/<name>/SKILL.md`), MAY be hand-authored as a single canonical file living
-  in one agent's own directory. Every other agent's directory MAY reference that skill only
-  via a symlink to the canonical file — never a hand-copied, paraphrased, or independently-
-  edited duplicate — so the skill remains one physical file with no possibility of drift.
-  This exception does NOT extend to any file actually produced by `specify integration
-  install`/`specify integration upgrade`: those remain governed exactly as the bullet above
-  requires, and hand-patching them (symlinked or otherwise) is still forbidden.
+  `.github/skills/<name>/`), MAY be hand-authored as a single canonical directory (holding
+  `SKILL.md` and any supporting files) living in one agent's own skill directory. Every
+  other agent's directory MAY reference that skill only via a symlink to the canonical
+  directory — never a hand-copied, paraphrased, or independently-edited duplicate — so the
+  skill remains one physical directory with no possibility of drift. This exception does
+  NOT extend to any file actually produced by `specify integration install`/`specify
+  integration upgrade`: those remain governed exactly as the bullet above requires, and
+  hand-patching them (symlinked or otherwise) is still forbidden.
 - Contributors MUST NOT manually copy, paraphrase, or hand-sync one agent's instruction
   file into another agent's format. A new coding-agent integration MUST be added via
   `specify integration install <name>`, and existing integrations MUST be refreshed via
@@ -331,9 +338,10 @@ hand-duplicated, independently-diverging instruction sets per agent.
   regeneration step, these files inevitably duplicate and drift, producing inconsistent
   agent behavior and an unreviewable, ever-growing maintenance burden (issue #46). The
   symlink exception preserves this same guarantee for repo-specific skills that are not
-  themselves Spec Kit template output: a symlink is definitionally a single file, not a
-  copy, so it cannot independently diverge from its target the way a hand-duplicated file
-  can — the drift this principle exists to prevent is structurally impossible for it.
+  themselves Spec Kit template output: a symlink is definitionally a single directory, not
+  a copy, so it cannot independently diverge from its target the way a hand-duplicated
+  directory can — the drift this principle exists to prevent is structurally impossible
+  for it.
 
 ## Additional Constraints (Quality Gates)
 
@@ -401,4 +409,4 @@ recurring pattern, MUST trigger a proposed constitution amendment rather than re
 ad-hoc exceptions. Use `.specify/memory/constitution.md` as the authoritative source for
 runtime development guidance until a dedicated guidance file is introduced.
 
-**Version**: 1.9.0 | **Ratified**: 2026-07-08 | **Last Amended**: 2026-08-22
+**Version**: 1.9.1 | **Ratified**: 2026-07-08 | **Last Amended**: 2026-08-22
