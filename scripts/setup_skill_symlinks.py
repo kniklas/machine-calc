@@ -75,12 +75,18 @@ def _normalize_target(target: str) -> tuple[str, ...]:
 
 
 def _windows_symlink_hint(error: OSError) -> str:
+    # core.symlinks is a *git checkout-time* setting - it controls whether
+    # `git checkout`/`git clone` materializes a committed symlink for you
+    # (see _matches_placeholder()'s recovery case) and has no bearing on
+    # whether this script's own os.symlink() call succeeds right now, so it
+    # is deliberately not presented as a requirement alongside Developer
+    # Mode/elevation below - a contributor who already has one of those
+    # enabled needs neither a config change nor a reclone to get past this.
     static_hint = (
-        "On Windows, creating symlinks requires either Developer Mode "
+        "On Windows, creating a symlink requires either Developer Mode "
         "(Settings > Update & Security > For developers > Developer Mode) "
-        "or an elevated (Administrator) terminal, plus `git config --global "
-        "core.symlinks true` set *before* cloning (a clone made without it "
-        "checks symlinks out as plain text files instead)."
+        "or running this script from an elevated (Administrator) "
+        "terminal."
     )
     return f"    Could not create the symlink ({error}). {static_hint}"
 
@@ -93,19 +99,30 @@ def _create_symlink_safely(dest: Path, target: str) -> OSError | None:
     directory entry itself (not its referent) on both POSIX and Windows.
 
     Returns `None` on success, or the `OSError` on failure - in the
-    failure case `dest` is left exactly as it was before the call, so a
-    caller replacing an existing (if wrong) symlink never ends up with
-    neither the old nor the new one.
+    failure case `dest` is left exactly as it was before the call (a
+    caller replacing an existing, wrong-target symlink or a Windows
+    placeholder file never ends up with neither the old nor the new one),
+    and the temporary path is cleaned up so a failed run doesn't leave a
+    stray `<name>.tmp-symlink` entry behind.
+
+    `target_is_directory=True` is always correct here since every symlink
+    this script creates points at a skill *directory*
+    (`.github/skills/<name>/`, holding `SKILL.md` plus any supporting
+    files); on Windows, omitting it would create a *file*-type reparse
+    point pointing at a directory, which some directory-aware tools/APIs
+    (Explorer, `dir`) don't resolve correctly. Ignored on POSIX.
     """
 
     tmp_dest = dest.with_name(dest.name + ".tmp-symlink")
     if tmp_dest.exists() or tmp_dest.is_symlink():
         tmp_dest.unlink()
     try:
-        os.symlink(target, tmp_dest)
+        os.symlink(target, tmp_dest, target_is_directory=True)
+        os.replace(tmp_dest, dest)
     except OSError as exc:
+        if tmp_dest.exists() or tmp_dest.is_symlink():
+            tmp_dest.unlink()
         return exc
-    os.replace(tmp_dest, dest)
     return None
 
 
@@ -173,7 +190,11 @@ def _sync_existing_non_symlink(
             f"PLACEHOLDER {name} (checked out as a plain-text file, not a real "
             "symlink - would replace)"
         )
-    dest.unlink()
+    # Deliberately not unlinking the placeholder first: _create_symlink_safely()
+    # replaces `dest` atomically via os.replace() only once the new symlink
+    # has actually been created, so if creation fails (the exact Windows
+    # privilege condition this recovery path exists for), the placeholder
+    # file - not nothing - is still there afterward.
     error = _create_symlink_safely(dest, expected_target)
     if error is not None:
         return False, f"FAILED  {name}\n{_windows_symlink_hint(error)}"

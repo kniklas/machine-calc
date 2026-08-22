@@ -333,11 +333,16 @@ python scripts/setup_skill_symlinks.py          # create/fix the symlinks
 python scripts/setup_skill_symlinks.py --check  # report status only, exit non-zero if anything's wrong
 ```
 
-On Windows, creating symlinks requires either Developer Mode (Settings >
-Update & Security > For developers) or an elevated (Administrator)
-terminal, plus `git config --global core.symlinks true` set **before**
-cloning. The script's error message repeats this if it can't create a
-symlink.
+On Windows, running the script above requires either Developer Mode
+(Settings > Update & Security > For developers) or an elevated
+(Administrator) terminal — the script's error message repeats this if it
+can't create a symlink. Separately, and only relevant to *future* clones
+(not to fixing an existing checkout with the script above): setting
+`git config --global core.symlinks true` **before** cloning makes `git
+checkout` materialize a real symlink for you in the first place, instead
+of the plain-text placeholder file that puts you in this situation.
+`core.symlinks` has no effect on the script's own symlink creation —
+Developer Mode/elevation alone is what that needs.
 
 ### Documented exceptions instead of silent suppressions
 

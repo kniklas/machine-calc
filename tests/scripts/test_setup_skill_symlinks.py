@@ -211,6 +211,72 @@ def test_sync_one_unrelated_file_content_is_still_a_conflict(dirs):
     assert unrelated.read_text() == "this is not a symlink placeholder"
 
 
+def test_sync_one_placeholder_fix_failure_leaves_placeholder_intact(dirs, monkeypatch):
+    """If `os.symlink()` fails while replacing a Windows plain-text
+    placeholder, the placeholder file itself must not be deleted first -
+    the caller should be left with the placeholder (recoverable by
+    re-running once Developer Mode/elevation is available), not nothing.
+    """
+    source, dest = dirs
+    _make_skill(source, "pr-review-loop")
+    expected_target = sss._relative_target("pr-review-loop")
+    placeholder = dest / "pr-review-loop"
+    placeholder.write_text(expected_target)
+
+    monkeypatch.setattr(
+        sss.os, "symlink", lambda *a, **k: (_ for _ in ()).throw(OSError("simulated"))
+    )
+
+    ok, message = sss.sync_one("pr-review-loop", check_only=False)
+
+    assert ok is False
+    assert "FAILED" in message
+    assert not placeholder.is_symlink()
+    assert placeholder.read_text() == expected_target
+
+
+def test_create_symlink_safely_passes_target_is_directory(dirs, monkeypatch):
+    """Every symlink this script creates points at a skill *directory*
+    (.github/skills/<name>/), so target_is_directory=True must always be
+    passed - on Windows, omitting it creates a file-type reparse point
+    that some directory-aware tools don't resolve correctly.
+    """
+    source, dest = dirs
+    _make_skill(source, "pr-review-loop")
+    calls: list[dict] = []
+    real_symlink = sss.os.symlink
+
+    def _recording_symlink(target, dest_path, **kwargs):
+        calls.append(kwargs)
+        return real_symlink(target, dest_path, **kwargs)
+
+    monkeypatch.setattr(sss.os, "symlink", _recording_symlink)
+
+    sss.sync_one("pr-review-loop", check_only=False)
+
+    assert calls and calls[0].get("target_is_directory") is True
+
+
+def test_create_symlink_safely_handles_replace_failure(dirs, monkeypatch):
+    """If os.replace() itself fails (not just os.symlink()), the failure
+    must be caught, the temporary symlink cleaned up, and FAILED returned
+    - not an uncaught exception escaping sync_one()/main().
+    """
+    source, dest = dirs
+    _make_skill(source, "pr-review-loop")
+
+    monkeypatch.setattr(
+        sss.os, "replace", lambda *a, **k: (_ for _ in ()).throw(OSError("simulated replace"))
+    )
+
+    ok, message = sss.sync_one("pr-review-loop", check_only=False)
+
+    assert ok is False
+    assert "FAILED" in message
+    assert not (dest / "pr-review-loop").exists()
+    assert not (dest / "pr-review-loop.tmp-symlink").exists()
+
+
 def test_sync_one_wrong_target_fix_failure_leaves_original_symlink_intact(dirs, monkeypatch):
     """If `os.symlink()` fails while fixing a wrong-target symlink (e.g. a
     Windows privilege error), the pre-existing symlink must not be
