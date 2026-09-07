@@ -150,8 +150,12 @@ every job that runs today still runs.
   that job depends on, except as required by FR-004.
 - **FR-003**: The system MUST default to running a job when a changed path matches no known
   category, so an unanticipated file never causes silent under-coverage.
-- **FR-004**: The system MUST run every job unconditionally when the change touches the CI
-  workflow configuration itself, regardless of what else changed in the same run.
+- **FR-004**: The system MUST run every path-filtered job unconditionally when the change
+  touches the CI workflow configuration itself, regardless of what else changed in the same
+  run. This applies only to the jobs FR-002 makes conditional in the first place — event-scoped
+  jobs such as `sync-agent-integrations`/`deploy-docs` are unaffected by this feature and keep
+  skipping on events they were never meant to run for (e.g. a pull request), independent of
+  which paths changed.
 - **FR-005**: The system MUST leave the `ci-ok` aggregate required check reporting success for a
   run in which every one of its dependency jobs either succeeded or was intentionally skipped by
   path selection, and reporting failure when any dependency job that actually ran did not succeed

@@ -366,18 +366,25 @@ that combines multiple signals into a single pass/fail/skip verdict:
     `continue-on-error` by design, and `quality-summary`, `deploy-docs`
     and `sync-agent-integrations` are reporting/conditional; any of them
     in `needs:` is promoted to a merge blocker.
-  - It must assert each result **explicitly**, accepting `success` *or*
-    `skipped` and rejecting `failure`/`cancelled`. `if: always()` makes
-    the job run when a dependency failed, and GitHub does not then fail
-    it implicitly — an aggregate without the assertion reports success
-    while `lint` is red, which is a CRITICAL-band decorative guard (§0).
+  - It must assert each result **explicitly**, rejecting `failure`/
+    `cancelled` from every dependency. `if: always()` makes the job run
+    when a dependency failed, and GitHub does not then fail it
+    implicitly — an aggregate without the assertion reports success while
+    `lint` is red, which is a CRITICAL-band decorative guard (§0).
     Since specs/016-ci-path-based-selection, `skipped` is no longer
-    equivalent to `failure`/`cancelled` here: `lint`/`complexity`/
-    `typecheck`/`security`/`test`/`build`/`docs` are now conditional on
-    which paths a PR touched, and a job intentionally skipped because it
-    had nothing to check MUST NOT block the merge — only a job that
-    actually failed or was cancelled should. A predicate reverting to
-    "any non-success blocks" silently re-breaks every path-filtered PR.
+    uniformly equivalent to `failure`/`cancelled` here, but neither is it
+    uniformly accepted like `success` — only a specific whitelist may
+    legitimately skip: `lint`/`complexity`/`typecheck`/`security`/`test`/
+    `build`/`docs` (conditional on which paths a PR touched — a job with
+    nothing to check MUST NOT block the merge), and `changes` itself only
+    when the triggering event is `workflow_dispatch`. `dependency-scan`
+    and `repo-invariants` are never path-selected and MUST always
+    succeed — a `skipped` result from either must still block, exactly
+    like `failure`/`cancelled` (Copilot round-5 HIGH finding on PR #89: an
+    earlier predicate accepted `skipped` uniformly, so an accidentally
+    skipped `dependency-scan` left `ci-ok` green). A predicate reverting
+    to "any non-success blocks" silently re-breaks every path-filtered
+    PR; one that accepts `skipped` uniformly reopens the always-on gap.
   - A job whose `if:` was made conditional on `needs.changes.outputs.*`
     must also fail open: its condition must run the job anyway when
     `needs.changes.result == 'failure'`, with an explicit override
@@ -388,14 +395,19 @@ that combines multiple signals into a single pass/fail/skip verdict:
     `specs/016-ci-path-based-selection/contracts/path-selection-contract.md`
     for the full contract.
 
-  `tests/static/test_ci_ok_aggregate_check.py` locks the first two —
-  including the step body itself, so replacing it with `run: echo ok` or
-  dropping its `sys.exit(1)` fails the suite — and forces any newly-added
-  `ci.yml` job to be classified as gating or supporting rather than
-  silently neither. `tests/static/test_ci_path_selection.py` locks the
-  third, plus the path-category/fail-open/CI-config-bypass wiring on each
-  filtered job. A change to `ci-ok` or to either test file to suit itself
-  deserves particular scrutiny.
+  `tests/static/test_ci_ok_aggregate_check.py` locks the first property
+  (the exact `needs:` set) and the assertion step's basic wiring —
+  `toJSON(needs)`/`sys.exit(1)` presence, so replacing the step with
+  `run: echo ok` fails the suite — and forces any newly-added `ci.yml` job
+  to be classified as gating or supporting rather than silently neither.
+  `tests/static/test_ci_path_selection.py` is what actually *executes*
+  the extracted predicate against representative `NEEDS_JSON` payloads
+  (`test_ci_ok_predicate_accepts_success_and_skipped`), covering the
+  second property's real behavior — including the always-on-job
+  whitelist above — not just a substring grep; it also locks the third
+  property, plus the path-category/fail-open/CI-config-bypass wiring on
+  each filtered job. A change to `ci-ok` or to either test file to suit
+  itself deserves particular scrutiny.
 
 ## 8. Cross-referencing issues
 

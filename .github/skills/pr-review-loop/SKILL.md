@@ -615,11 +615,15 @@ The loop (§3) is done only when, on a fresh fetch:
   `security`/`test`/`build`/`docs` are conditional on which paths the PR
   touched (e.g. a specs-only or docs-only PR shows most of them as
   Skipped, not Success) — a skip there is expected and does not need
-  investigating the way a failure or cancellation does. `lint` is the one
-  exception among those seven: it also runs (even when nothing else did)
-  for a `.github/skills/**`/`.claude/**`-only change, since it's the job
-  that verifies skill symlinks. `repo-invariants` and `changes` are never
-  skipped for path reasons — `changes` only skips on `schedule`/
+  investigating the way a failure or cancellation does. Two of those
+  seven have an extra carve-out beyond the shared `python`/`ci_config`/
+  `other` categories: `lint` also runs (even when nothing else did) for a
+  `.github/skills/**`/`.claude/**`-only change, since it's the job that
+  verifies skill symlinks; `build` also runs for a `README.md`/
+  `LICENSE.md`-only change, since those two files are packaging inputs
+  (`pyproject.toml`'s `readme`/`license-files`). `repo-invariants` and
+  `changes` are never skipped for path reasons — `changes` only skips on
+  `schedule`/
   `workflow_dispatch` (a manual dispatch bypasses its output rather than
   waiting on it), and `repo-invariants` runs unconditionally on every
   non-scheduled trigger. `Analyze (python)` and `CodeQL` stay separate

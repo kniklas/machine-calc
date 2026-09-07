@@ -12,9 +12,13 @@ runtime in the common case:
 * ``ci-ok``'s blocking predicate reverts to "any non-success blocks", re-breaking every
   path-filtered pull request the moment it fires;
 * a job this feature explicitly excludes from path selection (``dependency-scan``,
-  ``sync-agent-integrations``, ``performance``, ``quality-summary``, ``deploy-docs``) quietly
-  grows a ``needs.changes`` reference, coupling it to a mechanism FR-006 says it must not
-  depend on.
+  ``sync-agent-integrations``, ``performance``, ``deploy-docs``) quietly grows a
+  ``needs.changes`` reference in its own ``if:``, coupling it to a mechanism FR-006 says it
+  must not depend on. ``quality-summary`` is a reporting-only exception, not a fifth member of
+  this set: its ``needs:`` deliberately includes ``changes``/``repo-invariants`` so their
+  results appear in its comment, but its own ``if:`` never references ``needs.changes`` -
+  see ``test_quality_summary_also_depends_on_changes_and_repo_invariants`` and
+  ``test_quality_summary_if_never_references_changes`` below.
 
 Round 2 of Copilot's review of PR #89 found the original "known-non-code" set
 (``specs/**``, ``.github/skills/**``, root ``*.md``, ``.claude/**``) was too broad: three of
@@ -30,6 +34,7 @@ aggregate's own composition invariant.
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 import pathlib
@@ -121,7 +126,7 @@ def _evaluate_condition(
 # trigger exactly as before this feature, independent of `changes`, in every sense: neither
 # their own `if:` nor their `needs:` may reference it. `quality-summary` is deliberately NOT
 # here even though its own `if:` must equally never become conditional on path selection
-# (FR-008 requires it to always run and report one row per job) - unlike these five, it is
+# (FR-008 requires it to always run and report one row per job) - unlike these four, it is
 # supposed to have `changes`/`repo-invariants` in its `needs:`, to report their result too
 # (see test_quality_summary_also_depends_on_changes_and_repo_invariants above). See
 # test_quality_summary_if_never_references_changes below for its narrower version of this
@@ -412,20 +417,81 @@ def ci_ok_assertion_script(ci_jobs: dict) -> str:
     return match.group(1)
 
 
+def test_ci_ok_predicate_filtered_jobs_matches_this_module(ci_ok_assertion_script: str) -> None:
+    """`ci-ok`'s assertion step hand-duplicates a `FILTERED_JOBS` set (it has no import access
+    to this test tree - see the comment above its definition in ci.yml), so nothing but review
+    keeps the two in sync. Extracting and comparing the literal set here means a future job
+    added to this module's `FILTERED_JOBS` without the matching edit in ci.yml fails the suite
+    instead of silently reopening the always-on-job gap this module's predicate tests exist to
+    close: a legitimately-skippable job missing from ci.yml's copy would fall through
+    `blocks()`'s final `return True` and wrongly block every PR where it is skipped.
+    """
+    match = re.search(r"FILTERED_JOBS\s*=\s*(\{[^}]*\})", ci_ok_assertion_script)
+    assert match, "could not find the embedded FILTERED_JOBS set in ci-ok's assertion script"
+    embedded = ast.literal_eval(match.group(1))
+    assert embedded == set(FILTERED_JOBS), (
+        f"ci-ok's embedded FILTERED_JOBS {embedded!r} does not match this module's "
+        f"FILTERED_JOBS {set(FILTERED_JOBS)!r} - update both together"
+    )
+
+
 @pytest.mark.parametrize(
-    "results,expect_exit_zero",
+    "results,event_name,expect_exit_zero",
     [
-        pytest.param({"lint": "success", "test": "success"}, True, id="all-success"),
-        pytest.param({"lint": "success", "changes": "skipped"}, True, id="success-and-skipped"),
-        pytest.param({"lint": "skipped", "test": "skipped"}, True, id="all-skipped"),
-        pytest.param({"lint": "success", "test": "failure"}, False, id="one-failure"),
-        pytest.param({"lint": "success", "test": "cancelled"}, False, id="one-cancelled"),
+        pytest.param(
+            {"lint": "success", "test": "success"}, "pull_request", True, id="all-success"
+        ),
+        pytest.param(
+            {"lint": "skipped", "test": "skipped"}, "pull_request", True, id="all-skipped"
+        ),
+        pytest.param(
+            {"lint": "success", "test": "failure"}, "pull_request", False, id="one-failure"
+        ),
+        pytest.param(
+            {"lint": "success", "test": "cancelled"}, "pull_request", False, id="one-cancelled"
+        ),
+        pytest.param(
+            {"lint": "success", "changes": "skipped"},
+            "workflow_dispatch",
+            True,
+            id="changes-skip-on-workflow-dispatch-ok",
+        ),
+        pytest.param(
+            {"lint": "success", "changes": "skipped"},
+            "pull_request",
+            False,
+            id="changes-skip-on-pull-request-blocks",
+        ),
+        pytest.param(
+            {"lint": "success", "dependency-scan": "skipped"},
+            "pull_request",
+            False,
+            id="dependency-scan-skip-always-blocks",
+        ),
+        pytest.param(
+            {"lint": "success", "dependency-scan": "success"},
+            "pull_request",
+            True,
+            id="dependency-scan-success-ok",
+        ),
+        pytest.param(
+            {"lint": "success", "repo-invariants": "skipped"},
+            "workflow_dispatch",
+            False,
+            id="repo-invariants-skip-always-blocks-even-on-dispatch",
+        ),
     ],
 )
 def test_ci_ok_predicate_accepts_success_and_skipped(
-    ci_ok_assertion_script: str, results: dict, expect_exit_zero: bool
+    ci_ok_assertion_script: str, results: dict, event_name: str, expect_exit_zero: bool
 ) -> None:
-    """FR-005: a skip by path selection must not block `ci-ok`, but a real failure still must.
+    """FR-005: a skip by path selection must not block `ci-ok`, but a real failure still must -
+    and only the seven `FILTERED_JOBS` (plus `changes` on `workflow_dispatch`) may legitimately
+    skip at all. `dependency-scan`/`repo-invariants` are never path-selected
+    (contracts/path-selection-contract.md's "Jobs excluded from path selection" section), so an
+    unexpected `skipped` from either MUST still block (Copilot round-5 HIGH finding on PR #89:
+    the prior predicate accepted `skipped` for every dependency, so an accidentally skipped
+    `dependency-scan` left `ci-ok` green).
 
     Actually *executes* the extracted assertion script against representative `NEEDS_JSON`
     payloads rather than grepping the step body for a predicate-shaped substring - a substring
@@ -438,19 +504,20 @@ def test_ci_ok_predicate_accepts_success_and_skipped(
     needs_payload = {name: {"result": result} for name, result in results.items()}
     completed = subprocess.run(
         [sys.executable, "-c", ci_ok_assertion_script],
-        env={**os.environ, "NEEDS_JSON": json.dumps(needs_payload)},
+        env={**os.environ, "NEEDS_JSON": json.dumps(needs_payload), "EVENT_NAME": event_name},
         capture_output=True,
         text=True,
     )
     if expect_exit_zero:
         assert completed.returncode == 0, (
-            f"expected ci-ok's assertion to pass for {results!r}, but it exited "
-            f"{completed.returncode}:\n{completed.stdout}{completed.stderr}"
+            f"expected ci-ok's assertion to pass for {results!r} on {event_name!r}, but it "
+            f"exited {completed.returncode}:\n{completed.stdout}{completed.stderr}"
         )
     else:
         assert completed.returncode != 0, (
-            f"expected ci-ok's assertion to fail for {results!r}, but it exited 0 "
-            f"(a real failure/cancellation must still block the merge):\n{completed.stdout}"
+            f"expected ci-ok's assertion to fail for {results!r} on {event_name!r}, but it "
+            f"exited 0 (a real failure/cancellation must still block the merge):"
+            f"\n{completed.stdout}"
         )
 
 

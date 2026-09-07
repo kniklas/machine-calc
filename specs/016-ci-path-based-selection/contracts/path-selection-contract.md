@@ -43,20 +43,27 @@ data-model.md's Path Category Corrections note #4.)
 ## `ci-ok` blocking-predicate contract (supersedes the prior "any non-success blocks" rule)
 
 For each job `J` in `ci-ok`'s `needs:` (`changes`, `lint`, `complexity`, `typecheck`,
-`security`, `dependency-scan`, `test`, `build`, `docs`, `repo-invariants`):
+`security`, `dependency-scan`, `test`, `build`, `docs`, `repo-invariants`), `failure`/
+`cancelled` always block. Whether `skipped` blocks depends on which `J` this is — `skipped`
+is legitimate only where path selection can actually produce it:
 
-| `J`'s result | Blocks `ci-ok` |
+| `J` | `skipped` blocks `ci-ok`? |
 |---|---|
-| `success` | No |
-| `skipped` | No |
-| `failure` | Yes |
-| `cancelled` | Yes |
+| One of the seven filtered jobs (`lint`, `complexity`, `typecheck`, `security`, `test`, `build`, `docs`) | No — this is FR-005's whole point |
+| `changes`, when the triggering event is `workflow_dispatch` | No — `changes`'s own `if:` excludes `workflow_dispatch` (Manual-dispatch bypass contract below), so a `skipped` result here only ever means that bypass |
+| `changes`, on any other event | Yes — an unexpected skip of a required `ci-ok` dependency |
+| `dependency-scan`, `repo-invariants` | Yes, always — neither is ever path-selected (see "Jobs excluded from path selection" below; the constitution keeps dependency scanning unconditional), so a `skipped` result here can only mean something is wrong |
+
+An earlier version of this predicate accepted `skipped` for every dependency uniformly,
+which let an accidentally skipped `dependency-scan` or `repo-invariants` leave `ci-ok` green
+(Copilot round-5 HIGH finding on PR #89).
 
 This MUST be enforced by `tests/static/test_ci_path_selection.py` reading the literal
 assertion predicate out of `ci-ok`'s step body (the same technique
 `test_ci_ok_aggregate_check.py` already uses for `sys.exit(1)`/`NEEDS_JSON`), not merely
-asserted in prose — a predicate that silently reverts to "any non-success blocks" would
-re-break every path-filtered PR the moment someone "simplifies" that step.
+asserted in prose — a predicate that silently reverts to "any non-success blocks", or that
+re-widens to accept `skipped` from an always-on job, would re-break every path-filtered PR or
+reopen the always-on gap the moment someone "simplifies" that step.
 
 ## Fail-open contract for the `changes` job
 
@@ -99,10 +106,21 @@ dependency, that failure blocks the run even though nothing downstream needed it
 
 ## Jobs excluded from path selection (FR-006)
 
-`dependency-scan`, `sync-agent-integrations`, `performance`, `quality-summary`, and
-`deploy-docs` MUST NOT gain a `needs: [changes]` dependency or any category-based `if:` clause
-by this feature. `tests/static/test_ci_path_selection.py` MUST assert none of these five job
-names reference `needs.changes` anywhere in their `if:`.
+`dependency-scan`, `sync-agent-integrations`, `performance`, and `deploy-docs` MUST NOT gain a
+`needs: [changes]` dependency or any category-based `if:` clause by this feature.
+`tests/static/test_ci_path_selection.py` MUST assert none of these four job names reference
+`needs.changes` anywhere in their `if:`.
+
+`quality-summary` is a **reporting-only exception**, not a fifth member of that set: it
+deliberately gains `changes` and `repo-invariants` in its `needs:` so their results (including
+an intentional skip) appear as rows in its PR comment — a filtered job reporting `skipped`
+should render as `skipped` in the summary, not vanish from it. What FR-006 actually protects
+is `quality-summary`'s own `if:`, which MUST stay path-independent (`always() &&
+github.event_name == 'pull_request'`) — the job itself must never become subject to path
+selection, even though it reads path-selected jobs' results. `tests/static/
+test_ci_path_selection.py` MUST assert both halves: `quality-summary`'s `needs:` includes
+`changes` and `repo-invariants` (`test_quality_summary_also_depends_on_changes_and_repo_invariants`),
+and its `if:` never references `needs.changes` (`test_quality_summary_if_never_references_changes`).
 
 ## Repo-wide invariant contract (`repo-invariants`)
 

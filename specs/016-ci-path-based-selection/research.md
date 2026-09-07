@@ -4,9 +4,18 @@
 
 **Decision**: Add a `changes` job to `ci.yml` using `dorny/paths-filter@v3` (pinned by tag,
 same convention as this workflow's other third-party actions), guarded by
-`if: github.event_name != 'schedule'` — identical guard to every job it would gate. It emits
+`if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'`. It emits
 one boolean output per path category (see data-model.md); every filtered job adds
 `needs: [changes]` and reads `needs.changes.outputs.<category>` in its own `if:`.
+
+The `workflow_dispatch` exclusion was added after decision #5's fail-open clause alone proved
+insufficient (Copilot round-2 review of PR #89): every filtered job already ignores
+`changes`'s outputs on a manual dispatch via its own `workflow_dispatch` bypass, so running
+`changes` for that event anyway only gave a checkout or `paths-filter` failure a way to fail
+the manual run for no benefit — a required `ci-ok` dependency failing blocks the run even
+though nothing downstream needed its result. `changes`'s guard is therefore *not* identical to
+every filtered job's `if:` — those additionally run *on* `workflow_dispatch` (via their own
+bypass clause), while `changes` is the one job that skips it entirely.
 
 **Rationale**: The spec's own Assumptions section already ruled out GitHub's native
 `paths:`/`paths-ignore:` workflow-level trigger filters — they operate per-workflow, not
@@ -68,9 +77,16 @@ avoids the alternative of overlapping filters (`docs` filter itself containing `
 which would make the mapping harder to audit at a glance in the new static test.
 
 `other` exists solely to satisfy FR-003 (never silently under-cover an unanticipated path) —
-any file (a new top-level dotfile, a renamed directory) that matches none of `python`/`docs`/
-`ci_config` sets `other: true`, and every filtered job's `if:` ORs in `other` so it runs
-unconditionally for such a change.
+any file (a new top-level dotfile, a renamed directory) that matches none of the five named
+categories (`python`/`docs`/`ci_config`/`skills`/`packaging_metadata`) **and** none of the
+known-non-code paths (`specs/**`, root `*.md` other than `README.md`/`LICENSE.md`) sets
+`other: true`, and every filtered job's `if:` ORs in `other` so it runs unconditionally for
+such a change. `README.md`, for example, matches none of the first three categories but
+correctly leaves `other` false — it belongs to `packaging_metadata` instead; the same applies
+to any `.github/skills/**`/`.claude/**` path and `skills`. Stating the rule against only the
+original three categories (as an earlier draft of this section did) would direct a future
+change to broaden `other`'s negation incorrectly, re-running every filtered job for paths the
+`skills`/`packaging_metadata` categories already handle narrowly.
 
 ## 3. `ci-ok`'s pass/fail predicate
 
