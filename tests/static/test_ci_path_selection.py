@@ -662,6 +662,14 @@ _ALL_SUCCESS_ENV = {
         pytest.param({"LINT_RESULT": "failure"}, "FAIL", id="real-failure-still-fails"),
     ],
 )
+@pytest.mark.skipif(
+    sys.platform.startswith("win"),
+    reason="the script under test is bash, launched directly (not via GitHub's shell:"
+    " bash wrapper the real job uses) - it only ever runs on ubuntu-latest in ci.yml, but"
+    " `bash` isn't guaranteed on a Windows PATH, so this would raise FileNotFoundError on"
+    " a Windows checkout despite the package itself being OS Independent"
+    " (Copilot round-8 MEDIUM finding on PR #89).",
+)
 def test_quality_summary_verdict_mirrors_ci_ok_skip_whitelist(
     quality_summary_build_script: str, overrides: dict, expected_status: str, tmp_path
 ) -> None:

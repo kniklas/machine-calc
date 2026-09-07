@@ -7,7 +7,12 @@ Modified principles: Principle IX gains a new bullet (path-based job selection e
   "every pull request" by that exception. Additional Constraints' two bullets naming
   lint/typecheck/test/build/docs directly, plus the bullet naming the Principle IX gates
   (complexity/MI/security/dependency-scan/CodeQL), are amended the same way for the gates
-  this exception actually covers.
+  this exception actually covers. Principle II's "Test suites MUST run in CI on every pull
+  request" bullet is qualified the same way (Copilot round-8 CRITICAL finding on PR #89:
+  `test` is one of the seven path-filtered jobs, so this bullet's unqualified "every pull
+  request" was left in direct conflict with the exception this same amendment introduces -
+  missed in the original pass because Principle IX's own gates, not Principle II, were what
+  /speckit-analyze flagged).
 Rationale: /speckit-analyze on feature 016-ci-path-based-selection (specs/016-ci-path-based-
   selection/) found this constitution's literal, repeated "every pull request" language in
   direct textual conflict with that feature's entire purpose - conditionally skipping
@@ -216,8 +221,9 @@ alongside implementation, never deferred to "later".
 - Bug fixes MUST include a regression test that fails before the fix and passes after.
 - Integration tests MUST cover any multi-step calculation pipeline (e.g., chained formulas,
   unit conversions) to confirm end-to-end correctness, not just isolated functions.
-- Test suites MUST run in CI on every pull request (e.g., via `pytest`); a failing test
-  suite blocks merge.
+- Test suites MUST run in CI on every pull request whose changed paths are in scope for them
+  (e.g., via `pytest`; subject to Principle IX's path-based job selection exception); a
+  failing test suite blocks merge.
 - Target minimum coverage for calculation modules is 90% line coverage; any exclusion MUST
   be justified in the pull request description.
 - Rationale: calculation errors are silent and costly; only systematic, repeatable testing
