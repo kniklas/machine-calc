@@ -396,13 +396,23 @@ def test_other_filter_excludes_every_named_and_known_non_code_glob(
     specs-only change matched `other` because `specs/**` was neither excluded nor - even
     once it was - evaluated under a quantifier where the exclusion could take effect,
     running every filtered job for the exact case US1 exists to skip it for.
+
+    Compares the exclusion set *exactly*, not just "every expected entry is present" - a
+    subset check alone would also pass an extra, unexpected exclusion (e.g. a stray
+    `!config/**`), which would silently remove an otherwise-unmatched path from `other` and
+    reopen the FR-003 gap this contract exists to close, while every assertion here still
+    reads green (Copilot round-6 MEDIUM finding on PR #89).
     """
     other_globs = set(other_filter_globs)
-    excluded_elsewhere = (
+    expected_exclusions = (
         EXPECTED_PYTHON_GLOBS | {"docs/**", ".github/workflows/**"} | EXPECTED_KNOWN_NON_CODE_GLOBS
     )
-    for glob in excluded_elsewhere:
-        assert f"!{glob}" in other_globs, f"{glob!r} is not excluded from `other`"
+    actual_exclusions = {glob[1:] for glob in other_globs if glob != "**"}
+    assert actual_exclusions == expected_exclusions, (
+        f"`other`'s exclusion set {actual_exclusions!r} does not exactly match the expected "
+        f"{expected_exclusions!r} - missing: {expected_exclusions - actual_exclusions!r}, "
+        f"unexpected: {actual_exclusions - expected_exclusions!r}"
+    )
 
 
 @pytest.fixture(scope="module")
@@ -592,13 +602,94 @@ def test_quality_summary_also_depends_on_changes_and_repo_invariants(ci_jobs: di
     build_summary_run = ci_jobs["quality-summary"]["steps"][-2]["run"]
     assert "$CHANGES_RESULT" in build_summary_run
     assert "$REPO_INVARIANTS_RESULT" in build_summary_run
-    # Both must count toward the FAIL/PASS verdict, not just appear as a row - the `results=`
-    # line is what the run script uses to compute the overall status.
-    results_line = next(
-        line for line in build_summary_run.splitlines() if line.strip().startswith("results=")
+    # Both must count toward the FAIL/PASS verdict, not just appear as a row - the
+    # `always_on_results=` line is what the run script uses to compute the overall status for
+    # the never-path-selected gates (see test_quality_summary_verdict_mirrors_ci_ok_skip_
+    # whitelist below for the behavioral version of this same requirement).
+    always_on_line = next(
+        line
+        for line in build_summary_run.splitlines()
+        if line.strip().startswith("always_on_results=")
     )
-    assert "$CHANGES_RESULT" in results_line
-    assert "$REPO_INVARIANTS_RESULT" in results_line
+    assert "$CHANGES_RESULT" in always_on_line
+    assert "$REPO_INVARIANTS_RESULT" in always_on_line
+
+
+@pytest.fixture(scope="module")
+def quality_summary_build_script(ci_jobs: dict) -> str:
+    """The `run:` body of `quality-summary`'s "Build summary" step, extracted so it can be
+    executed directly (like `ci_ok_assertion_script` above) rather than only grepped for a
+    substring.
+    """
+    return ci_jobs["quality-summary"]["steps"][-2]["run"]
+
+
+_ALL_SUCCESS_ENV = {
+    "CHANGES_RESULT": "success",
+    "LINT_RESULT": "success",
+    "COMPLEXITY_RESULT": "success",
+    "TYPECHECK_RESULT": "success",
+    "SECURITY_RESULT": "success",
+    "DEPENDENCY_SCAN_RESULT": "success",
+    "TEST_RESULT": "success",
+    "BUILD_RESULT": "success",
+    "DOCS_RESULT": "success",
+    "REPO_INVARIANTS_RESULT": "success",
+    "PERFORMANCE_STATUS": "pass",
+}
+
+
+@pytest.mark.parametrize(
+    "overrides,expected_status",
+    [
+        pytest.param({}, "PASS", id="all-success-passes"),
+        pytest.param({"LINT_RESULT": "skipped"}, "PASS", id="filtered-job-skip-still-passes"),
+        pytest.param(
+            {"CHANGES_RESULT": "skipped"},
+            "FAIL",
+            id="changes-skip-fails-summary-too",
+        ),
+        pytest.param(
+            {"DEPENDENCY_SCAN_RESULT": "skipped"},
+            "FAIL",
+            id="dependency-scan-skip-fails-summary-too",
+        ),
+        pytest.param(
+            {"REPO_INVARIANTS_RESULT": "skipped"},
+            "FAIL",
+            id="repo-invariants-skip-fails-summary-too",
+        ),
+        pytest.param({"LINT_RESULT": "failure"}, "FAIL", id="real-failure-still-fails"),
+    ],
+)
+def test_quality_summary_verdict_mirrors_ci_ok_skip_whitelist(
+    quality_summary_build_script: str, overrides: dict, expected_status: str, tmp_path
+) -> None:
+    """The friendly PR comment's overall status must never say PASS while the required
+    `ci-ok` aggregate is red. `ci-ok` blocks an unexpected skip of `changes`/
+    `dependency-scan`/`repo-invariants` (this job's own predicate test above) but, before this
+    fix, `quality-summary` folded every `skipped` result into PASS uniformly - so a reviewer
+    could see a green summary comment while `ci-ok` failed separately, with no clue why
+    (Copilot round-6 MEDIUM finding on PR #89). Actually executes the extracted step body
+    (which writes `summary.md` into its cwd, hence `tmp_path`) against representative env,
+    rather than grepping for a predicate-shaped substring.
+    """
+    env = {**_ALL_SUCCESS_ENV, **overrides}
+    completed = subprocess.run(
+        ["bash", "-c", quality_summary_build_script],
+        env={**os.environ, **env},
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+    )
+    assert (
+        completed.returncode == 0
+    ), f"summary script exited {completed.returncode}:\n{completed.stdout}{completed.stderr}"
+    summary = (tmp_path / "summary.md").read_text()
+    if expected_status == "PASS":
+        assert "✅ PASS" in summary, summary
+    else:
+        assert "❌ FAIL" in summary, summary
 
 
 def test_quality_summary_if_never_references_changes(ci_jobs: dict) -> None:

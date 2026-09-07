@@ -851,15 +851,26 @@ jobs:
             # into pass/fail.
             echo "| performance | $(performance_status_label "$PERFORMANCE_STATUS") | $(metric_or_placeholder "$PERFORMANCE_METRIC") |"
             echo
-            # Overall status (data-model.md PR Summary Comment.overall_status):
-            # FAIL if any check failed; else cancelled/incomplete if any
-            # check was cancelled; else PASS. A `skipped` check never flips
-            # this by itself (spec.md Assumptions).
-            results="$CHANGES_RESULT $LINT_RESULT $COMPLEXITY_RESULT $TYPECHECK_RESULT $SECURITY_RESULT $DEPENDENCY_SCAN_RESULT $TEST_RESULT $BUILD_RESULT $DOCS_RESULT $REPO_INVARIANTS_RESULT"
+            # Overall status (data-model.md PR Summary Comment.overall_status): FAIL if any
+            # check failed; else cancelled/incomplete if any check was cancelled; else PASS.
+            # A `skipped` check never flips this by itself - but only for the seven
+            # path-filtered jobs (`ci-ok`'s own whitelist, contracts/path-selection-
+            # contract.md's blocking-predicate table). `changes`/`dependency-scan`/
+            # `repo-invariants` are never legitimately skipped here: this job only runs on
+            # `pull_request` (see the `if:` below), and `changes` only skips on `schedule`/
+            # `workflow_dispatch`, neither of which applies - so an unexpected skip of any of
+            # these three must FAIL the summary exactly like `ci-ok` fails, not render a
+            # green PASS while the required aggregate is red (Copilot round-6 MEDIUM finding
+            # on PR #89).
+            filtered_results="$LINT_RESULT $COMPLEXITY_RESULT $TYPECHECK_RESULT $SECURITY_RESULT $TEST_RESULT $BUILD_RESULT $DOCS_RESULT"
+            always_on_results="$CHANGES_RESULT $DEPENDENCY_SCAN_RESULT $REPO_INVARIANTS_RESULT"
+            results="$filtered_results $always_on_results"
             if echo "$results" | grep -qw "failure"; then
               echo "**Overall status: ❌ FAIL**"
             elif echo "$results" | grep -qw "cancelled"; then
               echo "**Overall status: 🚫 CANCELLED**"
+            elif echo "$always_on_results" | grep -qw "skipped"; then
+              echo "**Overall status: ❌ FAIL**"
             else
               echo "**Overall status: ✅ PASS**"
             fi
