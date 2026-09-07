@@ -610,9 +610,15 @@ The loop (§3) is done only when, on a fresh fetch:
   jobs either succeeded or were intentionally skipped — `changes`,
   `lint`, `complexity`, `typecheck`, `security`, `dependency-scan`,
   `test`, `build`, `docs`, `repo-invariants` — so a red `ci-ok` means one
-  of those actually failed or was cancelled, and its own log names which.
-  Since specs/016-ci-path-based-selection, `lint`/`complexity`/`typecheck`/
-  `security`/`test`/`build`/`docs` are conditional on which paths the PR
+  of those actually failed or was cancelled, **or** one of `changes`
+  (outside `workflow_dispatch`), `dependency-scan`, or `repo-invariants`
+  was unexpectedly `skipped` — none of the three is ever legitimately
+  skipped on a pull request (contracts/path-selection-contract.md's
+  blocking-predicate table; `ci-ok`'s own predicate blocks all three
+  cases identically). Its own log names which dependency actually
+  triggered the red. Since specs/016-ci-path-based-selection, `lint`/
+  `complexity`/`typecheck`/`security`/`test`/`build`/`docs` are conditional
+  on which paths the PR
   touched (e.g. a specs-only or docs-only PR shows most of them as
   Skipped, not Success) — a skip there is expected and does not need
   investigating the way a failure or cancellation does. Two of those

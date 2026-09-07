@@ -28,7 +28,11 @@ a matching entry here.
 - [ ] All required CI checks pass — `ci-ok`, `Analyze (python)`, CodeQL.
   (`ci-ok` aggregates `changes`, `lint`, `complexity`, `typecheck`, `security`,
   `dependency-scan`, `test`, `build`, `docs`, `repo-invariants`; if it is red,
-  its log names which one failed. Several of these are path-based
+  its log names which one failed. Seven of these (`lint`, `complexity`,
+  `typecheck`, `security`, `test`, `build`, `docs`) are path-based
   (`specs/016-ci-path-based-selection`) and report **Skipped** rather than
   running when nothing in their scope changed — that's expected and does not
-  block the merge, only a real failure/cancellation does.)
+  block the merge. `dependency-scan` and `repo-invariants` are never
+  path-based, and `changes` skips only on `workflow_dispatch`: an unexpected
+  **Skipped** on any of those three blocks the merge exactly like a real
+  failure/cancellation would.)
