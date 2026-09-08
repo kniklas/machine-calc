@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from prompt_toolkit.application import Application
+from prompt_toolkit.formatted_text import StyleAndTextTuples
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout import HSplit, Layout, Window
 from prompt_toolkit.layout.controls import FormattedTextControl
@@ -67,7 +68,7 @@ def _assign_mnemonics(entries: list[MenuEntry]) -> list[str | None]:
     return mnemonics
 
 
-def _render_entry(entry: MenuEntry, mnemonic: str | None, style: str) -> list[tuple[str, str]]:
+def _render_entry(entry: MenuEntry, mnemonic: str | None, style: str) -> StyleAndTextTuples:
     """One menu row's fragments, with its mnemonic character underlined."""
 
     if mnemonic is None:
@@ -134,8 +135,8 @@ def run_menu(*, title: str, entries: list[MenuEntry], locale: str) -> str | None
     mnemonics = _assign_mnemonics(entries)
     selected = [0]
 
-    def render() -> list[tuple[str, str]]:
-        fragments: list[tuple[str, str]] = [("", f"{title}\n\n")]
+    def render() -> StyleAndTextTuples:
+        fragments: StyleAndTextTuples = [("", f"{title}\n\n")]
         for index, (entry, mnemonic) in enumerate(zip(entries, mnemonics)):
             style = "class:selected" if index == selected[0] else ""
             fragments.extend(_render_entry(entry, mnemonic, style))

@@ -7,10 +7,10 @@ the same arguments (User Story 1's Independent Test).
 
 from __future__ import annotations
 
+from _tui_test_support import run_headless
+
 from mfgparams import MillingSubOperation, calculate_end_milling
 from mfgparams.console.tui.screens.milling import MillingSessionState, run_milling_screen
-
-from _tui_test_support import run_headless
 
 _KEYS = [
     "\t\r",  # sub-operation: accept default (end milling)

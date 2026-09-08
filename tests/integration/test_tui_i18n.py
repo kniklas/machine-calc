@@ -10,11 +10,11 @@ fixture catalogs deterministically") -- since only English ships today.
 
 from __future__ import annotations
 
+from _tui_test_support import run_headless
+
 import mfgparams.console.i18n as console_i18n
 from mfgparams.console.tui.forms import render_error as forms_render_error
 from mfgparams.console.tui.menu import run_top_level_menu
-
-from _tui_test_support import run_headless
 
 _FIXTURE_LOCALE = "xx-tui-fixture"
 

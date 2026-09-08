@@ -6,9 +6,9 @@ another calculation without exiting and relaunching)."""
 
 from __future__ import annotations
 
-from mfgparams.console.tui.app import run
-
 from _tui_test_support import run_headless
+
+from mfgparams.console.tui.app import run
 
 _ONE_DRILLING_CALCULATION_THEN_EXIT = [
     "m",  # top-level menu: mnemonic to Machining

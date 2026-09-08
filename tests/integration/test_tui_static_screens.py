@@ -4,13 +4,13 @@ test_tui_milling.py, which exercise the parameter-entry screens."""
 
 from __future__ import annotations
 
+from _tui_test_support import run_headless
+
 import mfgparams
 from mfgparams.console.tui.machining_menu import run_machining_menu
 from mfgparams.console.tui.screens.about import run_about_screen
 from mfgparams.console.tui.screens.configuration import run_configuration_screen
 from mfgparams.console.tui.screens.help import run_help_screen
-
-from _tui_test_support import run_headless
 
 
 def test_machining_menu_mnemonic_selects_milling():

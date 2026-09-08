@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import ast
 import contextvars
-import inspect
 import threading
 import time
 from unittest import mock
@@ -47,7 +46,11 @@ def test_resize_mid_entry_does_not_discard_already_typed_text():
             def worker():
                 with mock.patch.object(forms, "input_dialog", capturing_input_dialog):
                     result_holder["value"] = forms.ask_number(
-                        title="Drilling", label="Drill diameter", unit="mm", default=None, locale="en"
+                        title="Drilling",
+                        label="Drill diameter",
+                        unit="mm",
+                        default=None,
+                        locale="en",
                     )
 
             ctx = contextvars.copy_context()

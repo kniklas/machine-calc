@@ -8,10 +8,10 @@ with the same arguments (User Story 1's Independent Test).
 
 from __future__ import annotations
 
+from _tui_test_support import run_headless
+
 from mfgparams import calculate
 from mfgparams.console.tui.screens.drilling import DrillingSessionState, run_drilling_screen
-
-from _tui_test_support import run_headless
 
 _KEYS = [
     "\t\r",  # unit system: accept default (metric)

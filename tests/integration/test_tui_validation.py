@@ -4,9 +4,9 @@ validation message and the field is correctable without restarting
 
 from __future__ import annotations
 
-from mfgparams.console.tui.screens.drilling import DrillingSessionState, run_drilling_screen
-
 from _tui_test_support import run_headless
+
+from mfgparams.console.tui.screens.drilling import DrillingSessionState, run_drilling_screen
 
 _KEYS_WITH_INVALID_DIAMETER_THEN_CORRECTED = [
     "\t\r",  # unit system: default
