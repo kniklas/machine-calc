@@ -29,12 +29,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# The interactive console's runtime dependencies. Empty on delivery: the
-# console needs nothing beyond the standard library today. It is declared
-# anyway because adding an extra later is a packaging change users must react
-# to, whereas populating an already-declared one is invisible to them
-# (specs/014-process-namespaces-extras contracts/installation-extras-contract.md).
-console = []
+# The interactive console's runtime dependencies. Populated by
+# specs/017-console-text-gui: the REPL is replaced by a full-screen text GUI
+# built on prompt-toolkit, confirmed by that feature's technical spike
+# (specs/017-console-text-gui/spike-tui-framework.md) against Constitution
+# Principle V's legacy-hardware profile.
+console = ["prompt-toolkit>=3.0,<4.0"]
 # Every *runtime* extra the project ships. Referring to each extra by name
 # rather than restating its contents means `all` cannot drift from what those
 # extras hold -- but it does NOT make `all` grow by itself: adding a new

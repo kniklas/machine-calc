@@ -42,6 +42,24 @@ MESSAGES: dict[str, str] = {
     # Prose, so it is catalogued rather than inlined at the call site: a
     # literal there would stay English inside a translated sentence.
     "console.missing_dependency.unnamed": "a dependency",
+    # --- Text-GUI unavailable (console/tui/terminal_capability.py, FR-006) ---
+    #
+    # MUST stay in the core catalog for the same reason console.missing_
+    # dependency does (specs/017-console-text-gui research.md #2,
+    # contracts/console-tui-contract.md §4): a message whose whole purpose is
+    # to say the text GUI cannot run must not depend on the console's own
+    # catalog (or prompt-toolkit) having initialized successfully. `{reason}`
+    # is one of the two values `console.tui_unavailable.reason.*` below
+    # supplies -- never a raw literal, so it stays translated end-to-end.
+    "console.tui_unavailable": (
+        "The interactive text interface cannot run here: {reason}\nRun mfgparams "
+        "in a real terminal at least {min_columns}x{min_lines} to use it."
+    ),
+    "console.tui_unavailable.reason.no_tty": "this is not an interactive terminal",
+    "console.tui_unavailable.reason.too_small": (
+        "the terminal is only {columns}x{lines}, smaller than the minimum "
+        "{min_columns}x{min_lines}"
+    ),
     # --- Input labels embedded inside core error text (validation.py) ---
     #
     # These three duplicate entries in mfgparams.console.locales.en (FR-001):

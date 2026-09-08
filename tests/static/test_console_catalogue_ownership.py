@@ -4,19 +4,27 @@ FR-001/SC-001 require this "enforced automatically, not by convention"
 (mirroring 014's precedent, contracts/catalogue-ownership-contract.md). Five
 checks here, each catching a regression class the others cannot see:
 
-1. Every string-literal key `console/cli.py` passes to `translate()`/
-   `has_message()` — directly, through a module-level lookup dict (e.g.
-   `_MODE_OPTION_KEYS`), or through a chain of same-file function
-   parameters (e.g. a `label_key`/`engagement_label_key` argument threaded
-   through one or more wrapper functions before reaching the call) —
-   exists in `mfgparams.console.locales.en.MESSAGES`.
-2. `translate`/`has_message` are bound in `console/cli.py` **only** from
-   `mfgparams.console.i18n` — never from `mfgparams.i18n` or anywhere
-   else. Check 1 assumes a bare `translate`/`has_message` call means the
-   console's catalogue; this is what makes that assumption true rather
-   than merely convenient.
-3. `console.missing_dependency*` is present in core's catalogue and absent
-   from the console's — the sole FR-002 exception.
+1. Every string-literal key any file under `console/` (excluding
+   `console/locales/` itself) passes to `translate()`/`has_message()` —
+   directly, through a module-level lookup dict (e.g. `_MODE_OPTION_KEYS`),
+   or through a chain of same-file function parameters (e.g. a
+   `label_key`/`engagement_label_key` argument threaded through one or more
+   wrapper functions before reaching the call) — exists in
+   `mfgparams.console.locales.en.MESSAGES`. Generalized from scanning only
+   `console/cli.py` (specs/017-console-text-gui research.md #5): the text
+   GUI's screens live in `console/tui/`, a whole subpackage of files, not
+   one module, and leaving this scan hardcoded to `cli.py` alone would
+   silently stop enforcing FR-003 for almost all of that feature's UI code.
+2. `translate`/`has_message` are bound **only** from `mfgparams.console.i18n`
+   — never from `mfgparams.i18n` or anywhere else — in every one of those
+   same console files. Check 1 assumes a bare `translate`/`has_message` call
+   means the console's catalogue; this is what makes that assumption true
+   rather than merely convenient.
+3. `console.missing_dependency*` and `console.tui_unavailable*` are present
+   in core's catalogue and absent from the console's — the sole FR-002 (and
+   specs/017-console-text-gui FR-006) exceptions: both messages exist to say
+   the console/text-GUI is *unavailable*, so they must render without the
+   console's own catalogue (or prompt-toolkit) having initialized.
 4. Every `message_key=` value that reaches an `ErrorInfo(...)` call
    anywhere core builds one (`validation.py`, milling's `_calculate.py`,
    drilling's `__init__.py`) — directly, or via the same kind of
@@ -25,9 +33,10 @@ checks here, each catching a regression class the others cannot see:
    catalogue (FR-005). Confirms research.md #4's move did not
    over-relocate something core still needs.
 5. The two catalogues' key sets are disjoint, except
-   `console.missing_dependency*` (core only) and the three dual-use label
-   keys found during T007 implementation and documented in
-   contracts/catalogue-ownership-contract.md (both, deliberately).
+   `console.missing_dependency*`/`console.tui_unavailable*` (core only) and
+   the three dual-use label keys found during T007 implementation and
+   documented in contracts/catalogue-ownership-contract.md (both,
+   deliberately).
 
 Checks 1 and 4 share the same underlying problem — a catalogue key does
 not always appear as a literal argument at the call site that ultimately
@@ -38,7 +47,8 @@ file scanned only direct literal arguments, which a Copilot review found
 missed exactly this: `_reject_if_invalid`'s `error_message_key` parameter
 (check 4) and `_MODE_OPTION_KEYS`/`label_key`-style indirection in
 `console/cli.py` (check 1), in both cases silently failing to guard the
-key it claimed to guard.
+key it claimed to guard. Both checks now run per-file across every console
+module rather than assuming one file holds all the indirection.
 """
 
 from __future__ import annotations
@@ -51,7 +61,6 @@ import mfgparams.console.locales.en as console_en
 import mfgparams.locales.en as core_en
 
 _SRC = Path(mfgparams.__file__).parent
-_CLI_PATH = _SRC / "console" / "cli.py"
 
 #: The one subtree that never constructs a *core* `ErrorInfo` — it only
 #: displays one. Everything else under `src/mfgparams/` is in scope for
@@ -62,16 +71,55 @@ _CLI_PATH = _SRC / "console" / "cli.py"
 #: an earlier version of this file named exactly three files).
 _CONSOLE_SUBTREE = _SRC / "console"
 
+#: The console's own message-catalogue package -- excluded from the
+#: "every console file must use only its own catalogue" scan below, since
+#: these files define the catalogue rather than consume it via
+#: `translate()`/`has_message()`.
+_CONSOLE_LOCALES_SUBTREE = _CONSOLE_SUBTREE / "locales"
+
 
 def _non_console_source_files() -> list[Path]:
     return [path for path in sorted(_SRC.rglob("*.py")) if _CONSOLE_SUBTREE not in path.parents]
 
 
+def _console_source_files() -> list[Path]:
+    """Every `.py` file under `console/` that can call `translate()`/
+    `has_message()` -- i.e. all of `console/`, excluding the catalogue
+    package itself (specs/017-console-text-gui research.md #5).
+
+    Walks the tree rather than naming `cli.py`/`tui/` specifically, so a
+    future new console file is covered automatically, the same reasoning
+    `_non_console_source_files` already applies on the core side.
+    """
+
+    files = [
+        path
+        for path in sorted(_CONSOLE_SUBTREE.rglob("*.py"))
+        if _CONSOLE_LOCALES_SUBTREE not in path.parents and path != _CONSOLE_LOCALES_SUBTREE
+    ]
+    assert files, "no console source files found -- the layout moved and this test did not"
+    return files
+
+
 _CONSOLE_I18N_MODULE = "mfgparams.console.i18n"
 _CONSOLE_TRANSLATE_FUNCS = {"translate", "has_message"}
 
-#: The sole FR-002 exception: a `console.*`-prefixed key that stays in core.
-_CORE_ONLY_EXCEPTION = "console.missing_dependency"
+#: The sole FR-002/specs-017 FR-006 exceptions: `console.*`-prefixed keys
+#: that stay in core because they exist to say the console/text-GUI is
+#: unavailable, and so must render without the console's own catalogue.
+_CORE_ONLY_EXCEPTIONS = ("console.missing_dependency", "console.tui_unavailable")
+
+#: `console/cli.py` is the one file under `console/` with a legitimate,
+#: narrow reason to bind `translate` to **core**'s `mfgparams.i18n`, not the
+#: console's own: it renders the FR-006 `console.tui_unavailable*` message
+#: (a `_CORE_ONLY_EXCEPTIONS` key, by definition absent from the console's
+#: catalogue) before anything console-catalogue-dependent could even run,
+#: mirroring `mfgparams/__main__.py`'s identical exemption for
+#: `console.missing_dependency`. It imports nothing from
+#: `mfgparams.console.i18n` at all -- every other UI string lives in
+#: `console/tui/`, not here -- so both checks below exempt it rather than
+#: false-flagging its core-bound calls as console-catalogue violations.
+_CORE_TRANSLATE_EXEMPT_FILE = "cli.py"
 
 #: Keys with a structural reason to exist in both catalogues (T007 finding;
 #: see contracts/catalogue-ownership-contract.md). Not an oversight — do not
@@ -372,54 +420,109 @@ def _all_error_info_message_keys(tree: ast.Module) -> set[str]:
 
 
 def test_console_keys_resolve_in_the_console_catalogue():
-    """No exception for `_CORE_ONLY_EXCEPTION` here, deliberately: `console/cli.py`
-    has no legitimate reason to ever call the console's own `translate()`/
-    `has_message()` with `console.missing_dependency*` — that key exists to say
-    the console is unavailable (it is used by `__main__.py`'s guard, via
-    `_translate_core`, not by this module at all), so it is intentionally
-    absent from the console's catalogue. Excluding it here would have let
-    `console/cli.py` call it via the console-bound `translate()` — which
-    would render the raw key — pass unnoticed.
+    """No exception for `_CORE_ONLY_EXCEPTIONS` here, deliberately, for
+    every file **except** `_CORE_TRANSLATE_EXEMPT_FILE`: no other file
+    under `console/` has a legitimate reason to ever call the console's own
+    `translate()`/`has_message()` with `console.missing_dependency*` or
+    `console.tui_unavailable*` — those keys exist to say the console/text-GUI
+    is unavailable, so they are intentionally absent from the console's
+    catalogue. Excluding them here (for every file but the one exempted)
+    would have let a console file call one via the console-bound
+    `translate()` — which would render the raw key — pass unnoticed.
     """
 
-    tree = _parse(_CLI_PATH)
-    keys = _all_console_keys(tree)
+    for path in _console_source_files():
+        if path.name == _CORE_TRANSLATE_EXEMPT_FILE:
+            continue
+        tree = _parse(path)
+        keys = _all_console_keys(tree)
+        missing = {key for key in keys if key not in console_en.MESSAGES}
+        assert not missing, (
+            f"{path.relative_to(_SRC).as_posix()} uses keys absent from the console's own "
+            f"catalogue: {missing}"
+        )
 
-    assert keys, "expected to find at least one translate()/has_message() key"
-    missing = {key for key in keys if key not in console_en.MESSAGES}
-    assert not missing, f"console/cli.py uses keys absent from its own catalogue: {missing}"
+    # At least one file in the whole subtree must actually use the mechanism,
+    # or this test would pass vacuously if every file's keys were empty.
+    total_keys = {
+        key
+        for path in _console_source_files()
+        if path.name != _CORE_TRANSLATE_EXEMPT_FILE
+        for key in _all_console_keys(_parse(path))
+    }
+    assert total_keys, "expected to find at least one translate()/has_message() key"
 
 
 def test_console_translate_bindings_come_only_from_console_i18n():
     """Check 1 assumes a bare `translate`/`has_message` call means the
     console's catalogue. Verify that assumption directly: both names must
-    be imported from `mfgparams.console.i18n` and from nowhere else in
-    this file — reverting `console/cli.py` to import from `mfgparams.i18n`
-    would otherwise leave check 1 green while console keys render as raw
-    IDs (a Copilot review finding on an earlier version of this file).
+    be imported from `mfgparams.console.i18n` and from nowhere else, in
+    every file under `console/` **except** `_CORE_TRANSLATE_EXEMPT_FILE`
+    (documented above) — reverting any non-exempt file to import from
+    `mfgparams.i18n` would otherwise leave check 1 green while console keys
+    render as raw IDs (a Copilot review finding on an earlier version of
+    this file, when it only scanned `console/cli.py`).
     """
 
-    tree = _parse(_CLI_PATH)
-    bindings: dict[str, set[str | None]] = {name: set() for name in _CONSOLE_TRANSLATE_FUNCS}
+    for path in _console_source_files():
+        if path.name == _CORE_TRANSLATE_EXEMPT_FILE:
+            continue
+        tree = _parse(path)
+        bindings: dict[str, set[str | None]] = {name: set() for name in _CONSOLE_TRANSLATE_FUNCS}
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            for alias in node.names:
+                name = alias.asname or alias.name
+                if name in _CONSOLE_TRANSLATE_FUNCS:
+                    bindings[name].add(node.module)
+
+        for name, modules in bindings.items():
+            if not modules:
+                continue  # This file doesn't import that name at all.
+            assert modules == {_CONSOLE_I18N_MODULE}, (
+                f"{path.relative_to(_SRC).as_posix()}: {name!r} must be imported from "
+                f"{_CONSOLE_I18N_MODULE!r} only, found: {modules}"
+            )
+
+
+def test_the_exempt_file_really_does_only_bind_translate_to_core():
+    """A guard on the guard: if `cli.py` ever also imported the console's
+    `translate`, the exemption above would silently stop catching a real
+    mistake there. Confirms the exemption's premise stays true."""
+
+    path = next(p for p in _console_source_files() if p.name == _CORE_TRANSLATE_EXEMPT_FILE)
+    tree = _parse(path)
+    modules: set[str | None] = set()
     for node in ast.walk(tree):
         if not isinstance(node, ast.ImportFrom):
             continue
         for alias in node.names:
-            name = alias.asname or alias.name
-            if name in _CONSOLE_TRANSLATE_FUNCS:
-                bindings[name].add(node.module)
+            if (alias.asname or alias.name) == "translate":
+                modules.add(node.module)
 
-    for name, modules in bindings.items():
-        assert modules == {_CONSOLE_I18N_MODULE}, (
-            f"{name!r} must be imported from {_CONSOLE_I18N_MODULE!r} only, " f"found: {modules}"
+    assert modules == {"mfgparams.i18n"}, (
+        f"{_CORE_TRANSLATE_EXEMPT_FILE} was expected to bind translate() to core only, "
+        f"found: {modules} -- if it now also uses the console's own translate(), remove "
+        "this file's exemption in the two checks above instead of leaving it silently unchecked"
+    )
+
+
+def test_core_only_exceptions_are_present_in_core_and_absent_from_console():
+    """Checks every key under each exception's prefix, not just the base key
+    — `console.missing_dependency.unnamed` and `console.tui_unavailable.
+    reason.*` are separate catalogue entries that share the same "must
+    render without the console" reasoning as their base key.
+    """
+
+    for prefix in _CORE_ONLY_EXCEPTIONS:
+        core_matches = {key for key in core_en.MESSAGES if key.startswith(prefix)}
+        assert core_matches, f"no key under {prefix!r} found in core's catalogue"
+        console_matches = {key for key in console_en.MESSAGES if key.startswith(prefix)}
+        assert not console_matches, (
+            f"key(s) under {prefix!r} must not also be in the console's catalogue: "
+            f"{console_matches}"
         )
-
-
-def test_console_missing_dependency_is_the_sole_core_only_exception():
-    assert _CORE_ONLY_EXCEPTION in core_en.MESSAGES
-    assert f"{_CORE_ONLY_EXCEPTION}.unnamed" in core_en.MESSAGES
-    assert _CORE_ONLY_EXCEPTION not in console_en.MESSAGES
-    assert f"{_CORE_ONLY_EXCEPTION}.unnamed" not in console_en.MESSAGES
 
 
 def test_core_still_has_every_key_its_own_error_messages_need():
