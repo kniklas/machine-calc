@@ -1,7 +1,8 @@
 """Interactive console for mfgparams -- presentation only.
 
-This sub-package holds the REPL: prompting, formatting, and the process/
-operation menus. It owns no calculation logic; everything numeric lives under
+This sub-package holds the text GUI (:mod:`mfgparams.console.tui`, specs/017
+-console-text-gui): screens, dialogs, and the process/operation menus. It
+owns no calculation logic; everything numeric lives under
 :mod:`mfgparams.processes`.
 
 **The calculation core MUST NOT import this package**, at module import time

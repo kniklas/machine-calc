@@ -51,7 +51,7 @@ class CalculationMode(Enum):
 
 
 class MachiningOperation(Enum):
-    """The top-level machining operation the user selects in the REPL.
+    """The top-level machining operation the user selects in the console.
 
     Drives CLI dispatch only (specs/009-milling-calculations FR-001); it is
     not an input to any calculation function. Each member routes to its own
