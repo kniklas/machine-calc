@@ -113,6 +113,10 @@ structure (contracts §2) renders with visible shortcuts, and confirm the REPL i
       `input()`-driven session/prompt functions (an `ast`-based static assertion, mirroring
       `test_cli_contract.py`'s existing style), in `tests/integration/test_console_repl_removed.py`
       (Acceptance Scenario 4, FR-001, FR-007)
+- [ ] T013a [P] [US1] Integration test: simulate a terminal resize mid-form-entry (a partially
+      filled Milling or Drilling form) and confirm already-entered field values survive the
+      resize-triggered redraw, in `tests/integration/test_tui_resize_preserves_input.py`
+      (FR-008, Edge Cases — /speckit-analyze finding E2)
 
 ### Implementation for User Story 1
 
@@ -140,15 +144,19 @@ structure (contracts §2) renders with visible shortcuts, and confirm the REPL i
 - [ ] T022 [US1] Implement `src/mfgparams/console/tui/app.py`'s `Application`/`Layout`/key-binding
       wiring: constructs `NavigationState` (T003), resolves the session locale once via
       `mfgparams.console.i18n.get_locale()`, and assembles menu.py + machining_menu.py +
-      screens/* into one navigable app (depends on T015, T016, T017, T018, T019, T020, T021)
+      screens/* into one navigable app, **and handles a terminal resize (prompt-toolkit's own
+      redraw-on-resize) without discarding not-yet-submitted field values in the active screen
+      (FR-008 — /speckit-analyze finding E2)** (depends on T015, T016, T017, T018, T019, T020, T021)
 - [ ] T023 [US1] Rewrite `src/mfgparams/console/cli.py`: delete every REPL-only function
       (`_prompt_*` functions that call `input()` directly, `_run_drilling_session`,
       `_run_end_milling_session`, `_run_face_milling_session`, `_run_milling_session`, the REPL's
-      `run()` loop, the REPL's `_parse_args`); keep `main()` as a thin dispatcher that runs
-      `terminal_capability`'s check (T004) and then launches `tui/app.py` (T022); update
-      `tests/contract/test_cli_contract.py`'s target/assertion to match wherever `calculate()` is
-      now actually invoked from (`screens/drilling.py`/`milling.py`), since it currently asserts
-      against `cli.py` directly (depends on T004, T022)
+      `run()` loop, the REPL's `_parse_args`); keep `main()` as a thin dispatcher that calls
+      `terminal_capability`'s check (T004) and exits via T005's catalog message when it fails —
+      **this is the FR-006/US3 negative-path implementation itself, not a stub deferred to Phase
+      5** — and otherwise launches `tui/app.py` (T022); update `tests/contract/test_cli_contract.py`'s
+      target/assertion to match wherever `calculate()` is now actually invoked from
+      (`screens/drilling.py`/`milling.py`), since it currently asserts against `cli.py` directly
+      (depends on T004, T022)
 - [ ] T024 [US1] Bump `src/mfgparams/__init__.py`'s `__version__` from `"1.0.0"` to `"2.0.0"`
       (Constitution Principle IV, FR-013 — single source of truth, no other file hardcodes it)
 - [ ] T025 [US1] Add a `CHANGELOG.md` `[Unreleased]` entry (grouped with or after the existing
@@ -229,10 +237,11 @@ a prompt, actionable, non-crashing exit.
 
 ### Implementation for User Story 3
 
-- [ ] T033 [US3] Wire `terminal_capability`'s check (T004) into `console/cli.py`'s `main()`
-      (T023) so it runs — and can exit via T005's message — strictly before `tui/app.py` (T022)
-      constructs any prompt-toolkit object (research.md #2); this task is mostly verification if
-      T023 already called it correctly, but owns the negative-path wiring specifically
+None (T033 intentionally omitted — /speckit-analyze finding F2). The negative-path wiring ships as
+part of T023 (Phase 3): FR-006's no-TTY guard must already work the moment US1/MVP removes the REPL
+— shipping the removal without it would be unsafe — so there is no separate implementation
+increment to defer here. This phase's role is exclusively the dedicated tests T031/T032 confirming
+that T023's wiring behaves correctly.
 
 **Checkpoint**: All three user stories independently functional.
 
@@ -249,6 +258,11 @@ a prompt, actionable, non-crashing exit.
       Constitution Principle V's ~64-128 MB target for the *shipped* app (not just the framework
       import the spike measured) — opt-in via `MFGPARAMS_RUN_PERFORMANCE_TESTS=1` per the existing
       convention
+- [ ] T036a [P] Add an input-to-redraw latency test in
+      `tests/performance/test_tui_redraw_latency.py`: drive a form screen via
+      `prompt_toolkit.input.create_pipe_input`, send a simulated keypress, and measure wall-clock
+      time to the next render pass against a 200ms budget (SC-002 — /speckit-analyze finding E1) —
+      opt-in via `MFGPARAMS_RUN_PERFORMANCE_TESTS=1` alongside T036
 - [ ] T037 Run every scenario in `quickstart.md` manually, end-to-end, on a real terminal
 - [ ] T038 Run `/speckit-analyze` to confirm spec.md/plan.md/tasks.md are still consistent before
       implementation sign-off
@@ -265,26 +279,27 @@ a prompt, actionable, non-crashing exit.
 - **User Story 2 (Phase 4)**: Depends on Foundational + US1's screens existing (T030 audits code
   T015-T022 produce) — not independently buildable before US1's UI exists, but independently
   *testable* once it does.
-- **User Story 3 (Phase 5)**: Depends on Foundational + T023's `cli.py main()` existing (T033 wires
-  into it) — same relationship as US2.
+- **User Story 3 (Phase 5)**: Depends on Foundational + T023's `cli.py main()` existing (T023 owns
+  the wiring directly — see the "Implementation for User Story 3" note above) — same relationship
+  as US2.
 - **Polish (Phase 6)**: Depends on US1 (MVP); T034/T035/T037 benefit from US2/US3 also being done.
 
 ### Within Each User Story
 
-Tests (T010-T014, T028-T029, T031-T032) MUST be written and confirmed failing before their
+Tests (T010-T014, T013a, T028-T029, T031-T032) MUST be written and confirmed failing before their
 corresponding implementation tasks, per Constitution Principle II.
 
 ### Parallel Opportunities
 
 - T002 (package skeleton) has no dependents blocking it once T001 lands.
 - T003, T004, T005, T008, T009 (Foundational, marked [P]) run in parallel — different files.
-- T010-T014 (US1 tests, marked [P]) run in parallel — different files, no shared state.
+- T010-T014 and T013a (US1 tests, marked [P]) run in parallel — different files, no shared state.
 - T017, T018, T019, T020, T021 are NOT marked [P] against each other despite being different
   files: all five depend on T016 (or T015) but are otherwise independent of each other and MAY be
   parallelized in practice — left unmarked here only because T022 depends on all five completing,
   which the sequential listing already communicates unambiguously.
 - T028, T029 (US2 tests) and T031, T032 (US3 tests) each run in parallel within their story.
-- T034, T035, T036 (Polish, marked [P]) run in parallel.
+- T034, T035, T036, T036a (Polish, marked [P]) run in parallel.
 
 ---
 
@@ -310,7 +325,8 @@ Task: "Integration test: REPL fully removed in tests/integration/test_console_re
 3. Complete Phase 3: User Story 1 — this phase already includes REPL deletion, the version bump,
    and the changelog entry, since spec.md ties all three to US1 directly. There is no smaller
    shippable increment than "all of Phase 3."
-4. **STOP and VALIDATE**: run quickstart.md Scenarios 1, 2, 6 manually; confirm T010-T014 pass.
+4. **STOP and VALIDATE**: run quickstart.md Scenarios 1, 2, 6 manually; confirm T010-T014 and
+   T013a pass.
 
 ### Incremental Delivery
 
