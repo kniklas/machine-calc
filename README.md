@@ -43,12 +43,12 @@ Python 3.9 ships) reject it. `python -m pip install --upgrade pip` first if
 you are on one.
 
 An extra gates **dependencies, not modules**: every install ships the same
-wheel, `mfgparams.console` included. What `[console]` adds is what the console
-*needs*, so embedding the library in another application does not drag the
-REPL's requirements in with it. The extra is currently empty — the console
-needs nothing beyond the standard library today — so a default install can in
-fact run the console; the extra is declared now so that populating it later
-stays invisible to you.
+wheel, `mfgparams.console` included. What `[console]` adds is what the
+console's text GUI *needs* ([prompt-toolkit](https://python-prompt-toolkit.readthedocs.io/)),
+so embedding the library in another application does not drag that
+requirement in with it. `pip install mfgparams` alone gives you every
+calculation function but not a working `mfgparams` command — the console
+needs `[console]` installed to run at all.
 
 If a console dependency is ever unavailable, invoking `mfgparams` prints the
 exact command that fixes it and exits non-zero rather than showing a traceback.
@@ -182,41 +182,39 @@ See `specs/002-constrained-calculation-modes/quickstart.md` for full
 scenarios, including error handling (`INFEASIBLE_POWER_BUDGET`,
 `INVALID_TARGET_RPM`, `MODE_CONFLICT`).
 
-## Use the interactive CLI
+## Use the interactive text GUI
 
 ```bash
-python -m mfgparams
+mfgparams
 ```
 
-The REPL first asks which **machining operation** to calculate, and — when
-you choose `milling` — which sub-operation:
+(`python -m mfgparams` and `python -m mfgparams.console` reach the same
+interface.) A full-screen menu opens with **Machining**, **Configuration**,
+**About**, and **Help** — navigate with the arrow keys and Enter, or a
+menu item's underlined keyboard shortcut. Choosing **Machining** opens a
+submenu of **Milling** and **Drilling**; choosing **Milling** asks for the
+sub-operation (end milling or face milling) before continuing.
 
-```text
-Machining operation (drilling, milling) (drilling): milling
-Milling operation (end milling, face milling) (end milling): face milling
-```
+Choosing **Drilling** leads to the drilling flow (unit system, mode,
+material, tool, geometry); choosing **Milling** leads to the equivalent
+milling flow. After each result, dismissing it returns to the top-level
+menu so you can start another calculation — the same operation or a
+different one — without leaving the text GUI; each operation remembers its
+own previous answers as defaults for the rest of the session.
 
-Choosing `drilling` leads to exactly the drilling session as before. After
-each result you can run another calculation and pick a different operation;
-each operation remembers its own previous answers as defaults.
-
-For drilling, the REPL prompts for a calculation mode (`standard`, `power-constrained`,
-`fixed-rpm`) right after the unit-system prompt; `power-constrained` then
-asks for a required available power, and `fixed-rpm` asks for a required
-target spindle speed (with an optional advisory available power). Milling's
-REPL sessions (both end milling and face milling) prompt for the same
-calculation mode at the same point in the sequence, right after the
-unit-system prompt and before material selection.
+For drilling, the calculation-mode screen (`standard`, `power-constrained`,
+`fixed-rpm`) appears right after the unit-system screen; `power-constrained`
+then asks for a required available power, and `fixed-rpm` asks for a
+required target spindle speed (with an optional advisory available power).
+Milling (both end milling and face milling) shows the same calculation-mode
+screen at the same point in the sequence, right after the unit-system
+screen and before material selection.
 
 ### Material selection is two-step
 
-Materials are grouped by **material type**, so the REPL asks for the type
-first and then only offers the materials belonging to it:
-
-```text
-Material type (Metal, Wood): Wood
-Material (Oak, Maple, Pine, Spruce, Fir, Plywood, MDF): Oak
-```
+Materials are grouped by **material type**, so the text GUI asks for the
+type first and then only offers the materials belonging to it: choosing
+`Wood` then offers only `Oak, Maple, Pine, Spruce, Fir, Plywood, MDF`.
 
 This keeps the material list short as the catalog grows. On a repeat
 calculation the previous type is offered as the default; switching to a
@@ -290,7 +288,7 @@ feed_factor = 1.1
 - A missing/unreadable `--materials-config` file is a non-fatal notice — the
   CLI falls back to the bundled defaults. A malformed TOML file or a
   duplicate material/tool `name` within the file is a fatal, translated
-  error and the CLI exits without starting the REPL.
+  error and the CLI exits without starting the text GUI.
 - Invalid material numeric fields (missing/non-numeric/non-positive cutting
   speed, feed, or specific cutting force) are logged as warnings at registry
   load time; startup continues and the entry remains listable, but calculations
