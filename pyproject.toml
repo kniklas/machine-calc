@@ -56,6 +56,11 @@ all = ["mfgparams[console]"]
 # the floor" failure the `setuptools` split in this extra fixed
 # (specs/013-tox-multi-python-testing research.md #4).
 test = [
+    # specs/017-console-text-gui: the console's own code now imports
+    # prompt-toolkit unconditionally (not just at interactive-session time),
+    # so the test suite cannot even *collect* the console/tui/ tests without
+    # it -- self-referential, matching the existing `dev`/`all` pattern.
+    "mfgparams[console]",
     "pytest>=7.4",
     "pytest-cov>=4.1",
     # Used by tests/static/test_python_version_consistency.py to read
