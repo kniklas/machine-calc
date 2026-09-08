@@ -34,9 +34,9 @@ Single project — `src/mfgparams/`, `tests/` at repository root (plan.md's Proj
 
 **Purpose**: Dependency + package skeleton, before any behavior exists.
 
-- [ ] T001 Add `prompt-toolkit` to the `console` extra in `pyproject.toml` (currently `console = []`
+- [X] T001 Add `prompt-toolkit` to the `console` extra in `pyproject.toml` (currently `console = []`
       — see the extra's own comment explaining why it shipped empty since 014)
-- [ ] T002 [P] Create the `src/mfgparams/console/tui/` package skeleton: `__init__.py` and
+- [X] T002 [P] Create the `src/mfgparams/console/tui/` package skeleton: `__init__.py` and
       `screens/__init__.py`, per plan.md's Project Structure — empty modules, no logic yet
 
 ---
@@ -47,31 +47,31 @@ Single project — `src/mfgparams/`, `tests/` at repository root (plan.md's Proj
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T003 [P] Define `ScreenId` (enum) and `NavigationState` (dataclass: `current_screen`,
+- [X] T003 [P] Define `ScreenId` (enum) and `NavigationState` (dataclass: `current_screen`,
       `screen_stack`, `locale`, `materials_config_path`) in `src/mfgparams/console/tui/app.py`,
       per data-model.md's NavigationState entity
-- [ ] T004 [P] Implement `src/mfgparams/console/tui/terminal_capability.py`: a function checking
+- [X] T004 [P] Implement `src/mfgparams/console/tui/terminal_capability.py`: a function checking
       `sys.stdin.isatty()`/`sys.stdout.isatty()` and `shutil.get_terminal_size()` against the 25×80
       minimum (FR-006/FR-008/FR-011), returning a typed result — **no prompt-toolkit import in this
       module**, since research.md #2 established the check must run *before* any prompt-toolkit
       object exists
-- [ ] T005 [P] Add a `console.tui_unavailable` message key (no-TTY / terminal-too-small,
+- [X] T005 [P] Add a `console.tui_unavailable` message key (no-TTY / terminal-too-small,
       parameterized on which condition failed) to the **core** catalog
       `src/mfgparams/locales/en.py`, mirroring `console.missing_dependency`'s existing placement
       there (contracts/console-tui-contract.md §4 — a message saying the console is unavailable
       can't depend on the console's own catalog having initialized)
-- [ ] T006 Add the base `tui.*` message keys to `src/mfgparams/console/locales/en.py`: top-level
+- [X] T006 Add the base `tui.*` message keys to `src/mfgparams/console/locales/en.py`: top-level
       menu labels (`tui.menu.machining`, `tui.menu.configuration`, `tui.menu.about`,
       `tui.menu.help`), Machining submenu labels (`tui.machining.milling`,
       `tui.machining.drilling`), and a generic `tui.action.back` label — per contracts §2/§3
-- [ ] T007 Generalize `tests/static/test_console_catalogue_ownership.py` (currently scans only
+- [X] T007 Generalize `tests/static/test_console_catalogue_ownership.py` (currently scans only
       `console/cli.py`) to scan every `.py` file under `mfgparams/console/` and its subpackages,
       excluding `mfgparams/console/locales/`, for `translate()`/`has_message()` call sites — using
       the same "core vs. console" path-boundary approach `test_core_does_not_import_console.py`
       already uses (research.md #5)
-- [ ] T008 [P] Unit test for `ScreenId`/`NavigationState` push/pop/"back" semantics in
+- [X] T008 [P] Unit test for `ScreenId`/`NavigationState` push/pop/"back" semantics in
       `tests/unit/console/tui/test_navigation_state.py`
-- [ ] T009 [P] Unit test for `terminal_capability`'s isatty/size detection (mock `isatty()`
+- [X] T009 [P] Unit test for `terminal_capability`'s isatty/size detection (mock `isatty()`
       True/False and terminal sizes above/below 25×80) in
       `tests/unit/console/tui/test_terminal_capability.py`
 
@@ -93,61 +93,61 @@ structure (contracts §2) renders with visible shortcuts, and confirm the REPL i
 
 ### Tests for User Story 1 ⚠️ (write first, confirm they fail before implementing)
 
-- [ ] T010 [P] [US1] Contract test: exact menu structure + pairwise-unique mnemonics per menu, in
+- [X] T010 [P] [US1] Contract test: exact menu structure + pairwise-unique mnemonics per menu, in
       `tests/contract/test_console_tui_contract.py` (contracts §2/§3, data-model.md's `MenuEntry`
       validation rule)
-- [ ] T011 [P] [US1] Integration test: headless end-to-end Milling flow (menu → Machining →
+- [X] T011 [P] [US1] Integration test: headless end-to-end Milling flow (menu → Machining →
       Milling → sub-operation → parameters → result), using `prompt_toolkit.output.DummyOutput` +
       `prompt_toolkit.input.create_pipe_input` per the spike's own method, in
       `tests/integration/test_tui_milling.py` — asserts the displayed result matches
       `mfgparams.calculate_end_milling`/`calculate_face_milling` called directly with the same
       arguments
-- [ ] T012 [P] [US1] Integration test: headless end-to-end Drilling flow, in
+- [X] T012 [P] [US1] Integration test: headless end-to-end Drilling flow, in
       `tests/integration/test_tui_drilling.py` — asserts the displayed result matches
       `mfgparams.calculate` called directly (User Story 1's Independent Test)
-- [ ] T013 [P] [US1] Integration test: an invalid parameter (out of range/wrong type/missing)
+- [X] T013 [P] [US1] Integration test: an invalid parameter (out of range/wrong type/missing)
       produces an in-place, catalog-sourced validation message and the field is correctable without
       restarting, in `tests/integration/test_tui_validation.py` (Acceptance Scenario 2)
-- [ ] T014 [P] [US1] Integration test: the REPL is fully gone — `python -m mfgparams` launches the
+- [X] T014 [P] [US1] Integration test: the REPL is fully gone — `python -m mfgparams` launches the
       text GUI (asserted via the headless probe), and `mfgparams.console.cli` contains no
       `input()`-driven session/prompt functions (an `ast`-based static assertion, mirroring
       `test_cli_contract.py`'s existing style), in `tests/integration/test_console_repl_removed.py`
       (Acceptance Scenario 4, FR-001, FR-007)
-- [ ] T013a [P] [US1] Integration test: simulate a terminal resize mid-form-entry (a partially
+- [X] T013a [P] [US1] Integration test: simulate a terminal resize mid-form-entry (a partially
       filled Milling or Drilling form) and confirm already-entered field values survive the
       resize-triggered redraw, in `tests/integration/test_tui_resize_preserves_input.py`
       (FR-008, Edge Cases — /speckit-analyze finding E2)
 
 ### Implementation for User Story 1
 
-- [ ] T015 [US1] Implement `src/mfgparams/console/tui/menu.py`: top-level menu screen rendering the
+- [X] T015 [US1] Implement `src/mfgparams/console/tui/menu.py`: top-level menu screen rendering the
       4 entries from T006's keys with visible mnemonic hints (depends on T003, T006)
-- [ ] T016 [US1] Implement `src/mfgparams/console/tui/machining_menu.py`: Machining submenu
+- [X] T016 [US1] Implement `src/mfgparams/console/tui/machining_menu.py`: Machining submenu
       (Milling, Drilling) (depends on T015)
-- [ ] T017 [US1] Implement `src/mfgparams/console/tui/screens/milling.py`: ports the REPL's
+- [X] T017 [US1] Implement `src/mfgparams/console/tui/screens/milling.py`: ports the REPL's
       `_prompt_milling_sub_operation`/`_prompt_milling_inputs`/`_prompt_mill_tool_choice`/
       `_prompt_end_mill_tool_choice`/`_prompt_face_mill_tool_choice`/`_prompt_milling_geometry`
       logic (data shaping, not `input()` calls) into `data-model.md`'s `OperationForm`/`FieldSpec`
       shape, calling `mfgparams.calculate_end_milling`/`calculate_face_milling` unchanged
       (research.md #3) (depends on T004, T016)
-- [ ] T018 [US1] Implement `src/mfgparams/console/tui/screens/drilling.py`: ports the REPL's
+- [X] T018 [US1] Implement `src/mfgparams/console/tui/screens/drilling.py`: ports the REPL's
       `_run_drilling_session`'s data-shaping logic (material/tool/diameter/depth/power/mode/target
       RPM) into the same `OperationForm` shape, calling `mfgparams.calculate` unchanged
       (research.md #3) (depends on T004, T016)
-- [ ] T019 [US1] Implement `src/mfgparams/console/tui/screens/configuration.py`: read-only
+- [X] T019 [US1] Implement `src/mfgparams/console/tui/screens/configuration.py`: read-only
       materials/tools registry view+select (research.md #4, data-model.md's `ConfigurationView`) —
       **not** a create/edit UI (depends on T015)
-- [ ] T020 [US1] Implement `src/mfgparams/console/tui/screens/about.py`: program name, version
+- [X] T020 [US1] Implement `src/mfgparams/console/tui/screens/about.py`: program name, version
       (`mfgparams.__version__`), license pointer (depends on T015)
-- [ ] T021 [US1] Implement `src/mfgparams/console/tui/screens/help.py`: placeholder content,
+- [X] T021 [US1] Implement `src/mfgparams/console/tui/screens/help.py`: placeholder content,
       reachable and non-crashing (FR-009) (depends on T015)
-- [ ] T022 [US1] Implement `src/mfgparams/console/tui/app.py`'s `Application`/`Layout`/key-binding
+- [X] T022 [US1] Implement `src/mfgparams/console/tui/app.py`'s `Application`/`Layout`/key-binding
       wiring: constructs `NavigationState` (T003), resolves the session locale once via
       `mfgparams.console.i18n.get_locale()`, and assembles menu.py + machining_menu.py +
       screens/* into one navigable app, **and handles a terminal resize (prompt-toolkit's own
       redraw-on-resize) without discarding not-yet-submitted field values in the active screen
       (FR-008 — /speckit-analyze finding E2)** (depends on T015, T016, T017, T018, T019, T020, T021)
-- [ ] T023 [US1] Rewrite `src/mfgparams/console/cli.py`: delete every REPL-only function
+- [X] T023 [US1] Rewrite `src/mfgparams/console/cli.py`: delete every REPL-only function
       (`_prompt_*` functions that call `input()` directly, `_run_drilling_session`,
       `_run_end_milling_session`, `_run_face_milling_session`, `_run_milling_session`, the REPL's
       `run()` loop, the REPL's `_parse_args`); keep `main()` as a thin dispatcher that calls
@@ -157,12 +157,12 @@ structure (contracts §2) renders with visible shortcuts, and confirm the REPL i
       target/assertion to match wherever `calculate()` is now actually invoked from
       (`screens/drilling.py`/`milling.py`), since it currently asserts against `cli.py` directly
       (depends on T004, T022)
-- [ ] T024 [US1] Bump `src/mfgparams/__init__.py`'s `__version__` from `"1.0.0"` to `"2.0.0"`
+- [X] T024 [US1] Bump `src/mfgparams/__init__.py`'s `__version__` from `"1.0.0"` to `"2.0.0"`
       (Constitution Principle IV, FR-013 — single source of truth, no other file hardcodes it)
-- [ ] T025 [US1] Add a `CHANGELOG.md` `[Unreleased]` entry (grouped with or after the existing
+- [X] T025 [US1] Add a `CHANGELOG.md` `[Unreleased]` entry (grouped with or after the existing
       process-first-rename entry) documenting that the REPL entry point is removed and the text GUI
       is now the sole interactive entry point (FR-013, contracts §6)
-- [ ] T026 [US1] Delete the REPL-only integration tests that exercise the now-removed `run()` loop
+- [X] T026 [US1] Delete the REPL-only integration tests that exercise the now-removed `run()` loop
       via simulated stdin: `tests/integration/test_cli_edge_cases.py`,
       `test_cli_end_milling.py`, `test_cli_face_milling.py`, `test_cli_fixed_rpm.py`,
       `test_cli_flow.py`, `test_cli_loop.py`, `test_cli_material_types.py`,
@@ -175,7 +175,7 @@ structure (contracts §2) renders with visible shortcuts, and confirm the REPL i
       T017/T018 port) before deleting; anything found to test surviving logic gets folded into
       T011-T013 instead of dropped (SC-004). **Leave `tests/contract/test_library_cli_extensions.py`
       unchanged** — it tests core library function signatures, not the REPL.
-- [ ] T027 [US1] Re-verify `tests/integration/test_console_missing_dependency.py` still passes
+- [X] T027 [US1] Re-verify `tests/integration/test_console_missing_dependency.py` still passes
       unmodified: its guard (`mfgparams/__main__.py`) is generic over whatever the `console` extra
       declares, so T001's new `prompt-toolkit` dependency should require no test change — confirm
       rather than assume
@@ -197,18 +197,18 @@ locale or falls back to English.
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T028 [P] [US2] Integration test: with a fixture/test locale registered (mirroring this
+- [X] T028 [P] [US2] Integration test: with a fixture/test locale registered (mirroring this
       repo's existing i18n test fixture pattern — `mfgparams.console.i18n`'s catalog cache supports
       registering one deterministically), confirm the top-level menu and a deliberately-triggered
       validation error both render in that locale, in `tests/integration/test_tui_i18n.py`
       (quickstart.md Scenario 3)
-- [ ] T029 [P] [US2] Unit test: a `tui.*` key missing from a non-English catalog falls back to the
+- [X] T029 [P] [US2] Unit test: a `tui.*` key missing from a non-English catalog falls back to the
       English catalog entry rather than showing blank/broken text, in
       `tests/unit/console/tui/test_i18n_fallback.py`
 
 ### Implementation for User Story 2
 
-- [ ] T030 [US2] Audit every string emitted anywhere under `src/mfgparams/console/tui/` (menu.py,
+- [X] T030 [US2] Audit every string emitted anywhere under `src/mfgparams/console/tui/` (menu.py,
       machining_menu.py, screens/*.py, app.py) resolves via `mfgparams.console.i18n.translate` —
       zero hardcoded strings in the UI layer (SC-003); fix any violation T007's generalized
       contract test surfaces
@@ -228,10 +228,10 @@ a prompt, actionable, non-crashing exit.
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T031 [P] [US3] Integration test: piped/no-TTY invocation exits promptly with the T005 message,
+- [X] T031 [P] [US3] Integration test: piped/no-TTY invocation exits promptly with the T005 message,
       never a traceback, never prompt-toolkit's own "Input is not a terminal" warning, never a
       hang, in `tests/integration/test_tui_no_tty_fallback.py` (quickstart.md Scenario 4)
-- [ ] T032 [P] [US3] Integration test: a terminal reporting a size below 25×80 exits with the same
+- [X] T032 [P] [US3] Integration test: a terminal reporting a size below 25×80 exits with the same
       clear message, in `tests/integration/test_tui_terminal_too_small.py` (quickstart.md
       Scenario 5)
 
@@ -249,23 +249,38 @@ that T023's wiring behaves correctly.
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T034 [P] Update Sphinx end-user docs: replace REPL usage instructions with text-GUI usage
+- [X] T034 [P] Update Sphinx end-user docs: replace REPL usage instructions with text-GUI usage
       (menu navigation, shortcuts) (Constitution Principle VII)
-- [ ] T035 [P] Update Sphinx developer docs: document the new `console/tui/` architecture and its
+- [X] T035 [P] Update Sphinx developer docs: document the new `console/tui/` architecture and its
       relationship to `console/cli.py` (Constitution Principle VII)
-- [ ] T036 [P] Add `tests/performance/test_tui_startup_budget.py`, reusing
+- [X] T036 [P] Add `tests/performance/test_tui_startup_budget.py`, reusing
       `tests/performance/harness.py`'s isolated-child-process RSS measurement, budgeted against
       Constitution Principle V's ~64-128 MB target for the *shipped* app (not just the framework
       import the spike measured) — opt-in via `MFGPARAMS_RUN_PERFORMANCE_TESTS=1` per the existing
       convention
-- [ ] T036a [P] Add an input-to-redraw latency test in
+- [X] T036a [P] Add an input-to-redraw latency test in
       `tests/performance/test_tui_redraw_latency.py`: drive a form screen via
       `prompt_toolkit.input.create_pipe_input`, send a simulated keypress, and measure wall-clock
       time to the next render pass against a 200ms budget (SC-002 — /speckit-analyze finding E1) —
       opt-in via `MFGPARAMS_RUN_PERFORMANCE_TESTS=1` alongside T036
-- [ ] T037 Run every scenario in `quickstart.md` manually, end-to-end, on a real terminal
-- [ ] T038 Run `/speckit-analyze` to confirm spec.md/plan.md/tasks.md are still consistent before
-      implementation sign-off
+- [ ] T037 Run every scenario in `quickstart.md` manually, end-to-end, on a real terminal.
+      **Not done as such**: the implementing session had no interactive terminal to drive a real
+      one against. Every scenario's *automated* equivalent (the same headless
+      `DummyOutput`/pipe-input technique quickstart.md itself documents) passes — Scenarios 1/2 in
+      test_tui_drilling.py/test_tui_milling.py/test_tui_validation.py, Scenario 3 in
+      test_tui_i18n.py, Scenario 4 in test_tui_no_tty_fallback.py, Scenario 5 in
+      test_tui_terminal_too_small.py, and Scenario 6's menu-structure claim in
+      test_console_tui_contract.py — but a genuine human/real-terminal pass (screen legibility,
+      actual keystroke feel, SC-006's usability walkthrough) is still outstanding before ship.
+- [X] T038 Run `/speckit-analyze` to confirm spec.md/plan.md/tasks.md are still consistent before
+      implementation sign-off. `/speckit-analyze` was run in full before implementation began
+      (commit e4797e0), finding 0 CRITICAL/2 HIGH/5 MEDIUM/2 LOW issues; the 3 highest-impact were
+      remediated in that same commit (E1/E2/F2). `spec.md`/`plan.md` have not changed since —
+      confirmed via `git log` — and `tasks.md`'s only changes since are checkbox state and this
+      note, so that analysis remains valid rather than needing a full re-run. The four
+      deliberately-deferred findings (F1, E3, E4, E5) remain open, by explicit user choice to keep
+      that remediation diff small — see tasks.md's own "Note on the Configuration screen's scope"
+      section below for the other still-open item (T019's read-only interpretation).
 
 ---
 
