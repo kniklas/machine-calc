@@ -10,11 +10,14 @@ the two cases, using a fixture non-English catalog registered directly into
 `tests/contract/test_library_api_milling_locale.py` used before
 specs/015-console-i18n-relocation moved this concern to the console).
 
-Exercises the real `mfgparams.console.cli._render_error` rather than
+Exercises the real `mfgparams.console.tui.forms.render_error` rather than
 reimplementing its logic inline — a from-scratch reimplementation here would
 stay green even if the production renderer regressed (branched on `code`,
 dropped `kwargs`, or stopped translating), since it would only be testing
-itself.
+itself. (Retargeted from `console/cli.py`'s `_render_error`,
+specs/017-console-text-gui: the REPL is deleted, but this exact function was
+ported unchanged into `forms.render_error`, research.md #3 -- this test's
+value is undiminished by the move.)
 """
 
 from __future__ import annotations
@@ -23,7 +26,7 @@ import pytest
 
 from mfgparams import calculate_end_milling
 from mfgparams.console import i18n as console_i18n
-from mfgparams.console.cli import _render_error
+from mfgparams.console.tui.forms import render_error as _render_error
 
 _FIXTURE_LOCALE = "zz-test-fixture"
 _FIXTURE_CATALOG = {

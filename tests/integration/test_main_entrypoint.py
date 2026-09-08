@@ -1,4 +1,14 @@
-"""Smoke test for `python -m mfgparams` entry point (T025)."""
+"""Smoke test for `python -m mfgparams` entry point (T025).
+
+specs/017-console-text-gui: piped stdin/stdout (what a subprocess with
+`input=`/`capture_output=True` gives every test in this file) is exactly
+FR-006's "no TTY" case -- there is no REPL left to drive through a pipe.
+These smoke tests now assert the *correct* new behavior (a clean, actionable
+exit rather than a hang or a traceback) instead of driving a full
+calculation; test_tui_drilling.py/test_tui_milling.py exercise the full
+calculation flow headlessly, at the function level, where a real dialog
+chain can be driven.
+"""
 
 import subprocess
 import sys
@@ -6,16 +16,17 @@ import sys
 import pytest
 
 
-def test_module_entrypoint_runs_and_exits_cleanly():
+def test_module_entrypoint_exits_cleanly_with_no_tty():
     proc = subprocess.run(
         [sys.executable, "-m", "mfgparams"],
-        input="drilling\nmetric\nstandard\nMetal\nMild Steel\nCarbide\n10\n25\n\nn\n",
+        input="",
         capture_output=True,
         text=True,
         timeout=10,
     )
-    assert proc.returncode == 0
-    assert "RPM" in proc.stdout
+    assert proc.returncode == 1
+    assert "Traceback" not in proc.stderr
+    assert proc.stderr.strip()
 
 
 # --- `python -m mfgparams.console`, the direct console form ---------------
@@ -42,13 +53,15 @@ def _run_module(module: str, *args: str, stdin: str = "") -> "subprocess.Complet
     )
 
 
-def test_console_module_form_starts_and_exits_cleanly_on_eof():
-    """`python -m mfgparams.console` reaches the REPL and leaves it cleanly."""
+def test_console_module_form_exits_cleanly_with_no_tty():
+    """`python -m mfgparams.console` reaches the FR-006 gate and exits
+    cleanly -- there is no REPL left to reach on EOF any more."""
 
     result = _run_module("mfgparams.console", stdin="")
 
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 1
     assert "Traceback" not in result.stderr
+    assert result.stderr.strip()
 
 
 def test_console_module_form_matches_the_package_root_help():
