@@ -30,13 +30,25 @@ constitutional constraints any candidate must satisfy, and a leading candidate (
 evaluation — recommending a short technical spike against the legacy-hardware profile before
 `/speckit-plan` commits to one.
 
-**Entry-point precedence (revised from PR #94 review discussion)**: the text GUI is the **default**
-interactive entry point once shipped — launching the console interactively opens the text GUI, not
-the REPL. The REPL is **retained**, not removed, as an explicit, scriptable entry point for
-automation, CI, and power users (e.g. via an explicit flag or a distinct executable/command), per
-issue #63's "keep REPL" instruction. This is a narrower reading of "keep REPL" than the PR's
-original text (which framed the two as fully parallel, equally-weighted entry points) but does not
-require any #63 amendment: the REPL keeps working, unchanged, for anyone who invokes it explicitly.
+**Entry-point precedence (revised from PR #94 review discussion, superseding the note below)**: the
+text GUI becomes the **sole** interactive entry point — the REPL is **removed entirely**, not kept
+alongside it. This reverses issue #63's explicit "keep REPL" instruction; that reversal is
+deliberate, per direct instruction during PR #94's review, and is recorded here rather than left
+implicit. Two consequences follow directly and are treated as first-class requirements below, not
+afterthoughts:
+- **This is a breaking change to `mfgparams`'s public CLI.** Per Constitution Principle IV
+  ("Breaking changes to the public API MUST bump the MAJOR version and MUST be documented in a
+  changelog before release"), shipping this feature MUST bump the package's MAJOR version and MUST
+  be called out in the changelog as removing the REPL entry point.
+- **There is no longer a fallback entry point for environments the text GUI cannot run in.** The
+  REPL previously served as that fallback (see the now-superseded User Story 3 below); with it
+  removed, an unsupported terminal has no interactive alternative left. FR-006/SC-005 are revised
+  accordingly: the console MUST fail with a clear, actionable, non-crashing message rather than
+  falling back to anything.
+- *(Superseded, kept for history)* ~~the text GUI is the default interactive entry point... the REPL
+  is retained... as an explicit, scriptable entry point for automation, CI, and power users~~ — this
+  intermediate design (text GUI as default, REPL kept for scripting) was recorded during PR #94
+  review and is superseded by full REPL removal above.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -46,15 +58,18 @@ As a console user — including one with little computer experience — I want a
 menu-driven text interface reachable with the keyboard alone (arrow/tab navigation and mnemonic
 shortcuts), organized as a small top-level menu (Machining → Milling, Drilling; Configuration;
 About; Help), for choosing a manufacturing process/operation, entering its parameters, and reviewing
-the result, so that the tool is at least as approachable as the line-by-line REPL, and readable at a
-glance rather than requiring memorized commands.
+the result, so that the tool is approachable and readable at a glance rather than requiring
+memorized commands — this is now the *only* way to use `mfgparams.console` interactively, so it must
+stand on its own rather than merely improve on a line-based alternative.
 
 **Why this priority**: This is the entire substance of the feature; every other story depends on
-this one existing.
+this one existing. It is also now the *sole* interactive entry point into `mfgparams.console` —
+there is no REPL to fall back on if this story is incomplete.
 
 **Independent Test**: Launch the text GUI, complete one full calculation (pick an operation, enter
-valid parameters, view the result) using only the keyboard, and confirm the displayed result
-matches the value the same inputs produce through the existing REPL.
+valid parameters, view the result) using only the keyboard, and confirm the displayed result matches
+the value the same inputs produce when the same parameters are passed directly to the underlying
+core calculation function (not via the REPL, which no longer exists after this feature ships).
 
 **Acceptance Scenarios**:
 
@@ -67,9 +82,10 @@ matches the value the same inputs produce through the existing REPL.
    restarting.
 3. **Given** the user has completed one calculation, **When** they choose to start another,
    **Then** they can do so without exiting and relaunching the text GUI.
-4. **Given** the existing REPL entry point, **When** this feature ships, **Then** the REPL continues
-   to work exactly as before when invoked explicitly — the text GUI becomes the default interactive
-   entry point, and the REPL is not removed or degraded.
+4. **Given** the existing REPL entry point, **When** this feature ships, **Then** the REPL is removed
+   from `mfgparams.console` entirely and the text GUI is the only interactive entry point; invoking
+   the console interactively (e.g. the bare `mfgparams` command) MUST launch the text GUI, not the
+   REPL, and any REPL-only code path MUST be deleted rather than left dead in the tree.
 5. **Given** the text GUI's top-level menu, **When** the user views it, **Then** it presents exactly
    the structure Machining (→ Milling, Drilling), Configuration, About, and Help, each reachable by
    a visible keyboard shortcut without needing to consult external documentation.
@@ -103,28 +119,34 @@ validation error) renders in that language or falls back to English per the exis
 
 ---
 
-### User Story 3 - Fall back gracefully on unsupported terminals (Priority: P3)
+### User Story 3 - Fail clearly, not crash, on unsupported terminals (Priority: P3)
 
 As a user running the console on a constrained, scripted, or non-interactive environment (e.g., a
 CI job, a dumb terminal, or piped input/output), I want the tool to detect that the text GUI cannot
-run and fall back to the existing REPL (or a clear message) instead of crashing, so automation and
-low-capability terminals are never broken by this feature.
+run and exit with a clear, actionable message instead of crashing, so a terminal that can't support
+the text GUI fails predictably rather than with a traceback. **There is no REPL to fall back to** —
+this feature removes it entirely (see the "Entry-point precedence" note in Context) — so an
+unsupported terminal means the console cannot be used interactively at all until run somewhere
+capable; this story is about failing safely, not about recovering an interactive session.
 
 **Why this priority**: Lower priority than the core feature and its i18n parity, but a hard
 requirement given Principle V's target of older/constrained environments where not every terminal
-emulator supports full-screen rendering.
+emulator supports full-screen rendering, and given that REPL removal means this is now the console's
+*only* safety net for such environments — there is no second entry point to catch what this one
+misses.
 
-**Independent Test**: Invoke the console's text-GUI entry point with stdin/stdout piped (no TTY)
-and confirm it falls back to the REPL or prints a clear, actionable message, with a non-crashing
-exit.
+**Independent Test**: Invoke the console's entry point with stdin/stdout piped (no TTY) and confirm
+it exits with a clear, actionable, non-zero-or-documented-exit-code message, never an unhandled
+exception or traceback, and never a silent hang.
 
 **Acceptance Scenarios**:
 
-1. **Given** no TTY is attached (piped/redirected stdin or stdout), **When** the text-GUI entry
-   point is invoked, **Then** the process falls back to the REPL or exits with a clear message,
-   never with an unhandled exception or traceback.
-2. **Given** a terminal that lacks a capability the text GUI requires, **When** the text GUI is
-   launched, **Then** the same graceful fallback occurs.
+1. **Given** no TTY is attached (piped/redirected stdin or stdout), **When** the console is invoked,
+   **Then** the process exits promptly with a clear, actionable, localized message explaining that
+   an interactive terminal is required — never with an unhandled exception or traceback, and never
+   a silent hang.
+2. **Given** a terminal that lacks a capability the text GUI requires, **When** the console is
+   launched, **Then** the same clear-failure behavior occurs.
 
 ---
 
@@ -147,13 +169,13 @@ exit.
 ### Functional Requirements
 
 - **FR-001**: The `mfgparams.console` submodule MUST offer a full-screen, keyboard-navigable text
-  interface that becomes the **default** interactive entry point; the existing line-based REPL MUST
-  remain available, unchanged, as an explicit entry point (e.g. a distinct command/flag) for
-  scripting, automation, and power users — it MUST NOT be removed or degraded by this feature.
-- **FR-002**: The text GUI MUST let a user select a manufacturing process/operation already exposed
-  by the REPL, enter that operation's required parameters, and view its calculated result and any
-  validation/error messages — reaching feature parity with what the REPL already exposes at the
-  time this feature ships.
+  interface as its **sole** interactive entry point; the existing line-based REPL MUST be removed
+  entirely (code deleted, not merely hidden behind a flag). Invoking the console interactively
+  (e.g. the bare `mfgparams` command) MUST launch the text GUI.
+- **FR-002**: The text GUI MUST let a user select a manufacturing process/operation the REPL exposed
+  prior to its removal, enter that operation's required parameters, and view its calculated result
+  and any validation/error messages — reaching feature parity with what the REPL exposed
+  immediately before removal.
 - **FR-003**: Every user-facing string the text GUI displays (labels, prompts, help text,
   validation/error messages) MUST be sourced from the console's existing message-catalog/locale
   mechanism (`src/mfgparams/console/i18n.py`, `src/mfgparams/console/locales/`) per Constitution
@@ -166,12 +188,14 @@ exit.
   `console` optional-dependency extra (`pyproject.toml`), so that installing only the core library
   (`pip install mfgparams`) continues to pull in none of it.
 - **FR-006**: When the runtime terminal environment cannot support the text GUI (no TTY, an
-  unrecognized/incapable terminal type, or non-interactive/piped invocation), the console MUST fall
-  back to the existing REPL or report a clear, actionable message — it MUST NOT crash with an
-  unhandled exception.
+  unrecognized/incapable terminal type, or non-interactive/piped invocation), the console MUST exit
+  with a clear, actionable, localized message explaining that an interactive terminal is required —
+  it MUST NOT crash with an unhandled exception, hang silently, or attempt to fall back to a REPL
+  (there is none after this feature ships).
 - **FR-007**: The text GUI MUST be delivered inside the existing `mfgparams.console` submodule
-  (not a new top-level package) and MUST reuse the submodule's existing REPL/i18n infrastructure
-  rather than duplicating equivalent logic.
+  (not a new top-level package) and MUST reuse the submodule's existing i18n infrastructure and any
+  REPL-independent calculation-invocation logic rather than duplicating equivalent logic;
+  REPL-specific presentation code MUST be deleted, not left dead in the tree.
 - **FR-008**: The text GUI MUST degrade gracefully (clear message, not a garbled or silently
   truncated display) when the terminal window is smaller than the interface's minimum usable size,
   and MUST adapt to a terminal resize occurring mid-session without discarding already-entered,
@@ -191,6 +215,9 @@ exit.
 - **FR-012**: The text GUI's navigation and wording MUST be usable by a first-time, non-technical
   user without external documentation — every screen MUST make the next available action (or how to
   go back) visible without requiring the user to already know a command.
+- **FR-013**: Removing the REPL is a breaking change to `mfgparams`'s public CLI. Per Constitution
+  Principle IV, this feature MUST bump the package's MAJOR version and MUST document the REPL's
+  removal in the changelog before release.
 
 ### Key Entities
 
@@ -202,17 +229,20 @@ validation results that already exist; it introduces no new persisted data or do
 ### Measurable Outcomes
 
 - **SC-001**: A console user can complete an entire calculation — selecting a process/operation,
-  entering parameters, and viewing the result — inside the text GUI using only the keyboard,
-  without needing the line-based REPL.
+  entering parameters, and viewing the result — inside the text GUI using only the keyboard; there
+  is no REPL to fall back on, so this is the only way that flow can be completed.
 - **SC-002**: The text GUI remains responsive (perceived input-to-screen-update delay under
   approximately 200 ms) when exercised on hardware meeting the Principle V legacy-hardware profile.
 - **SC-003**: 100% of the strings the text GUI displays are resolvable through the console's
   existing message-catalog mechanism; zero strings are hardcoded in the UI layer, verified by
   review/audit at merge time.
-- **SC-004**: 100% of the console's existing REPL tests continue to pass unmodified after the text
-  GUI is added — the feature is additive, not a regression.
+- **SC-004**: 100% of the console's existing tests that exercise REPL-independent behavior
+  (calculation logic, i18n, validation) continue to pass unmodified after the REPL is removed and
+  the text GUI takes over; REPL-specific tests are removed along with the REPL code they tested,
+  not left failing or skipped.
 - **SC-005**: When invoked with no TTY attached (piped/redirected input or output), the console
-  falls back to the REPL or a clear message in 100% of tested cases, with no unhandled exception.
+  exits with a clear, actionable message in 100% of tested cases, with no unhandled exception and no
+  silent hang.
 - **SC-006**: A first-time user given no instructions beyond "run the console" can locate and start
   a Milling calculation from the top-level menu, and can locate Help, within a small, fixed number
   of keystrokes/menu selections determined during usability review — verified by an informal
@@ -230,10 +260,11 @@ validation results that already exist; it introduces no new persisted data or do
   process/operation the REPL already exposes at ship time, not to introduce new calculations —
   consistent with Principle VI's per-operation interface, which any UI layer built against it can
   drive uniformly without operation-specific glue.
-- **The REPL is permanent, not deprecated — but no longer the default.** Per issue #63's explicit
-  "keep REPL" instruction, the REPL keeps working unchanged; this feature makes the text GUI the
-  default interactive entry point and repositions the REPL as an explicit entry point for
-  scripting/automation, rather than keeping both as equally-weighted parallel entry points.
+- **The REPL is removed, not kept.** This deliberately reverses issue #63's "keep REPL" instruction
+  (per direct instruction during PR #94 review); the text GUI becomes the sole interactive entry
+  point. There is no scripting/automation entry point into `mfgparams.console` after this feature
+  ships — a future need for one would be a new, separate feature, not part of this spec's scope.
+  This is a breaking CLI change; see FR-013 and Principle IV.
 - **Keyboard-only interaction.** Mouse/pointer support is out of scope, consistent with targeting
   minimal/legacy terminals and keeping the dependency footprint small.
 - **No new persistence.** The text GUI reads/displays calculation results already computed by
