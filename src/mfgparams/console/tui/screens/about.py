@@ -9,9 +9,7 @@ from mfgparams.console.i18n import translate
 
 
 def run_about_screen(locale: str) -> None:
-    text = translate(
-        locale, "tui.about.text", name="mfgparams", version=mfgparams.__version__
-    )
+    text = translate(locale, "tui.about.text", name="mfgparams", version=mfgparams.__version__)
     message_dialog(
         title=translate(locale, "tui.about.title"),
         text=text,

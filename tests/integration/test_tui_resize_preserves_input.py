@@ -74,9 +74,9 @@ def test_resize_mid_entry_does_not_discard_already_typed_text():
             thread.join(timeout=10)
 
     assert not thread.is_alive()
-    assert result_holder.get("value") == 10.0, (
-        "the digit typed before the resize was lost -- resize discarded in-progress input"
-    )
+    assert (
+        result_holder.get("value") == 10.0
+    ), "the digit typed before the resize was lost -- resize discarded in-progress input"
 
 
 def test_no_tui_module_rechecks_terminal_capability_after_startup():

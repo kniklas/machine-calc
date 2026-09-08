@@ -15,17 +15,13 @@ from mfgparams.console.tui.screens.help import run_help_screen
 
 def test_machining_menu_mnemonic_selects_milling():
     result_holder = {}
-    run_headless(
-        lambda: result_holder.__setitem__("value", run_machining_menu(locale="en")), ["m"]
-    )
+    run_headless(lambda: result_holder.__setitem__("value", run_machining_menu(locale="en")), ["m"])
     assert result_holder["value"] == "milling"
 
 
 def test_machining_menu_mnemonic_selects_drilling():
     result_holder = {}
-    run_headless(
-        lambda: result_holder.__setitem__("value", run_machining_menu(locale="en")), ["d"]
-    )
+    run_headless(lambda: result_holder.__setitem__("value", run_machining_menu(locale="en")), ["d"])
     assert result_holder["value"] == "drilling"
 
 

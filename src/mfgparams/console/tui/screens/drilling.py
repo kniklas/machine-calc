@@ -95,7 +95,10 @@ def run_drilling_screen(
     state.material = material
 
     tool = forms.ask_drilling_tool(
-        names=tools, config_path=materials_config_path, default=state.tool, locale=locale,
+        names=tools,
+        config_path=materials_config_path,
+        default=state.tool,
+        locale=locale,
         display_locale=display_locale,
     )
     if tool is None:

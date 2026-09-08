@@ -384,9 +384,7 @@ def format_result(result, labels: dict[str, str], locale: str) -> str:
             unit=labels["feed_rate"],
         ),
         translate(locale, "tui.result.machining_time", value=f"{result.machining_time:.2f}"),
-        translate(
-            locale, "tui.result.torque", value=f"{result.torque:.1f}", unit=labels["torque"]
-        ),
+        translate(locale, "tui.result.torque", value=f"{result.torque:.1f}", unit=labels["torque"]),
         translate(
             locale,
             "tui.result.power_required",
