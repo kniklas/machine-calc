@@ -253,9 +253,10 @@ validation results that already exist; it introduces no new persisted data or do
 
 ## Assumptions
 
-- **Framework selection is deferred, not decided by this spec.** prompt-toolkit is documented below
-  as the leading candidate, but no framework is committed to here; `/speckit-plan` MUST record the
-  outcome of the technology-evaluation next step (below) before implementation begins.
+- **Framework selection: prompt-toolkit, confirmed by spike.** The technical spike recommended
+  below has been run (see [spike-tui-framework.md](spike-tui-framework.md)); prompt-toolkit was not
+  disqualified and is the confirmed choice for `/speckit-plan` to carry forward, with urwid as the
+  documented fallback if a disqualifying finding surfaces later.
 - **Feature parity, not feature growth, is the v1 scope.** The text GUI is assumed to cover every
   process/operation the REPL already exposes at ship time, not to introduce new calculations —
   consistent with Principle VI's per-operation interface, which any UI layer built against it can
@@ -281,24 +282,20 @@ validation results that already exist; it introduces no new persisted data or do
   (relevant to Principle V's OS-compatibility requirement), built-in Unicode rendering that eases
   multi-language display (relevant to Principle VIII), and a comparatively simple API surface
   (relevant to Principle I's maintainability requirement).
-- **This has not been verified against this project's actual constraints.** No TUI library has been
-  benchmarked in this repository, and the `console` extra has shipped empty since 014
-  specifically because nothing has been evaluated yet.
-- **Recommended next step before `/speckit-plan`**: run a short, time-boxed technical spike that
-  installs prompt-toolkit (and, for comparison, at least one full-screen alternative such as
-  Textual, and at least one minimal-dependency alternative such as urwid or blessed) and measures,
-  on hardware representative of the Principle V profile:
-  1. Idle and active RSS memory footprint.
-  2. Cold-start time and input-to-redraw latency.
-  3. Behavior on the older/long-term-stable OS release(s) this project targets (e.g., an old Debian
-     stable install) — including whether the library's own dependency chain (e.g., `wcwidth`,
-     terminal-capability detection libraries) is itself compatible with that target.
-  4. Practical ease of wiring the existing message-catalog mechanism into the framework's widgets
-     (Principle VIII) without a parallel i18n layer.
-- **If the spike disqualifies prompt-toolkit** (e.g., it cannot meet the memory/CPU profile on the
-  target OS), `/speckit-plan` should record the disqualifying measurement and select from the
-  alternatives evaluated in the same spike, rather than defaulting silently.
-- **If no in-repo spike is performed**, `/speckit-plan` MUST at minimum document the chosen
-  framework's published resource-footprint claims and how they were checked against Principle V
-  before committing to it in the plan, per Principle V's "flagged during planning... with an
-  explicit trade-off note" requirement.
+- **Spike completed 2026-09-08 — prompt-toolkit is confirmed.** See
+  [spike-tui-framework.md](spike-tui-framework.md) for full methodology and results. Summary:
+  prompt-toolkit (~6.2 MB disk, ~25.7 MB minimal-screen peak RSS, 1 transitive dependency),
+  Textual (~18.7 MB disk — driven by an unrelated markdown/syntax-highlighting stack, ~27.4 MB
+  peak RSS, 8 transitive dependencies), and urwid (~5.9 MB disk, ~20.8 MB peak RSS, 2 transitive
+  dependencies) were all installed and probed under Python 3.9.0 (this project's floor). None was
+  disqualified on memory — all comfortably fit Principle V's ~64-128 MB target with headroom.
+  Textual's dependency weight is unjustified by this feature's needs and is not recommended; urwid
+  is leanest/fastest but lower-level, requiring more custom widget work to meet FR-009/FR-010/
+  FR-012's menu/shortcut/novice-usability bar; prompt-toolkit's footprint is close to urwid's while
+  its higher-level widget/layout API most directly supports those requirements. `/speckit-plan`
+  MUST treat prompt-toolkit as the selected framework unless it surfaces a concrete disqualifying
+  finding of its own (per the original "if the spike disqualifies prompt-toolkit" fallback below).
+- **If `/speckit-plan` or implementation surfaces a disqualifying finding not caught by this
+  spike** (e.g. an actual legacy-hardware/terminal incompatibility), it should record that finding
+  and fall back to urwid (the next-leanest, already-probed alternative) rather than defaulting
+  silently or re-running the full comparison from scratch.

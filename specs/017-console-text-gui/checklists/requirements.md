@@ -37,6 +37,7 @@
   `src/mfgparams/console/i18n.py`) is a constraint, not a new implementation choice. The one actual
   technology choice this feature introduces — which TUI framework to adopt — is deliberately kept
   out of the Functional Requirements/Success Criteria and confined to the separate "Technology
-  Candidates & Recommended Next Steps" section, which exists precisely because that choice is not
-  yet decided.
+  Candidates & Recommended Next Steps" section. That section now records prompt-toolkit as the
+  spike-confirmed choice (see spike-tui-framework.md), but the confirmation itself still lives only
+  in that section, not in FR-*/SC-*, preserving the same separation of concerns.
 - Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`.
