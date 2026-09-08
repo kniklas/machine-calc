@@ -30,14 +30,24 @@ constitutional constraints any candidate must satisfy, and a leading candidate (
 evaluation — recommending a short technical spike against the legacy-hardware profile before
 `/speckit-plan` commits to one.
 
+**Entry-point precedence (revised from PR #94 review discussion)**: the text GUI is the **default**
+interactive entry point once shipped — launching the console interactively opens the text GUI, not
+the REPL. The REPL is **retained**, not removed, as an explicit, scriptable entry point for
+automation, CI, and power users (e.g. via an explicit flag or a distinct executable/command), per
+issue #63's "keep REPL" instruction. This is a narrower reading of "keep REPL" than the PR's
+original text (which framed the two as fully parallel, equally-weighted entry points) but does not
+require any #63 amendment: the REPL keeps working, unchanged, for anyone who invokes it explicitly.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Run a calculation from a full-screen text interface (Priority: P1)
 
-As a console user, I want a full-screen, keyboard-navigable text interface — not just the
-line-by-line REPL — for choosing a manufacturing process/operation, entering its parameters, and
-reviewing the result, so that entering parameters and reading results is less error-prone than
-typing and re-typing REPL commands, especially over a slow or remote terminal connection.
+As a console user — including one with little computer experience — I want a full-screen,
+menu-driven text interface reachable with the keyboard alone (arrow/tab navigation and mnemonic
+shortcuts), organized as a small top-level menu (Machining → Milling, Drilling; Configuration;
+About; Help), for choosing a manufacturing process/operation, entering its parameters, and reviewing
+the result, so that the tool is at least as approachable as the line-by-line REPL, and readable at a
+glance rather than requiring memorized commands.
 
 **Why this priority**: This is the entire substance of the feature; every other story depends on
 this one existing.
@@ -58,7 +68,11 @@ matches the value the same inputs produce through the existing REPL.
 3. **Given** the user has completed one calculation, **When** they choose to start another,
    **Then** they can do so without exiting and relaunching the text GUI.
 4. **Given** the existing REPL entry point, **When** this feature ships, **Then** the REPL continues
-   to work exactly as before — the text GUI is an additional entry point, not a replacement.
+   to work exactly as before when invoked explicitly — the text GUI becomes the default interactive
+   entry point, and the REPL is not removed or degraded.
+5. **Given** the text GUI's top-level menu, **When** the user views it, **Then** it presents exactly
+   the structure Machining (→ Milling, Drilling), Configuration, About, and Help, each reachable by
+   a visible keyboard shortcut without needing to consult external documentation.
 
 ---
 
@@ -118,8 +132,9 @@ exit.
 
 - What happens when the terminal window is resized while the text GUI is running mid-calculation?
   The layout must adapt (or clip gracefully) without losing already-entered input.
-- What happens when the terminal window is smaller than the text GUI's minimum usable size? The
-  user must get a clear message rather than a garbled or silently-truncated display.
+- What happens when the terminal window is smaller than the text GUI's minimum usable size (target
+  25 rows × 80 columns)? The user must get a clear message rather than a garbled or
+  silently-truncated display.
 - How does the system handle a locale switch requested *while* the text GUI is already running?
 - What happens if the process is killed or the connection drops mid-input? No partial/corrupt state
   should be persisted, since calculations are not yet saved to disk in this feature's scope.
@@ -132,8 +147,9 @@ exit.
 ### Functional Requirements
 
 - **FR-001**: The `mfgparams.console` submodule MUST offer a full-screen, keyboard-navigable text
-  interface as an additional entry point alongside the existing line-based REPL, without removing,
-  replacing, or changing the behavior of the REPL.
+  interface that becomes the **default** interactive entry point; the existing line-based REPL MUST
+  remain available, unchanged, as an explicit entry point (e.g. a distinct command/flag) for
+  scripting, automation, and power users — it MUST NOT be removed or degraded by this feature.
 - **FR-002**: The text GUI MUST let a user select a manufacturing process/operation already exposed
   by the REPL, enter that operation's required parameters, and view its calculated result and any
   validation/error messages — reaching feature parity with what the REPL already exposes at the
@@ -160,6 +176,21 @@ exit.
   truncated display) when the terminal window is smaller than the interface's minimum usable size,
   and MUST adapt to a terminal resize occurring mid-session without discarding already-entered,
   not-yet-submitted input.
+- **FR-009**: The text GUI's top-level navigation MUST be organized as a menu with exactly these
+  entries: **Machining** (containing, at minimum, **Milling** and **Drilling**, extensible as core
+  gains further processes), **Configuration** (setting up materials, tools, and related reference
+  data), **About** (the program), and **Help** (a placeholder in this feature's scope, reachable and
+  non-crashing even with no content beyond a stub).
+- **FR-010**: Every action reachable from the text GUI MUST be reachable via the keyboard alone,
+  using both sequential navigation (arrow keys/Tab) and a direct mnemonic/accelerator shortcut per
+  menu item, with the active shortcuts visibly hinted on screen (not requiring the user to memorize
+  or look up a command).
+- **FR-011**: The text GUI's default/target layout MUST fit within a 25-row × 80-column terminal
+  without requiring scrolling or resizing for any top-level menu or single-operation screen; FR-008's
+  graceful-degradation behavior applies below that size, not at or above it.
+- **FR-012**: The text GUI's navigation and wording MUST be usable by a first-time, non-technical
+  user without external documentation — every screen MUST make the next available action (or how to
+  go back) visible without requiring the user to already know a command.
 
 ### Key Entities
 
@@ -182,6 +213,13 @@ validation results that already exist; it introduces no new persisted data or do
   GUI is added — the feature is additive, not a regression.
 - **SC-005**: When invoked with no TTY attached (piped/redirected input or output), the console
   falls back to the REPL or a clear message in 100% of tested cases, with no unhandled exception.
+- **SC-006**: A first-time user given no instructions beyond "run the console" can locate and start
+  a Milling calculation from the top-level menu, and can locate Help, within a small, fixed number
+  of keystrokes/menu selections determined during usability review — verified by an informal
+  walkthrough with a non-technical reviewer before this feature ships.
+- **SC-007**: The text GUI's default screens (top-level menu and each single-operation screen)
+  render fully within a 25×80 terminal with no scrolling required, verified by manual/automated
+  check at the target size during implementation.
 
 ## Assumptions
 
@@ -192,8 +230,10 @@ validation results that already exist; it introduces no new persisted data or do
   process/operation the REPL already exposes at ship time, not to introduce new calculations —
   consistent with Principle VI's per-operation interface, which any UI layer built against it can
   drive uniformly without operation-specific glue.
-- **The REPL is permanent, not a stepping stone.** Per issue #63's explicit "keep REPL" instruction,
-  this feature adds a second entry point; it does not deprecate or plan to remove the REPL.
+- **The REPL is permanent, not deprecated — but no longer the default.** Per issue #63's explicit
+  "keep REPL" instruction, the REPL keeps working unchanged; this feature makes the text GUI the
+  default interactive entry point and repositions the REPL as an explicit entry point for
+  scripting/automation, rather than keeping both as equally-weighted parallel entry points.
 - **Keyboard-only interaction.** Mouse/pointer support is out of scope, consistent with targeting
   minimal/legacy terminals and keeping the dependency footprint small.
 - **No new persistence.** The text GUI reads/displays calculation results already computed by
