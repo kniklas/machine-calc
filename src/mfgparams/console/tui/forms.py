@@ -10,6 +10,7 @@ logic (Constitution Principle I).
 
 from __future__ import annotations
 
+import enum
 import math
 from collections import Counter
 from typing import Callable
@@ -22,6 +23,7 @@ from mfgparams.models import CalculationMode, ErrorInfo
 from mfgparams.processes.machining.drilling.tools import DrillingTool, get_tool
 from mfgparams.processes.machining.milling._tool_registry import MillingTool
 from mfgparams.registry import WorkpieceMaterial, get_material
+from mfgparams.units import hp_to_kw, in_to_mm, kw_to_hp, mm_to_in
 
 UNIT_LABELS = {
     UnitSystem.METRIC: {
@@ -49,6 +51,48 @@ _MODE_OPTION_KEYS = {
     CalculationMode.POWER_CONSTRAINED: "tui.mode.power_constrained",
     CalculationMode.FIXED_RPM: "tui.mode.fixed_rpm",
 }
+
+
+class Cancelled(enum.Enum):
+    """Sentinel `ask_optional_number` returns when the user backs out via
+    the dialog's own Back/Cancel button -- distinct from a blank
+    submission, which returns ``default`` (itself often ``None``, meaning
+    "unknown"). ``ask_number``/``ask_choice`` can use plain ``None`` for
+    this because their value is never legitimately ``None``; this field
+    is optional, so ``None`` is already taken. A caller that needs to stop
+    the flow on cancel (mirroring the other dialogs' convention) checks
+    ``result is CANCELLED``. A single-member ``Enum``, not a plain
+    sentinel object, so mypy narrows the ``is`` check (it does not narrow
+    identity checks against an arbitrary class instance).
+    """
+
+    CANCELLED = enum.auto()
+
+
+CANCELLED = Cancelled.CANCELLED
+
+
+def convert_length(value: float, from_system: UnitSystem, to_system: UnitSystem) -> float:
+    """Convert a stored length/feed-per-tooth value between unit systems.
+
+    Used when `ask_unit_system` changes `unit_system` mid-session, so a
+    remembered value keeps its physical meaning instead of being re-offered
+    as-is under the new unit's label (e.g. a remembered 10 mm silently
+    becoming a defaulted "10 in").
+    """
+
+    if from_system is to_system:
+        return value
+    return mm_to_in(value) if to_system is UnitSystem.IMPERIAL else in_to_mm(value)
+
+
+def convert_power(value: float, from_system: UnitSystem, to_system: UnitSystem) -> float:
+    """Convert a stored power value between unit systems (kW<->HP). See
+    `convert_length` for why this conversion is needed at all."""
+
+    if from_system is to_system:
+        return value
+    return kw_to_hp(value) if to_system is UnitSystem.IMPERIAL else hp_to_kw(value)
 
 
 def _ok_cancel(locale: str, *, cancel_key: str = "tui.action.back") -> tuple[str, str]:
@@ -237,11 +281,14 @@ def ask_required_number(
 
 def ask_optional_number(
     *, title: str, label: str, unit: str, default: float | None, locale: str
-) -> float | None:
+) -> float | None | Cancelled:
     """Prompt for an optional numeric value. Blank keeps ``default``; a
     non-numeric entry is treated as "unknown" (mirrors `console/cli.py`'s
     `_prompt_optional_power`: it warns and falls back to ``default`` rather
-    than re-prompting, since this field is never required)."""
+    than re-prompting, since this field is never required). Backing out via
+    the dialog's own Back/Cancel button returns :data:`CANCELLED`, not
+    ``default`` -- see that sentinel's docstring for why the two must be
+    distinguishable."""
 
     ok_text, cancel_text = _ok_cancel(locale)
     hint = translate(locale, "tui.prompt.power.optional_hint")
@@ -257,7 +304,7 @@ def ask_optional_number(
         title=title, text=text, default=current_default, ok_text=ok_text, cancel_text=cancel_text
     ).run()
     if raw is None:
-        return default
+        return CANCELLED
     raw = raw.strip()
     if not raw:
         return default

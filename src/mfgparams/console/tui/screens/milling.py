@@ -67,6 +67,41 @@ def _to_mm(value: float, unit_system: UnitSystem) -> float:
     return in_to_mm(value) if unit_system is UnitSystem.IMPERIAL else value
 
 
+def _convert_on_unit_change(state: MillingSessionState, unit_system: UnitSystem) -> None:
+    """Keep remembered geometry/power meaning their original physical
+    quantity across a unit-system switch, rather than re-offering the same
+    raw number relabeled under the new unit (Copilot review on PR #94: a
+    remembered 10 mm silently became a defaulted "10 in"). Must run before
+    `state.unit_system` is overwritten -- it is the "from" system here.
+    `number_of_teeth`/`target_rpm` are pure counts/RPM and never converted.
+    """
+
+    if unit_system is state.unit_system:
+        return
+    if state.diameter is not None:
+        state.diameter = forms.convert_length(state.diameter, state.unit_system, unit_system)
+    if state.axial_depth_of_cut is not None:
+        state.axial_depth_of_cut = forms.convert_length(
+            state.axial_depth_of_cut, state.unit_system, unit_system
+        )
+    if state.radial_engagement is not None:
+        state.radial_engagement = forms.convert_length(
+            state.radial_engagement, state.unit_system, unit_system
+        )
+    if state.feed_per_tooth is not None:
+        state.feed_per_tooth = forms.convert_length(
+            state.feed_per_tooth, state.unit_system, unit_system
+        )
+    if state.length_of_cut is not None:
+        state.length_of_cut = forms.convert_length(
+            state.length_of_cut, state.unit_system, unit_system
+        )
+    if state.available_power is not None:
+        state.available_power = forms.convert_power(
+            state.available_power, state.unit_system, unit_system
+        )
+
+
 def _prompt_tool(
     sub_operation: MillingSubOperation,
     state: MillingSessionState,
@@ -132,6 +167,7 @@ def run_milling_screen(
     unit_system = forms.ask_unit_system(default=state.unit_system, locale=locale)
     if unit_system is None:
         return
+    _convert_on_unit_change(state, unit_system)
     state.unit_system = unit_system
     labels = forms.UNIT_LABELS[state.unit_system]
 
@@ -236,6 +272,8 @@ def _prompt_power_or_rpm(
             default=None if mode_changed else state.available_power,
             locale=locale,
         )
+        if available_power is forms.CANCELLED:
+            return False
         state.mode = mode
         state.previous_mode = mode
         state.target_rpm = target_rpm
@@ -249,6 +287,8 @@ def _prompt_power_or_rpm(
         default=None if mode_changed else state.available_power,
         locale=locale,
     )
+    if available_power is forms.CANCELLED:
+        return False
     state.mode = mode
     state.previous_mode = mode
     state.target_rpm = None
