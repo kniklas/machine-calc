@@ -1,19 +1,24 @@
 """Static check: no literal user-facing strings outside the message catalog
 (T043a; Constitution VIII).
 
-Parses ``cli.py`` and confirms every ``input(...)``/``print(...)`` call
-site passes either no argument, a variable, or a call to
-``mfgparams.i18n.translate(...)`` — never a hard-coded string literal —
-so future edits cannot silently reintroduce untranslated text. Also
-confirms ``logging_setup.py`` (the one place Constitution VIII requires
-plain English) uses ordinary string literals, not catalog lookups.
+`console/cli.py` no longer holds any interactive prompt logic
+(specs/017-console-text-gui deleted the REPL) -- that scan now covers only
+`cli.py` itself (its one `print()` call site) and `__main__.py`. The bulk of
+this feature's user-facing text lives under `console/tui/`, whose sink is
+different: prompt-toolkit dialog constructors (`input_dialog`,
+`radiolist_dialog`, `message_dialog`, `yes_no_dialog`, `button_dialog`)
+rather than `input()`/`print()`, so a second, dedicated scan below covers
+that surface instead of trying to force it through the `input`/`print`
+scan the REPL needed.
 """
 
 from __future__ import annotations
 
 import ast
 import inspect
+from pathlib import Path
 
+import mfgparams
 from mfgparams import __main__ as entry_point
 from mfgparams import logging_setup
 from mfgparams.console import cli
@@ -34,7 +39,7 @@ def test_cli_has_no_hardcoded_user_facing_strings():
     source = inspect.getsource(cli)
     calls = _call_sites(source, {"input", "print"})
 
-    assert calls, "expected at least one input()/print() call site in cli.py"
+    assert calls, "expected at least one print() call site in cli.py"
 
     for call in calls:
         for arg in call.args:
@@ -78,50 +83,63 @@ def test_logging_setup_uses_plain_english_not_the_catalog():
     assert "mfgparams.i18n" not in source and "from mfgparams.i18n" not in source
 
 
-#: The milling session functions added by specs/009-milling-calculations.
-#: The scan above walks the whole ``cli.py`` module, so these are already
-#: covered — this list exists to fail loudly if the milling prompts are ever
-#: moved into a module the scan does not read (009 T048).
-_MILLING_CLI_FUNCTIONS = {
-    "_prompt_operation",
-    "_prompt_milling_sub_operation",
-    "_prompt_mill_tool_choice",
-    "_prompt_validated_length",
-    "_prompt_milling_geometry",
-    "_prompt_milling_inputs",
-    "_run_end_milling_session",
-    "_run_face_milling_session",
-    "_run_milling_session",
+# --- console/tui/ -- prompt-toolkit dialog sinks (specs/017-console-text-gui) ------
+
+#: Every prompt-toolkit shortcut this feature's screens construct dialogs
+#: with. If a screen starts using a different one, add it here rather than
+#: silently losing coverage.
+_DIALOG_CONSTRUCTORS = {
+    "input_dialog",
+    "radiolist_dialog",
+    "message_dialog",
+    "yes_no_dialog",
+    "button_dialog",
 }
 
+#: Keyword arguments on those constructors that carry user-facing text.
+_TEXT_KEYWORDS = {"title", "text", "label", "ok_text", "cancel_text", "yes_text", "no_text"}
 
-def test_milling_session_functions_are_inside_the_scanned_surface():
-    tree = ast.parse(inspect.getsource(cli))
-    defined = {node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)}
-
-    missing = _MILLING_CLI_FUNCTIONS - defined
-    assert not missing, (
-        "these milling CLI functions are no longer in cli.py, so the "
-        f"hard-coded-string scan no longer covers them: {sorted(missing)}"
-    )
+_TUI_DIR = Path(mfgparams.__file__).parent / "console" / "tui"
 
 
-def test_milling_prompts_are_translated():
-    """Every milling prompt/print argument must be a translate() call."""
+def _tui_source_files() -> list[Path]:
+    files = sorted(_TUI_DIR.rglob("*.py"))
+    assert files, "no console/tui source files found -- the layout moved and this test did not"
+    return files
 
-    tree = ast.parse(inspect.getsource(cli))
-    functions = [
+
+def _dialog_calls(tree: ast.Module) -> list[ast.Call]:
+    return [
         node
         for node in ast.walk(tree)
-        if isinstance(node, ast.FunctionDef) and node.name in _MILLING_CLI_FUNCTIONS
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id in _DIALOG_CONSTRUCTORS
     ]
-    assert len(functions) == len(_MILLING_CLI_FUNCTIONS)
+
+
+def test_tui_dialog_calls_pass_no_hardcoded_text_keyword_arguments():
+    """Every `title=`/`text=`/`label=`/`*_text=` argument to a dialog
+    constructor under `console/tui/` must be a `translate(...)` call (or a
+    variable/expression built from one), never a literal string -- the
+    `console/tui/` equivalent of the REPL-era `input()`/`print()` scan
+    above, for prompt-toolkit's dialog shortcuts instead of `input`/`print`.
+    """
 
     checked = 0
-    for function in functions:
-        for call in _call_sites(ast.unparse(function), {"input", "print"}):
-            for arg in call.args:
-                assert not isinstance(arg, ast.Constant) or not isinstance(arg.value, str)
+    for path in _tui_source_files():
+        tree = ast.parse(path.read_text())
+        for call in _dialog_calls(tree):
+            for kw in call.keywords:
+                if kw.arg not in _TEXT_KEYWORDS:
+                    continue
                 checked += 1
+                assert not (
+                    isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str)
+                ), (
+                    f"{path.relative_to(_TUI_DIR.parent.parent).as_posix()}:{call.lineno} "
+                    f"passes a literal string to {kw.arg!r} -- source it from translate() "
+                    "via the message catalog instead"
+                )
 
-    assert checked, "expected the milling session functions to emit some output"
+    assert checked, "expected at least one dialog text-keyword argument under console/tui/"

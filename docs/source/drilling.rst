@@ -3,37 +3,31 @@ Drilling calculations (user guide)
 
 mfgparams calculates parameters for twist-drill **drilling**, alongside
 milling (end milling and face milling). This page covers using it from the
-interactive CLI; see :doc:`drilling-api` for the library API.
+interactive text GUI; see :doc:`drilling-api` for the library API.
 
-Selecting an operation in the REPL
-----------------------------------
+Selecting an operation in the text GUI
+---------------------------------------
 
-Start the REPL with::
+Launch the text GUI with::
 
-    python -m mfgparams
+    mfgparams
 
-The first question is which machining operation to calculate; drilling is
-the default::
+(equivalently, ``python -m mfgparams`` or ``python -m mfgparams.console`` —
+all three reach the same interface.) The top-level menu offers **Machining**,
+**Configuration**, **About**, and **Help**; each item is reachable with the
+arrow keys and Enter, or its underlined keyboard shortcut. Choosing
+**Machining** opens a submenu of **Milling** and **Drilling** — selecting
+**Drilling** walks through a sequence of screens for unit system,
+calculation mode, material type, material, drilling tool, drill diameter,
+hole depth, and available power, in that order, before showing the result.
+Choosing **Milling** instead switches to the flow described in
+:doc:`milling`.
 
-    Machining operation (drilling, milling) (drilling):
-    Unit system [metric/imperial] (metric):
-    Calculation mode (standard, power-constrained, fixed-rpm) (standard):
-    Material type (Metal, Wood): Metal
-    Material (Mild Steel, Stainless Steel, ...): Mild Steel
-    Drilling tool (HSS, Cobalt, Carbide): Carbide
-    Drill diameter (mm): 10
-    Hole depth (mm): 25
-    Available power (kW, blank if unknown):
-
-Pressing Enter at the operation prompt accepts the ``drilling`` default and
-leads to exactly this session; choosing ``milling`` instead switches to the
-milling flow described in :doc:`milling`.
-
-After each result the REPL asks whether to run another calculation.
-Answering yes returns to the operation prompt, so you can switch to milling
-and back freely. Each operation remembers its *own* previous answers as
-defaults, so hopping from drilling to milling and back does not lose your
-drilling inputs.
+After a result is shown, dismissing it returns to the top-level menu, so you
+can start another calculation — the same operation or a different one —
+without leaving the text GUI. Each operation remembers its *own* previous
+answers as defaults for the rest of the session, so switching from drilling
+to milling and back does not lose your drilling inputs.
 
 Drilling inputs
 ----------------
@@ -51,21 +45,16 @@ Hole depth                    Depth of the hole to be drilled, in mm / in.
 Calculation modes
 -----------------
 
-Right after choosing the unit system, the REPL asks for a calculation mode::
-
-    Calculation mode (standard, power-constrained, fixed-rpm) (standard):
+Right after choosing the unit system, the text GUI asks for a calculation
+mode: ``standard``, ``power-constrained``, or ``fixed-rpm``.
 
 ``standard``
     The unconstrained calculation used throughout the rest of this guide.
     Available power stays optional and only advisory: if the calculated
-    power exceeds it, the result is shown anyway with a warning. Like the
-    unit-system prompt above, the mode prompt has an editable default — a
-    blank entry accepts the current default (``standard`` on the first
-    pass) rather than re-prompting. This differs from milling's mode
-    prompt, which requires an explicit choice every time.
+    power exceeds it, the result is shown anyway with a warning.
 
 ``power-constrained``
-    Available power becomes a **required** prompt instead of an optional
+    Available power becomes a **required** screen instead of an optional
     one, and the result label always reads "adjusted to fit available
     power" instead of "recommended" — regardless of whether an adjustment
     actually happened. If your machine can already deliver the calculated
@@ -74,21 +63,19 @@ Right after choosing the unit system, the REPL asks for a calculation mode::
     matches what you supplied exactly. A budget too small for any feasible
     spindle speed is **not** re-prompted at this step — the calculation
     itself fails with an "infeasible power budget" error, which is
-    displayed in place of a result, and the REPL proceeds to the "run
-    another calculation?" prompt rather than asking for available power
-    again.
+    displayed in place of a result, and dismissing it returns to the
+    top-level menu rather than asking for available power again.
 
 ``fixed-rpm``
-    Adds a required "Target spindle speed (RPM)" prompt. The spindle speed
+    Adds a required "Target spindle speed (RPM)" screen. The spindle speed
     in the result is exactly what you entered — labeled "user-specified" —
     and every other value is recomputed for that speed. Available power
     stays optional/advisory here too, so an insufficient machine still
     produces a result, with a warning.
 
-Answering ``y`` at the "run another calculation?" prompt returns to the
-operation prompt, where you can pick a different mode; any previous
-mode's power/RPM answer is cleared rather than carried over as a stale
-default.
+Starting another Drilling calculation from the menu lets you pick a
+different mode; any previous mode's power/RPM answer is cleared rather than
+carried over as a stale default.
 
 Reading the results
 --------------------
@@ -134,7 +121,7 @@ In addition, both values must be positive, finite, and within the bound
 above. ``NaN``, ``+inf``/``-inf`` and non-numeric values are all rejected
 as ``INVALID_DIAMETER``/``INVALID_DEPTH`` before the bound is checked, so
 the CLI re-prompts for them — including the literal ``nan`` that
-``_prompt_number()`` happily parses via ``float("nan")`` — rather than
+``float()`` happily parses as ``nan`` — rather than
 letting a ``NaN`` poison the calculation (fixed in issue #56).
 
 Library callers

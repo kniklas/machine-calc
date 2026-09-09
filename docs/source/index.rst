@@ -25,7 +25,7 @@ a specific material. See:
 - ``specs/005-configurable-materials-tools/contracts/materials-config-schema.md``
 
 Milling support (end milling and face milling, with operation selection in
-the REPL) is covered in:
+the text GUI) is covered in:
 
 - ``specs/009-milling-calculations/spec.md``
 - ``specs/009-milling-calculations/quickstart.md``

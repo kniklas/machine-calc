@@ -3,35 +3,28 @@ Milling calculations (user guide)
 
 mfgparams calculates parameters for two milling sub-operations —
 **end milling** and **face milling** — alongside drilling. This page covers
-using them from the interactive CLI; see :doc:`milling-api` for the library
-API.
+using them from the interactive text GUI; see :doc:`milling-api` for the
+library API.
 
-Selecting an operation in the REPL
-----------------------------------
+Selecting an operation in the text GUI
+---------------------------------------
 
-Start the REPL with::
+Launch the text GUI with::
 
-    python -m mfgparams
+    mfgparams
 
-The first question is which machining operation to calculate. Choosing
-``milling`` adds a second question for the sub-operation::
+From the top-level menu choose **Machining**, then **Milling** from the
+submenu. The first screen asks for the sub-operation — **end milling** or
+**face milling** — followed by unit system, calculation mode, material
+type, material, and the appropriate tool (end-mill or face-mill). Choosing
+**Drilling** from the same submenu instead leads to the flow described in
+:doc:`drilling`.
 
-    Machining operation (drilling, milling) (drilling): milling
-    Milling operation (end milling, face milling) (end milling): end milling
-    Unit system [metric/imperial] (metric):
-    Calculation mode (standard, power-constrained, fixed-rpm):
-    Material type (Metal, Wood): Metal
-    Material (Mild Steel, Stainless Steel, ...): Mild Steel
-    End-mill tool (HSS, Cobalt, Carbide, Coated Carbide): Carbide
-
-Both prompts accept the option text (not a number), and both offer a default
-in parentheses that you can accept by pressing Enter. Choosing ``drilling``
-leads to exactly the drilling session that existed before milling was added.
-
-After each result the REPL asks whether to run another calculation. Answering
-yes returns to the operation prompt, so you can switch operations freely.
-Each operation remembers its *own* previous answers as defaults, so hopping
-from end milling to drilling and back does not lose your milling inputs.
+After a result is shown, dismissing it returns to the top-level menu, so you
+can start another calculation without leaving the text GUI. Each operation
+(and each milling sub-operation) remembers its *own* previous answers as
+defaults for the rest of the session, so switching from end milling to
+drilling and back does not lose your milling inputs.
 
 End milling inputs
 ------------------
@@ -64,38 +57,33 @@ across the cutter. As with end milling it must not exceed the cutter diameter.
 Calculation modes
 -----------------
 
-Right after choosing the unit system, the REPL asks for a calculation mode::
-
-    Calculation mode (standard, power-constrained, fixed-rpm):
+Right after choosing the unit system, the text GUI asks for a calculation
+mode: ``standard``, ``power-constrained``, or ``fixed-rpm``.
 
 ``standard``
     The unconstrained calculation used throughout the rest of this guide.
     Available power stays optional and only advisory: if the calculated
-    power exceeds it, the result is shown anyway with a warning. Unlike the
-    unit-system prompt above, the mode prompt has no editable default — you
-    must type one of the three options; a blank entry re-prompts instead of
-    silently accepting ``standard``.
+    power exceeds it, the result is shown anyway with a warning.
 
 ``power-constrained``
-    Available power becomes a **required** prompt instead of an optional
+    Available power becomes a **required** screen instead of an optional
     one. If your machine can already deliver the calculated power the
     result is unchanged. Otherwise the spindle speed is reduced until the
     power required matches what you supplied exactly, and the result label
     reads "adjusted to fit available power" instead of "recommended". A
-    budget too small for any feasible spindle speed is rejected with a
-    re-prompt.
+    budget too small for any feasible spindle speed is rejected and
+    re-shown for correction.
 
 ``fixed-rpm``
-    Adds a required "Target spindle speed (RPM)" prompt. The spindle speed
+    Adds a required "Target spindle speed (RPM)" screen. The spindle speed
     in the result is exactly what you entered — labeled "user-specified" —
     and every other value is recomputed for that speed. Available power
     stays optional/advisory here too, so an insufficient machine still
     produces a result, with a warning.
 
-Answering ``y`` at the "run another calculation?" prompt returns to the
-operation prompt, where you can pick a different mode; any previous
-mode's power/RPM answer is cleared rather than carried over as a stale
-default.
+Starting another Milling calculation from the menu lets you pick a
+different mode; any previous mode's power/RPM answer is cleared rather than
+carried over as a stale default.
 
 Reading the results
 -------------------

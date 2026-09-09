@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-09-08
+
+### Removed
+
+- **Breaking**: the interactive line-based REPL is removed entirely, replaced
+  by a full-screen, keyboard-navigable text GUI (`mfgparams`, `python -m
+  mfgparams`, and `python -m mfgparams.console` all now launch it) — a menu
+  (Machining → Milling, Drilling; Configuration; About; Help), each item
+  reachable by arrow-key navigation or a direct keyboard shortcut
+  (specs/017-console-text-gui). This un-parks the "text-base UI" item issue
+  #63 originally deferred ("keep REPL; park text-base UI for later") —
+  reversed deliberately during that feature's review, not silently: the REPL
+  is deleted, not kept alongside the new interface or hidden behind a flag.
+  Built on [prompt-toolkit](https://python-prompt-toolkit.readthedocs.io/),
+  selected after a technical spike compared it against Textual and urwid on
+  dependency footprint, memory, and cold-start time (specs/017-console-text
+  -gui/spike-tui-framework.md); this is also the first release of the
+  `console` extra's dependencies, which shipped empty since 014 specifically
+  because nothing needed it until now.
+
+  **There is no scripting/automation entry point into `mfgparams.console`
+  any more.** A terminal that cannot support the text GUI (no TTY, or
+  smaller than the 25×80 target) gets a clear, localized, actionable message
+  and a clean exit — never a REPL fallback, since none exists.
+
 ### Changed
 
 - **Breaking**: calculation modules are grouped **process-first**. A
@@ -74,12 +99,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and exits
   non-zero, instead of a traceback. A failure rooted inside `mfgparams` itself
   still surfaces as itself: a broken install is not a missing extra.
-
-### Note on versioning
-
-This change cuts **no release**. Issue #63's four slices accumulate here and
-publish together as a single major version once the last one lands, so that a
-package with no users does not burn a major version per slice.
 
 ## [1.0.0]
 
