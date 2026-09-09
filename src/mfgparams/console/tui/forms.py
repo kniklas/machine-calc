@@ -10,6 +10,7 @@ logic (Constitution Principle I).
 
 from __future__ import annotations
 
+import math
 from collections import Counter
 from typing import Callable
 
@@ -201,6 +202,37 @@ def ask_number(
             text=render_error(error, locale),
             ok_text=ok_text,
         ).run()
+
+
+def ask_required_number(
+    *,
+    title: str,
+    label: str,
+    unit: str,
+    default: float | None,
+    locale: str,
+    invalid_message_key: str,
+) -> float | None:
+    """Prompt for a required numeric value that must be positive and finite
+    (available power, target RPM). Unlike a bare `ask_number` call, which
+    only rejects non-numeric text, this also rejects zero/negative/`inf`/
+    `nan` -- via `ask_number`'s own `validate` re-prompt loop, so the
+    rejection shows an explanatory error dialog rather than silently
+    re-showing the same prompt.
+    """
+
+    def _validate(value: float) -> ErrorInfo | None:
+        if math.isfinite(value) and value > 0:
+            return None
+        return ErrorInfo(
+            code="INVALID_NUMBER",
+            message=translate(DEFAULT_LOCALE, invalid_message_key),
+            message_key=invalid_message_key,
+        )
+
+    return ask_number(
+        title=title, label=label, unit=unit, default=default, locale=locale, validate=_validate
+    )
 
 
 def ask_optional_number(

@@ -11,7 +11,6 @@ sub-operation's answers leaking in (FR-002 parity).
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 from typing import Callable, cast
 
@@ -139,11 +138,13 @@ def run_milling_screen(
     mode = forms.ask_mode(default=state.mode, locale=locale)
     if mode is None:
         return
-    state.mode = mode
-    if state.mode is not state.previous_mode:
-        state.target_rpm = None
-        state.available_power = None
-    state.previous_mode = state.mode
+    # Mode switch: the new mode's power/RPM field(s) shouldn't default to a
+    # value carried over from a *different* mode. Committing that to `state`
+    # happens only once `_prompt_power_or_rpm` below actually succeeds, not
+    # here -- otherwise cancelling anywhere after this point would
+    # permanently discard the previous mode's still-valid power/RPM values
+    # for nothing (mirrors drilling.py's identically-shaped fix).
+    mode_changed = mode is not state.previous_mode
 
     material_types = list_material_types(config_path=materials_config_path)
     material_type = forms.ask_material_type(
@@ -175,50 +176,83 @@ def run_milling_screen(
     if not _prompt_geometry(state, engagement_label_key, labels, locale):
         return
 
-    if not _prompt_power_or_rpm(state, labels, locale):
+    if not _prompt_power_or_rpm(state, labels, locale, mode, mode_changed):
         return
 
     result = _calculate(sub_operation, state, materials_config_path, locale)
     forms.show_result(result, labels, locale)
 
 
-def _prompt_power_or_rpm(state: MillingSessionState, labels: dict[str, str], locale: str) -> bool:
+def _prompt_power_or_rpm(
+    state: MillingSessionState,
+    labels: dict[str, str],
+    locale: str,
+    mode: CalculationMode,
+    mode_changed: bool,
+) -> bool:
     """The mode-dependent power/RPM screen(s); returns False on cancel.
 
     Extracted from `run_milling_screen` (Constitution Principle I /
-    complexity gate) -- mirrors drilling.py's identically-shaped helper.
+    complexity gate) -- mirrors drilling.py's identically-shaped helper,
+    including committing `state.mode`/`previous_mode`/`target_rpm`/
+    `available_power` together, only on success (see `run_milling_screen`'s
+    comment on `mode_changed`).
     """
 
     title = translate(locale, "tui.milling.title")
 
-    if state.mode is CalculationMode.POWER_CONSTRAINED:
-        power = _prompt_required_power(labels, state, locale)
+    if mode is CalculationMode.POWER_CONSTRAINED:
+        power = forms.ask_required_number(
+            title=title,
+            label=translate(locale, "tui.label.power_required"),
+            unit=labels["power"],
+            default=None if mode_changed else state.available_power,
+            locale=locale,
+            invalid_message_key="tui.prompt.power_required.invalid",
+        )
         if power is None:
             return False
+        state.mode = mode
+        state.previous_mode = mode
+        state.target_rpm = None
         state.available_power = power
         return True
 
-    if state.mode is CalculationMode.FIXED_RPM:
-        target_rpm = _prompt_target_rpm(state, locale)
+    if mode is CalculationMode.FIXED_RPM:
+        target_rpm = forms.ask_required_number(
+            title=title,
+            label=translate(locale, "tui.label.target_rpm"),
+            unit="RPM",
+            default=None if mode_changed else state.target_rpm,
+            locale=locale,
+            invalid_message_key="tui.prompt.target_rpm.invalid",
+        )
         if target_rpm is None:
             return False
-        state.target_rpm = target_rpm
-        state.available_power = forms.ask_optional_number(
+        available_power = forms.ask_optional_number(
             title=title,
             label=translate(locale, "tui.label.power"),
             unit=labels["power"],
-            default=state.available_power,
+            default=None if mode_changed else state.available_power,
             locale=locale,
         )
+        state.mode = mode
+        state.previous_mode = mode
+        state.target_rpm = target_rpm
+        state.available_power = available_power
         return True
 
-    state.available_power = forms.ask_optional_number(
+    available_power = forms.ask_optional_number(
         title=title,
         label=translate(locale, "tui.label.power"),
         unit=labels["power"],
-        default=state.available_power,
+        default=None if mode_changed else state.available_power,
         locale=locale,
     )
+    state.mode = mode
+    state.previous_mode = mode
+    state.target_rpm = None
+    state.available_power = available_power
     return True
 
 
@@ -362,38 +396,6 @@ def _prompt_geometry(
         return False
     state.length_of_cut = length
     return True
-
-
-def _prompt_required_power(
-    labels: dict[str, str], state: MillingSessionState, locale: str
-) -> float | None:
-    while True:
-        value = forms.ask_number(
-            title=translate(locale, "tui.milling.title"),
-            label=translate(locale, "tui.label.power_required"),
-            unit=labels["power"],
-            default=state.available_power,
-            locale=locale,
-        )
-        if value is None:
-            return None
-        if math.isfinite(value) and value > 0:
-            return value
-
-
-def _prompt_target_rpm(state: MillingSessionState, locale: str) -> float | None:
-    while True:
-        value = forms.ask_number(
-            title=translate(locale, "tui.milling.title"),
-            label=translate(locale, "tui.label.target_rpm"),
-            unit="RPM",
-            default=state.target_rpm,
-            locale=locale,
-        )
-        if value is None:
-            return None
-        if math.isfinite(value) and value > 0:
-            return value
 
 
 @dataclass(frozen=True)
