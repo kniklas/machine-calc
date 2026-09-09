@@ -53,8 +53,16 @@ from prompt_toolkit.output import DummyOutput
 #: A longer chain of dialogs (e.g. milling's six geometry fields) showed
 #: occasional flakiness at 0.08s under sandboxed-environment load, so this
 #: errs generous -- it only adds wall-clock time to headless tests, not to
-#: the shipped product.
-_STEP_DELAY_SECONDS = 0.4
+#: the shipped product. Bumped from 0.4 to 0.65 while adding `app.py`'s
+#: Back-navigation fix (Copilot review on PR #94): re-entering the *same*
+#: hand-rolled menu Application consecutively (e.g. cancelling back through
+#: several menu levels in a row) needs more margin than the original
+#: dialog-chain patterns did -- 0.4s reproduced the same "second instance in
+#: a session doesn't see its input" race the module docstring already
+#: documents for `RadioList`, just for this Application shape instead;
+#: 0.5s still occasionally hung 3 consecutive instances, 0.6s+ did not
+#: across repeated local runs, so 0.65s keeps a margin.
+_STEP_DELAY_SECONDS = 0.65
 _JOIN_TIMEOUT_SECONDS = 20.0
 
 
@@ -66,12 +74,28 @@ def run_headless(target: Callable[[], None], key_batches: list[str]) -> None:
     :data:`_JOIN_TIMEOUT_SECONDS` of the last batch being sent -- almost
     always means the key script under-supplies a step (a dialog is still
     open, waiting), not a hang in the product code itself.
+
+    Re-raises, on the calling thread, any exception ``target`` itself
+    raised on its worker thread (Copilot review on PR #94: this previously
+    only checked that the worker thread had *stopped*, so a screen that
+    crashed outright -- as opposed to hanging -- still made this function
+    return normally, and every test built on it would report success).
     """
+
+    captured: list[BaseException] = []
+
+    def _run_and_capture() -> None:
+        # Deliberately broad: re-raised on the caller's thread below (see
+        # `if captured:`), not swallowed.
+        try:
+            target()
+        except BaseException as exc:  # noqa: BLE001
+            captured.append(exc)
 
     with create_pipe_input() as pipe_input:
         with create_app_session(input=pipe_input, output=DummyOutput()):
             ctx = contextvars.copy_context()
-            thread = threading.Thread(target=lambda: ctx.run(target), daemon=True)
+            thread = threading.Thread(target=lambda: ctx.run(_run_and_capture), daemon=True)
             thread.start()
             for batch in key_batches:
                 thread.join(timeout=_STEP_DELAY_SECONDS)
@@ -83,3 +107,5 @@ def run_headless(target: Callable[[], None], key_batches: list[str]) -> None:
                 "target did not complete -- the key-batch script likely "
                 "under-supplies a step (a dialog is still open)"
             )
+    if captured:
+        raise captured[0]

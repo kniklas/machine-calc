@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Callable
 
 from mfgparams.console.i18n import get_locale
 from mfgparams.i18n import get_raw_locale
@@ -137,27 +138,66 @@ def run(materials_config_path: str | None = None) -> None:
     drilling_state = DrillingSessionState()
     milling_states = {sub: MillingSessionState() for sub in MillingSubOperation}
 
-    while True:
-        state.current_screen = ScreenId.MENU
-        choice = run_top_level_menu(locale=locale)
-        if choice is None:
-            return  # Escape/Ctrl-Q at the root: exit the app.
+    # Screens that just run once and pop back to whatever pushed them,
+    # regardless of whether that run ended in cancellation or a completed
+    # calculation -- MENU and MACHINING_MENU are handled separately below
+    # since they instead decide *which* screen to push next.
+    simple_screens: dict[ScreenId, Callable[[], None]] = {
+        ScreenId.MILLING_FORM: lambda: run_milling_screen(
+            milling_states, materials_config_path, locale, display_locale
+        ),
+        ScreenId.DRILLING_FORM: lambda: run_drilling_screen(
+            drilling_state, materials_config_path, locale, display_locale
+        ),
+        ScreenId.CONFIGURATION: lambda: run_configuration_screen(materials_config_path, locale),
+        ScreenId.ABOUT: lambda: run_about_screen(locale),
+        ScreenId.HELP: lambda: run_help_screen(locale),
+    }
 
-        if choice == "machining":
-            state.push(ScreenId.MACHINING_MENU)
+    # Driven by `state.current_screen`/`push`/`pop` (Copilot review on PR #94:
+    # this loop previously reset to MENU at the top of every iteration and
+    # never called `pop()`, so "go back" from Drilling/Milling skipped the
+    # Machining submenu entirely instead of returning to it one level at a
+    # time, per contract §3).
+    while True:
+        if state.current_screen is ScreenId.MENU:
+            choice = run_top_level_menu(locale=locale)
+            if choice is None:
+                return  # Escape/Ctrl-Q at the root: exit the app.
+            _push_top_level_choice(state, choice)
+            continue
+
+        if state.current_screen is ScreenId.MACHINING_MENU:
             sub_choice = run_machining_menu(locale=locale)
-            if sub_choice == "milling":
-                state.push(ScreenId.MILLING_FORM)
-                run_milling_screen(milling_states, materials_config_path, locale, display_locale)
-            elif sub_choice == "drilling":
-                state.push(ScreenId.DRILLING_FORM)
-                run_drilling_screen(drilling_state, materials_config_path, locale, display_locale)
-        elif choice == "configuration":
-            state.push(ScreenId.CONFIGURATION)
-            run_configuration_screen(materials_config_path, locale)
-        elif choice == "about":
-            state.push(ScreenId.ABOUT)
-            run_about_screen(locale)
-        elif choice == "help":
-            state.push(ScreenId.HELP)
-            run_help_screen(locale)
+            _push_machining_choice(state, sub_choice)
+            continue
+
+        simple_screens[state.current_screen]()
+        state.pop()
+
+
+def _push_top_level_choice(state: NavigationState, choice: str) -> None:
+    """`run`'s MENU branch: which screen a top-level menu choice pushes.
+    Extracted from `run` (Constitution Principle I / complexity gate)."""
+
+    if choice == "machining":
+        state.push(ScreenId.MACHINING_MENU)
+    elif choice == "configuration":
+        state.push(ScreenId.CONFIGURATION)
+    elif choice == "about":
+        state.push(ScreenId.ABOUT)
+    elif choice == "help":
+        state.push(ScreenId.HELP)
+
+
+def _push_machining_choice(state: NavigationState, sub_choice: str | None) -> None:
+    """`run`'s MACHINING_MENU branch: which screen a submenu choice pushes,
+    or back to the top-level menu on cancel. Extracted from `run`
+    (Constitution Principle I / complexity gate)."""
+
+    if sub_choice == "milling":
+        state.push(ScreenId.MILLING_FORM)
+    elif sub_choice == "drilling":
+        state.push(ScreenId.DRILLING_FORM)
+    else:
+        state.pop()  # Escape/Ctrl-Q: back to the top-level menu.

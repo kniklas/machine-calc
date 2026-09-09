@@ -22,7 +22,10 @@ _ONE_DRILLING_CALCULATION_THEN_EXIT = [
     "20\r\r",  # depth
     "\t\r",  # optional power: blank
     "\r",  # dismiss the result dialog
-    "\x1b",  # back at the top-level menu: exit the app
+    # Back one level at a time (contract §3): Drilling -> Machining submenu
+    # -> top-level menu -> exit the app.
+    "\x1b",  # back at the Machining submenu
+    "\x1b",  # exit from the top-level menu
 ]
 
 
@@ -34,8 +37,9 @@ def test_full_session_completes_one_drilling_calculation_then_exits(monkeypatch)
     # hanging or raising.
 
 
-_TWO_CALCULATIONS_THEN_EXIT = _ONE_DRILLING_CALCULATION_THEN_EXIT[:-1] + [
-    "m",
+_TWO_CALCULATIONS_THEN_EXIT = _ONE_DRILLING_CALCULATION_THEN_EXIT[:-2] + [
+    # Finishing the first calculation returns to the Machining submenu (the
+    # fix above), not the top-level menu -- so no leading "m" here.
     "d",
     "\t\r",
     "\t\r",
@@ -46,7 +50,8 @@ _TWO_CALCULATIONS_THEN_EXIT = _ONE_DRILLING_CALCULATION_THEN_EXIT[:-1] + [
     "\t\r",  # depth: blank accepts the remembered default
     "\t\r",
     "\r",
-    "\x1b",
+    "\x1b",  # back at the Machining submenu
+    "\x1b",  # exit from the top-level menu
 ]
 
 
