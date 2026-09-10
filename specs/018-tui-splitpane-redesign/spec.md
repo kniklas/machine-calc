@@ -180,8 +180,12 @@ User Story 1's navigation shell rather than exited or reset.
   (e.g. an engagement value invalid relative to a diameter that was itself just changed) shows the
   clear, actionable, localized error `calculate()` already returns for it, rather than clearing the
   pane to nothing.
-- What happens if the user collapses the Machining tree while a leaf operation's screen is open —
-  does the operation screen close too, or only the tree's own visual state change?
+- **Third open question (see Assumptions below)**: what happens if the user collapses the
+  Machining tree while a leaf operation's screen is open — does the operation screen close too, or
+  only the tree's own visual state change? Unlike the resize and cross-field-validation Edge Cases
+  above, this one is not resolved here — it is a genuine layout/architecture question (whether the
+  tree stays visible alongside an open operation screen at all), not something the existing
+  codebase or 017's precedent already answers.
 - The application must remain fully operable by keyboard alone, with no mouse/pointer interaction
   required for any action — carried over unchanged from 017's own Assumptions.
 
@@ -308,6 +312,13 @@ User Story 1's navigation shell rather than exited or reset.
 - **FR-018**: The right pane's result text MUST wrap to fit the pane's width rather than being
   truncated or overflowing it — `format_result`'s existing per-line output (label, value, unit) is
   routinely wider than a narrow result pane, confirmed in the same prototype.
+- **FR-019**: The application MUST continue to operate within the legacy-hardware resource profile
+  Constitution Principle V defines (~64-128 MB RAM, single-threaded CPU, minimal clock speeds) —
+  carrying forward 017's FR-004 unchanged. This feature's reactive right-pane redraw (FR-007) is
+  the primary new resource-consumption risk relative to 017's one-shot dialogs (which computed and
+  displayed a result exactly once per screen, not on every keystroke) and MUST be evaluated against
+  this profile specifically, not assumed compatible merely because the underlying
+  `calculate()`/registry calls are themselves unchanged.
 
 ### Key Entities
 
@@ -340,6 +351,12 @@ User Story 1's navigation shell rather than exited or reset.
 - **SC-005**: A first-time, non-technical user can complete one calculation and start a second one
   using only the on-screen menu bar/tree/pane affordances, without external instructions beyond
   what the screen itself shows (carries forward 017's own novice-usability framing).
+- **SC-006**: FR-007's automatic right-pane recalculation remains responsive (perceived
+  input-to-update delay under approximately 200 ms) when exercised on hardware meeting Constitution
+  Principle V's legacy-hardware profile — carrying forward 017's SC-002, scoped to this feature's
+  own new reactive-redraw risk surface. Per the Carried-Over Items table below,
+  `test_tui_redraw_latency.py` has never actually measured a real reactive redraw until this
+  feature's right pane exists to give it one.
 
 ## Assumptions
 
@@ -366,6 +383,20 @@ User Story 1's navigation shell rather than exited or reset.
   where Milling's own End-Milling/Face-Milling choice (FR-009a) lives** — tree or left pane — since
   FR-009 requires Milling to follow Drilling's pattern exactly; `/speckit-clarify`'s answer here
   should address both operations' placement together, not just Drilling's.
+- **Whether collapsing the Machining tree while a leaf operation's screen is open closes that
+  screen is a third genuinely open question** (Edge Cases above), alongside Configuration scope and
+  drilling-type/sub-operation placement — the checklist and PR test plan's "two open Assumptions"
+  framing predates this one being raised and should be read as three from here on. This spec
+  assumes the operation screen does **not** close, as the more conservative default (destroying
+  in-progress left-pane input as a side effect of a sibling menu-bar item's own state change would
+  be a surprising, hard-to-undo action for a UI whose whole premise is not losing input FR-013a
+  cares about). Unlike the resize/validation Edge Cases above, this one has **no existing precedent
+  to lean on**: 017/PR #94's `NavigationState` (`tui/app.py`) tracks a single `current_screen` with
+  no notion of the tree and a leaf screen being simultaneously "open" at all — that architecture is
+  mutually-exclusive-state by construction, so it neither supports nor rules out this feature's
+  persistent layout answering the question either way. This is a genuinely fresh architectural
+  decision for this feature, not a carryover — flagged for `/speckit-clarify` to confirm or
+  override.
 - **The 25×80 minimum terminal size (017's FR-011) likely needs raising, not just carrying
   forward, based on the recommended prototype's measured pane height.** Milling's left pane (13
   fields including the always-present available-power field, 14 with Fixed RPM's extra target-RPM

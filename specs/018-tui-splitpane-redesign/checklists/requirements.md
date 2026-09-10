@@ -47,5 +47,6 @@
   any other requirement — that keeps the checkbox above unchecked.
 - **Done: a throwaway UX prototype was tried in a real terminal**, per the spec's own "Recommended
   Next Steps" section (now updated to record what it found). The remaining gate before
-  `/speckit-plan` is `/speckit-clarify` on the two flagged Assumptions (Configuration scope;
-  drilling-type/sub-operation placement), not the prototype.
+  `/speckit-plan` is `/speckit-clarify` on the three flagged Assumptions (Configuration scope;
+  drilling-type/sub-operation placement; whether collapsing the Machining tree closes an open
+  operation screen), not the prototype.
