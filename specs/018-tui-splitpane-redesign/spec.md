@@ -280,8 +280,10 @@ User Story 1's navigation shell rather than exited or reset.
   (`calculate_end_milling()`/`calculate_face_milling()`) MUST remain reachable; an implementation
   that omits this choice makes one of the two unreachable. Per FR-009's identical-pattern
   requirement, its placement follows FR-005/FR-005a's resolution for Drilling's equivalent choice
-  (resolved via `/speckit-clarify`): the left pane always retains full control, with the Machining
-  tree offering it as a navigation shortcut alongside Drilling's own tree-level choice.
+  (resolved via `/speckit-clarify`): the left pane always retains full control. Unlike Drilling,
+  Milling's sub-operation choice has no Machining-tree-level shortcut — FR-002/FR-003 define a
+  tree-level sub-expansion for Drilling only, and this feature does not add an equivalent one for
+  Milling.
 - **FR-010**: The application MUST remain fully operable via keyboard alone; no action may require
   mouse/pointer interaction (unchanged from 017).
 - **FR-011**: The application MUST reuse the existing i18n message catalog mechanism

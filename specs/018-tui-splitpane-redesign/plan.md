@@ -176,12 +176,12 @@ tests/
 ├── unit/console/tui/              # EXTENDED — unit tests for the new menu-bar/tree widgets and
 │                                  # the shared left/right-pane component.
 ├── contract/
-│   └── test_console_tui_contract.py            # UPDATED — 017's contract test file; either
-│                                  # extended for the new menu-bar/tree/pane contract or
-│                                  # superseded by a new `test_console_tui_splitpane_contract.py`
-│                                  # validating contracts/console-tui-splitpane-contract.md
-│                                  # (research.md decides which, given 017's contract describes
-│                                  # the now-replaced dialog-chain structure).
+│   └── test_console_tui_contract.py            # UPDATED (research.md's consolidated decisions
+│                                  # table) — rewritten in place against
+│                                  # contracts/console-tui-splitpane-contract.md;
+│                                  # 017's contract described the now-replaced dialog-chain
+│                                  # structure, but no second, differently-named contract test file
+│                                  # is added for the same subsystem.
 ├── integration/
 │   ├── _tui_test_support.py       # ADAPTED (research.md) — driving one persistent Application
 │   │                              # instead of a dialog chain.
