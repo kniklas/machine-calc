@@ -56,8 +56,9 @@ expected to be substantially rewritten, not preserved as-is.
 ### User Story 1 - Navigate by menu bar and tree instead of a dialog chain (Priority: P1)
 
 A user launches the console text GUI and sees a persistent horizontal menu bar (Exit, Machining,
-Configuration, Help) instead of a full-screen list of choices. Selecting Machining expands a tree
-showing Milling and Drilling; selecting Drilling expands further into a choice of drilling type.
+Configuration, About, Help) instead of a full-screen list of choices. Selecting Machining expands
+a tree showing Milling and Drilling; selecting Drilling expands further into a choice of drilling
+type.
 Selecting a leaf operation opens that operation's split-pane screen (User Story 2) without a
 separate full-screen transition for the menu bar or tree itself.
 
@@ -117,6 +118,10 @@ leaving the pane.
 4. **Given** the Milling screen is open, **When** the user views its left pane, **Then** the same
    simultaneous-input pattern applies to milling's own inputs (mirroring Drilling's pattern, per
    the feature description).
+5. **Given** a numeric field, **When** the user types text that cannot be parsed as a number,
+   **Then** the field remains immediately editable, a clear and actionable localized message
+   indicates the value is invalid, and the unparseable text is never passed to `calculate()`/its
+   milling counterparts (FR-006b).
 
 ---
 
@@ -223,7 +228,21 @@ User Story 1's navigation shell rather than exited or reset.
   same mechanism PR #94's dialogs already use), per FR-007's "calculate() calls already wired up";
   it does not require new validation logic, only that this feature's right pane actually display
   what that existing mechanism already produces. Mirrors 017's own clear-actionable-message
-  guarantee for invalid input (017 Acceptance Scenario 2).
+  guarantee for invalid input (017 Acceptance Scenario 2) for the *out-of-range/unknown-selection*
+  portion of that guarantee specifically — `calculate()` and its milling counterparts already
+  re-validate every field internally regardless of caller (verified: an out-of-range diameter,
+  depth, *or* an unknown material name each independently produce their own `ErrorInfo`, not just
+  diameter), so FR-006a's single mechanism covers all of them once the field holds a parseable
+  numeric value or a valid selection.
+- **FR-006b**: A numeric left-pane field containing text that cannot be parsed as a number at all
+  (017 Acceptance Scenario 2's "wrong type" case) MUST NOT be passed to `calculate()`/
+  `calculate_end_milling()`/`calculate_face_milling()` — those functions expect an already-parsed
+  float and cannot themselves reject unparseable text the way they reject an out-of-range value.
+  The field MUST remain immediately editable to correct it, and the application MUST show a clear,
+  actionable, localized indication that the value is invalid, distinct from FR-006a's
+  calculate()-rejected-combination message. This is the one part of 017's Acceptance Scenario 2
+  guarantee FR-006a's reuse-`calculate()`'s-own-errors mechanism cannot cover, since it never
+  reaches `calculate()` in the first place.
 - **FR-007**: The right pane MUST refresh automatically when a left-pane input changes, without a
   separate manual "calculate" action, mirroring the same `calculate()`/`calculate_end_milling()`/
   `calculate_face_milling()` calls PR #94 already wires up.
