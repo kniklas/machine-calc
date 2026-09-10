@@ -189,26 +189,37 @@ mfgparams
 ```
 
 (`python -m mfgparams` and `python -m mfgparams.console` reach the same
-interface.) A full-screen menu opens with **Machining**, **Configuration**,
-**About**, and **Help** — navigate with the arrow keys and Enter, or a
-menu item's underlined keyboard shortcut. Choosing **Machining** opens a
-submenu of **Milling** and **Drilling**; choosing **Milling** asks for the
-sub-operation (end milling or face milling) before continuing.
+interface.) A persistent menu bar stays visible across the top of the
+screen: **Exit**, **Machining**, **Configuration**, **About**, **Help** —
+navigate with the arrow keys and Enter, or an item's underlined keyboard
+shortcut. Choosing **Machining** expands a tree in place, showing
+**Milling** and **Drilling**; selecting **Drilling** further expands a
+tool-selection shortcut into the same field its own screen shows.
 
-Choosing **Drilling** leads to the drilling flow (unit system, mode,
-material, tool, geometry); choosing **Milling** leads to the equivalent
-milling flow. After each result, dismissing it returns to the top-level
-menu so you can start another calculation — the same operation or a
-different one — without leaving the text GUI; each operation remembers its
-own previous answers as defaults for the rest of the session.
+Opening Drilling or Milling shows a split-pane screen: the left pane lists
+every input for that operation at once — unit system, calculation mode,
+material type/material, tool, and the operation's geometry fields (plus,
+for Milling, the end-milling/face-milling choice) — all simultaneously
+visible and editable, with no separate screen per field. The right pane
+shows the live result, refreshing automatically as you fill in or change an
+input. A numeric field becomes editable the instant you select it (typing a
+digit edits it immediately), and Left/Right nudges it by a small step;
+radio fields (unit system, mode, material type, material, tool,
+sub-operation) cycle their options on Left/Right.
 
-For drilling, the calculation-mode screen (`standard`, `power-constrained`,
-`fixed-rpm`) appears right after the unit-system screen; `power-constrained`
-then asks for a required available power, and `fixed-rpm` asks for a
-required target spindle speed (with an optional advisory available power).
-Milling (both end milling and face milling) shows the same calculation-mode
-screen at the same point in the sequence, right after the unit-system
-screen and before material selection.
+Escape moves focus back to the menu bar without closing the open screen or
+changing the tree's expand/collapse state; Escape again, from the menu bar,
+closes the screen and returns you to the menu bar/tree, so you can start
+another calculation — the same operation or a different one — without
+leaving the text GUI. Each operation remembers its own previous answers as
+defaults for the rest of the session.
+
+For drilling, the calculation-mode field (`standard`, `power-constrained`,
+`fixed-rpm`) sits right after unit system in the left pane;
+`power-constrained` then makes available power a required field, and
+`fixed-rpm` adds a required target spindle speed (with an optional advisory
+available power). Milling (both end milling and face milling) presents the
+same calculation-mode field in the same position.
 
 ### Material selection is two-step
 
@@ -315,6 +326,65 @@ Principle VIII). Which catalog depends on what the string is:
 
 See [`specs/015-console-i18n-relocation/contracts/catalogue-ownership-contract.md`](specs/015-console-i18n-relocation/contracts/catalogue-ownership-contract.md)
 for the full rule, including two narrow, explicitly documented exceptions.
+
+### `console/tui/` architecture
+
+The text GUI (`mfgparams/console/tui/`) is one persistent
+[prompt-toolkit](https://python-prompt-toolkit.readthedocs.io/) `Application`
+for the whole session, constructed once by `app.py`'s `build_app()` — not a
+chain of short-lived, per-screen `Application`s the way the 017-era dialog
+chain worked (prompt-toolkit does not support a second, nested
+`Application.run()` call, which is exactly why that model changed). Three
+kinds of state stay deliberately separate:
+
+- **`SessionUI`** (`app.py`) — the session-lifetime, business-relevant state:
+  the menu bar's fixed entries, the Machining tree's expand/collapse flags
+  (`MachiningTree`), which operation screen (if any) is open
+  (`OperationScreen`), and each operation's own remembered inputs
+  (`DrillingSessionState`/`MillingSessionState`, one instance per operation —
+  two for Milling, one per sub-operation — so revisiting a screen offers the
+  previous answers as defaults). `tree` and `open_operation` are independent
+  fields with no code path writing both from the same handler: collapsing the
+  tree never closes an open operation, and vice versa.
+- **`_ViewState`** (`app.py`, module-private) — pure UI-presentation state
+  that does *not* survive a body change on purpose: which body is currently
+  shown (`body_mode`) and which row is highlighted within it. Kept separate
+  from `SessionUI` so, for example, selecting Configuration from the bar
+  never touches the Machining tree's own state.
+- **`OperationScreen.field_buffer`** — the raw, possibly mid-typed text of
+  whichever numeric field is currently selected in a split-pane screen (see
+  below), distinct from that field's last-committed value.
+
+Four widgets render as pure functions of this state — `menu.render_menu_bar`,
+`machining_menu.render_tree`, `screens.about.render_about`,
+`screens.help.render_help` — rather than each owning its own dialog/`Layout`.
+The Drilling/Milling screens (`screens/drilling.py`, `screens/milling.py`)
+are built the same way but share one more layer,
+`screens/split_pane.py`: each screen's `rows_for()` returns a list of
+`RadioRow`/`NumberRow` describing that operation's current fields (a later
+row's presence or options can depend on an earlier row's committed value —
+e.g. the specific-material row only appears once a material type is chosen
+— so the list is rebuilt every render, not cached), and `split_pane.py`
+owns the shared navigation/instant-edit/nudge logic and the right pane's
+three-state result machine (placeholder while incomplete; a result once
+every required field validates; an error either from `calculate()` itself
+rejecting a complete-but-invalid combination, or from text that never
+parses as a number at all). Deliberately, this module does *not*
+re-validate field ranges itself — `calculate()`/`calculate_end_milling()`/
+`calculate_face_milling()` already re-validate every field internally
+regardless of caller, so the split pane's only extra job is catching input
+that can never reach those functions in the first place (unparseable text).
+
+Testing drives the real `Application` headlessly:
+`prompt_toolkit.output.DummyOutput` renders nowhere, and
+`prompt_toolkit.input.create_pipe_input` feeds a scripted key sequence from a
+background thread (with explicit `contextvars` propagation — a plain
+`threading.Thread` does not inherit prompt-toolkit's ambient input/output
+context). `tests/integration/_tui_test_support.py`'s `run_headless()`
+supports an `on_batch` hook that runs between each batch of keys, so a test
+can inspect `SessionUI`/`OperationScreen` state mid-session (e.g. confirming
+the right pane shows a placeholder before every field is complete), not just
+after the whole script finishes.
 
 ## Run the tests
 

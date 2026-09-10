@@ -253,10 +253,10 @@ is usable end to end (quickstart.md Scenarios 1-6).
       `tests/integration/test_tui_app_run.py`, `tests/integration/test_tui_static_screens.py`, and
       `tests/integration/test_tui_i18n.py` still pass against the rewritten `app.py` — research.md
       flags this as needing confirmation, not assumed
-- [ ] T034 [P] Add the `console/tui/` architecture docs page 017's own tasks.md left outstanding
+- [X] T034 [P] Add the `console/tui/` architecture docs page 017's own tasks.md left outstanding
       (Constitution Principle VII, Carried-Over Items table) — write it now that this feature's
       architecture (this plan) is settled
-- [ ] T035 [P] Update Sphinx end-user docs: replace the old menu/dialog-chain navigation
+- [X] T035 [P] Update Sphinx end-user docs: replace the old menu/dialog-chain navigation
       instructions with the new persistent menu-bar/tree/split-pane model (Constitution Principle
       VII)
 - [X] T036 Bump `src/mfgparams/__init__.py`'s `__version__` from `"2.0.0"` to `"2.1.0"` (MINOR, not

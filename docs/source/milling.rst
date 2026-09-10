@@ -13,18 +13,33 @@ Launch the text GUI with::
 
     mfgparams
 
-From the top-level menu choose **Machining**, then **Milling** from the
-submenu. The first screen asks for the sub-operation — **end milling** or
-**face milling** — followed by unit system, calculation mode, material
-type, material, and the appropriate tool (end-mill or face-mill). Choosing
-**Drilling** from the same submenu instead leads to the flow described in
-:doc:`drilling`.
+A persistent menu bar stays visible at the top of the screen: **Exit**,
+**Machining**, **Configuration**, **About**, **Help**. Selecting
+**Machining** expands a tree in place, showing **Milling** and
+**Drilling**; selecting **Milling** opens a two-pane screen. The left pane
+lists every milling input at once — the sub-operation choice (**end
+milling** or **face milling**), unit system, calculation mode, material
+type, material, and the appropriate tool (end-mill or face-mill), plus the
+geometry fields below — all simultaneously visible and editable, with no
+separate screen per field; the right pane shows the live result, updating
+automatically as you fill in or change an input. Changing the sub-operation
+choice switches which set of remembered answers the rest of the screen
+shows, without closing and reopening it. Selecting **Drilling** from the
+tree instead leads to the flow described in :doc:`drilling`.
 
-After a result is shown, dismissing it returns to the top-level menu, so you
-can start another calculation without leaving the text GUI. Each operation
-(and each milling sub-operation) remembers its *own* previous answers as
-defaults for the rest of the session, so switching from end milling to
-drilling and back does not lose your milling inputs.
+Numeric fields become editable the instant you select them — start typing
+a digit and it edits immediately, no separate "start editing" step.
+Left/Right also nudges a selected numeric field up or down by a small
+step. Radio fields (sub-operation, unit system, mode, material type,
+material, tool) cycle through their options on Left/Right.
+
+Pressing Escape moves focus back to the menu bar without closing the open
+screen; pressing Escape again, from the menu bar, closes it and returns to
+the menu bar/tree, letting you start another calculation without leaving
+the text GUI. Each operation (and each milling sub-operation) remembers its
+*own* previous answers as defaults for the rest of the session, so
+switching from end milling to drilling and back does not lose your milling
+inputs.
 
 End milling inputs
 ------------------
@@ -66,24 +81,23 @@ mode: ``standard``, ``power-constrained``, or ``fixed-rpm``.
     power exceeds it, the result is shown anyway with a warning.
 
 ``power-constrained``
-    Available power becomes a **required** screen instead of an optional
+    Available power becomes a **required** field instead of an optional
     one. If your machine can already deliver the calculated power the
     result is unchanged. Otherwise the spindle speed is reduced until the
     power required matches what you supplied exactly, and the result label
     reads "adjusted to fit available power" instead of "recommended". A
-    budget too small for any feasible spindle speed is rejected and
-    re-shown for correction.
+    budget too small for any feasible spindle speed produces an error in
+    the right pane — correct the available-power field in place to retry.
 
 ``fixed-rpm``
-    Adds a required "Target spindle speed (RPM)" screen. The spindle speed
+    Adds a required "Target spindle speed (RPM)" field. The spindle speed
     in the result is exactly what you entered — labeled "user-specified" —
     and every other value is recomputed for that speed. Available power
     stays optional/advisory here too, so an insufficient machine still
     produces a result, with a warning.
 
-Starting another Milling calculation from the menu lets you pick a
-different mode; any previous mode's power/RPM answer is cleared rather than
-carried over as a stale default.
+Switching mode on an open Milling screen clears any previous mode's
+power/RPM answer rather than carrying it over as a stale default.
 
 Reading the results
 -------------------
@@ -114,9 +128,13 @@ what the machine can deliver.
 Limits and validation
 ---------------------
 
-Milling inputs are validated before anything is calculated, and an invalid
-value is re-prompted rather than aborting the session. The bounds are
-configurable (see the configuration documentation); the defaults are:
+Milling inputs are validated as part of the calculation itself: an
+out-of-range value produces a clear, actionable error in the right pane
+rather than a result, and the field stays editable in place to correct it
+— nothing is discarded and the session never aborts. Text that cannot be
+parsed as a number at all is caught even earlier, before it ever reaches
+the calculation, with its own distinct message. The bounds are configurable
+(see the configuration documentation); the defaults are:
 
 ===============================  ==========  =========================================
 Setting                          Default     Applies to

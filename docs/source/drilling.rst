@@ -13,21 +13,36 @@ Launch the text GUI with::
     mfgparams
 
 (equivalently, ``python -m mfgparams`` or ``python -m mfgparams.console`` —
-all three reach the same interface.) The top-level menu offers **Machining**,
-**Configuration**, **About**, and **Help**; each item is reachable with the
-arrow keys and Enter, or its underlined keyboard shortcut. Choosing
-**Machining** opens a submenu of **Milling** and **Drilling** — selecting
-**Drilling** walks through a sequence of screens for unit system,
-calculation mode, material type, material, drilling tool, drill diameter,
-hole depth, and available power, in that order, before showing the result.
-Choosing **Milling** instead switches to the flow described in
-:doc:`milling`.
+all three reach the same interface.) A persistent menu bar stays visible at
+the top of the screen: **Exit**, **Machining**, **Configuration**, **About**,
+**Help** — each reachable with the arrow keys and Enter, or its underlined
+keyboard shortcut. Selecting **Machining** expands a tree in place, showing
+**Milling** and **Drilling**; selecting **Drilling** further expands a
+tool-selection shortcut. Opening Drilling — either that shortcut, or the
+Drilling leaf itself — shows a two-pane screen: the left pane lists every
+drilling input at once (unit system, calculation mode, material type,
+material, drilling tool, drill diameter, hole depth, available power), all
+simultaneously visible and editable, with no separate screen per field; the
+right pane shows the live result, updating automatically as you fill in or
+change an input. Choosing **Milling** instead switches to the flow described
+in :doc:`milling`.
 
-After a result is shown, dismissing it returns to the top-level menu, so you
-can start another calculation — the same operation or a different one —
-without leaving the text GUI. Each operation remembers its *own* previous
-answers as defaults for the rest of the session, so switching from drilling
-to milling and back does not lose your drilling inputs.
+Numeric fields (drill diameter, hole depth, available power) become
+editable the instant you select them — start typing a digit and it edits
+immediately, no separate "start editing" step. Left/Right also nudges a
+selected numeric field up or down by a small step. Radio fields (unit
+system, mode, material type, material, tool) cycle through their options on
+Left/Right.
+
+Pressing Escape moves focus back to the menu bar without closing the open
+operation screen or changing the tree's expand/collapse state — so you can
+collapse the Machining tree to see more of the screen without losing your
+place. Pressing Escape again, from the menu bar, closes the operation and
+returns to the menu bar/tree, letting you start another calculation — the
+same operation or a different one — without leaving the text GUI. Each
+operation remembers its *own* previous answers as defaults for the rest of
+the session, so switching from drilling to milling and back does not lose
+your drilling inputs.
 
 Drilling inputs
 ----------------
@@ -54,28 +69,26 @@ mode: ``standard``, ``power-constrained``, or ``fixed-rpm``.
     power exceeds it, the result is shown anyway with a warning.
 
 ``power-constrained``
-    Available power becomes a **required** screen instead of an optional
+    Available power becomes a **required** field instead of an optional
     one, and the result label always reads "adjusted to fit available
     power" instead of "recommended" — regardless of whether an adjustment
     actually happened. If your machine can already deliver the calculated
     power the numeric values are unchanged even though the label switches.
     Otherwise the spindle speed is reduced until the power required
     matches what you supplied exactly. A budget too small for any feasible
-    spindle speed is **not** re-prompted at this step — the calculation
-    itself fails with an "infeasible power budget" error, which is
-    displayed in place of a result, and dismissing it returns to the
-    top-level menu rather than asking for available power again.
+    spindle speed produces an "infeasible power budget" error in the right
+    pane in place of a result — correct the available-power field in place
+    to retry, without leaving the screen.
 
 ``fixed-rpm``
-    Adds a required "Target spindle speed (RPM)" screen. The spindle speed
+    Adds a required "Target spindle speed (RPM)" field. The spindle speed
     in the result is exactly what you entered — labeled "user-specified" —
     and every other value is recomputed for that speed. Available power
     stays optional/advisory here too, so an insufficient machine still
     produces a result, with a warning.
 
-Starting another Drilling calculation from the menu lets you pick a
-different mode; any previous mode's power/RPM answer is cleared rather than
-carried over as a stale default.
+Switching mode on an open Drilling screen clears any previous mode's
+power/RPM answer rather than carrying it over as a stale default.
 
 Reading the results
 --------------------
@@ -102,13 +115,13 @@ beyond what the machine can deliver.
 Limits and validation
 ----------------------
 
-The drill diameter and hole depth are validated before anything is
-calculated, and an invalid value at either prompt is re-prompted rather
-than aborting the session (unlike available power or a power-constrained
-budget — see "Calculation modes" and "Reading the results" above, where an
-invalid/infeasible value instead produces a warning or an error result).
-The interactive CLI always validates diameter and depth against these
-fixed bounds:
+Drill diameter and hole depth are validated as part of the calculation
+itself: an out-of-range value produces a clear, actionable error in the
+right pane rather than a result, and the field stays editable in place to
+correct it — nothing is discarded and the session never aborts. Text that
+cannot be parsed as a number at all (rather than a number that is merely
+out of range) is caught even earlier, before it ever reaches the
+calculation, with its own distinct message. The bounds themselves are:
 
 ===============================  ==========  =========================================
 Setting                          Default     Applies to
