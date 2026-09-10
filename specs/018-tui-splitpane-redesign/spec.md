@@ -155,8 +155,13 @@ User Story 1's navigation shell rather than exited or reset.
 ### Edge Cases
 
 - What happens when the terminal is too small for the menu bar + two panes, even if it met 017's
-  25×80 floor for a single dialog? (See Assumptions — the floor may need revisiting; the
-  recommended prototype step should surface whether it does.)
+  25×80 floor for a single dialog? (See the revised terminal-size Assumption — the floor likely
+  needs raising; the completed prototype gave concrete row-count evidence, though the full screen
+  with menu bar and tree together still needs a follow-up pass to confirm the exact number.)
+- What happens when the terminal is resized mid-session, with left-pane input already entered but
+  not yet submitted? (FR-013a: the application MUST adapt without discarding it — a requirement
+  that needs re-verifying for this feature's persistent, long-lived `Application`, not assumed
+  carried over from 017's short-lived, per-screen `Application` construction.)
 - How does the system handle the user switching from Milling to Drilling (or vice versa) via the
   tree while the left pane has partially-entered, unsaved input for the operation being left? (Per
   017's existing per-operation session-state pattern, each operation's own state should be
@@ -233,6 +238,15 @@ User Story 1's navigation shell rather than exited or reset.
   + tree + operation screen together) and raised if it doesn't fit, per the revised Assumption
   below. Preserving the number unchanged despite a layout that may no longer fit it would admit
   terminals too small to show every simultaneous input FR-005 requires.
+- **FR-013a**: The application MUST adapt to a terminal resize occurring mid-session without
+  discarding already-entered, not-yet-submitted left-pane input — carrying forward 017's FR-008
+  resize guarantee, which FR-013 above does not otherwise restate. This needs an explicit
+  requirement again, not an assumed carryover: 017's dialog-chain screens got this for free from
+  prompt-toolkit's own per-`Application` redraw-on-resize behavior (each screen a short-lived,
+  independently-constructed `Application`, so there was never a *cross-screen* state-loss risk to
+  guard against — see `tui/app.py`'s note on FR-008). This feature's persistent, long-lived
+  menu-bar/tree/pane `Application` is a materially different shape that has not itself been
+  verified to preserve in-progress input across a resize.
 - **FR-014**: The Configuration menu item's actual capability (view-only vs. create/edit) MUST be
   resolved as part of this feature rather than carried forward as an open question a third time
   (see Assumptions) — a menu bar entry is being rebuilt regardless, and the two supporting screens
