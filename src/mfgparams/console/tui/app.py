@@ -426,12 +426,16 @@ def build_app(  # noqa: C901
         if view.body_mode in ("drilling", "milling") and ui.open_operation is not None:
             return VSplit(
                 [
-                    Window(content=left_control),
+                    Window(content=left_control, wrap_lines=True),
                     Window(width=1, char="│"),
-                    Window(content=right_control),
+                    # FR-018: prompt-toolkit's own `Window` default is
+                    # `wrap_lines=False` -- without this, a result line
+                    # longer than the pane's width would overflow/truncate
+                    # instead of wrapping.
+                    Window(content=right_control, wrap_lines=True),
                 ]
             )
-        return Window(content=body_control)
+        return Window(content=body_control, wrap_lines=True)
 
     def _activate_bar_entry() -> None:
         entry = bar_entries[view.bar_selected]

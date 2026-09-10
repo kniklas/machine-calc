@@ -156,3 +156,31 @@ def test_milling_shares_the_same_three_state_contract():
     )
     text = "".join(t for _, t in fragments)
     assert translate("en", "tui.result.title") in text
+
+
+def test_the_left_and_right_pane_windows_wrap_long_lines():
+    """FR-018: prompt-toolkit's own `Window` defaults to `wrap_lines=False`
+    -- without explicitly overriding it, a result line wider than the pane
+    would overflow/truncate instead of wrapping. Checked against the real,
+    built `Layout` (not just re-reading the source), since this is exactly
+    the kind of default that's easy to silently lose in a future refactor."""
+
+    from mfgparams.console.tui import app as app_mod
+
+    application, ui, view = app_mod.build_app(None, "en", "en")
+    ui.open_operation = OperationScreen(
+        operation="drilling",
+        session_state=DrillingSessionState(),
+        selected_field=FieldId.UNIT_SYSTEM,
+    )
+    view.body_mode = "drilling"
+
+    def _wraps(window) -> bool:
+        wrap = window.wrap_lines
+        return bool(wrap()) if callable(wrap) else bool(wrap)
+
+    wrapping_windows = [w for w in application.layout.find_all_windows() if _wraps(w)]
+    # Exactly the left and right pane content windows -- not the bar or the
+    # bar/body separator, which render fixed decorative content that never
+    # needs wrapping.
+    assert len(wrapping_windows) == 2
