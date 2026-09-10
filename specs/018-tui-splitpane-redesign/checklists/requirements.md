@@ -14,7 +14,7 @@
 ## Requirement Completeness
 
 - [x] No [NEEDS CLARIFICATION] markers remain
-- [x] Requirements are testable and unambiguous
+- [ ] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
 - [x] All acceptance scenarios are defined
@@ -31,16 +31,19 @@
 
 ## Notes
 
-- "Requirements are testable and unambiguous" is checked under the same interpretation 017's
-  checklist used: two genuinely open questions (Configuration's view-vs-edit scope; whether
-  "drilling type" is a new domain concept or a relocation of the existing tool-selection field) are
-  recorded in Assumptions with a reasonable default and an explicit flag for `/speckit-clarify`,
-  rather than as blocking `[NEEDS CLARIFICATION]` markers — following this repo's own established
-  precedent for the first of the two (017's Configuration-scope question was carried the same way
-  across `/speckit-plan`/`/speckit-tasks`/`/speckit-analyze` without blocking progress). Every
-  requirement itself (FR-001 through FR-018 — three added after a throwaway UX prototype confirmed
-  their interaction details, per spec.md's Recommended Next Steps) is independently testable as
-  written; it is the two
-  flagged Assumptions, not the requirements, that carry open questions.
-- Per the spec's own "Recommended Next Steps" section, `/speckit-plan` should not run until a
-  throwaway UX prototype has been tried in a real terminal.
+- **"Requirements are testable and unambiguous" is deliberately left unchecked.** Unlike 017's
+  Configuration-scope ambiguity — which lived only in that spec's Assumptions section and never
+  appeared inside a MUST clause — this spec's FR-003, FR-005, and FR-009a explicitly say their own
+  drilling-type/sub-operation-placement question is "pending `/speckit-clarify` resolution" inside
+  the requirement text itself. A requirement that names its own pending branch is not yet
+  unambiguous as written, even with a reasonable default recorded. (017's precedent still applies
+  to the Configuration-scope Assumption, which — like 017's — is not referenced inside a MUST
+  clause; only the drilling-type/sub-operation question changes this checkbox's answer.) Re-check
+  this once `/speckit-clarify` resolves FR-003/FR-005/FR-009a's open question.
+- Every requirement itself (FR-001 through FR-018, FR-009a) is otherwise independently testable;
+  it is specifically FR-003/FR-005/FR-009a's shared open question — not the Configuration-scope
+  Assumption, and not any other requirement — that keeps the checkbox above unchecked.
+- **Done: a throwaway UX prototype was tried in a real terminal**, per the spec's own "Recommended
+  Next Steps" section (now updated to record what it found). The remaining gate before
+  `/speckit-plan` is `/speckit-clarify` on the two flagged Assumptions (Configuration scope;
+  drilling-type/sub-operation placement), not the prototype.

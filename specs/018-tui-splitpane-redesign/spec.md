@@ -208,6 +208,15 @@ User Story 1's navigation shell rather than exited or reset.
   application (parity with PR #94's Acceptance Scenario 3).
 - **FR-009**: Milling MUST follow the identical left-pane/right-pane interaction pattern as
   Drilling, differing only in which fields the left pane presents.
+- **FR-009a**: Selecting Milling MUST still require the user to choose between End Milling and
+  Face Milling (`MillingSubOperation`) before or within the Milling screen — PR #94's existing
+  distinction, not something this redesign may drop. Both calculation paths
+  (`calculate_end_milling()`/`calculate_face_milling()`) MUST remain reachable; an implementation
+  that omits this choice makes one of the two unreachable. Exactly where the choice lives (the
+  Machining tree, alongside Drilling's own tree-level choice per FR-003, or a left-pane field) is
+  not a second, independent open question: FR-009's identical-pattern requirement means it follows
+  whatever FR-003/FR-005's `/speckit-clarify` resolution decides for Drilling's own equivalent
+  choice.
 - **FR-010**: The application MUST remain fully operable via keyboard alone; no action may require
   mouse/pointer interaction (unchanged from 017).
 - **FR-011**: The application MUST reuse the existing i18n message catalog mechanism
@@ -216,16 +225,23 @@ User Story 1's navigation shell rather than exited or reset.
 - **FR-012**: The application MUST reuse `DrillingSessionState`/`MillingSessionState`'s existing
   field semantics and default-carryover-across-visits behavior (including PR #94's mode-switch and
   unit-system-switch fixes) rather than reintroducing equivalent state from scratch.
-- **FR-013**: The application MUST preserve PR #94's entry-point gating unchanged: no-TTY
-  detection, terminal-too-small detection, and the missing-`console`-extra message all continue to
-  run before any prompt-toolkit object is constructed.
+- **FR-013**: The application MUST preserve PR #94's entry-point gating *mechanism* unchanged:
+  no-TTY detection, terminal-too-small detection, and the missing-`console`-extra message all
+  continue to run before any prompt-toolkit object is constructed. This is about the gating
+  sequence, not the specific 25×80 threshold `terminal_capability.py` currently checks against —
+  that threshold MUST instead be validated against this feature's actual complete layout (menu bar
+  + tree + operation screen together) and raised if it doesn't fit, per the revised Assumption
+  below. Preserving the number unchanged despite a layout that may no longer fit it would admit
+  terminals too small to show every simultaneous input FR-005 requires.
 - **FR-014**: The Configuration menu item's actual capability (view-only vs. create/edit) MUST be
   resolved as part of this feature rather than carried forward as an open question a third time
   (see Assumptions) — a menu bar entry is being rebuilt regardless, and the two supporting screens
   should not be shipped, then re-opened, twice.
-- **FR-015**: If the Configuration screen remains view-only, it MUST cover all three tool
-  registries (drilling, end-mill, face-mill), not only drilling's — closing the gap Copilot's
-  review of PR #94 found and deferred.
+- **FR-015**: The Configuration screen MUST cover all three tool registries (drilling, end-mill,
+  face-mill), not only drilling's — closing the gap Copilot's review of PR #94 found and deferred.
+  This applies regardless of which way FR-014 resolves: a create/edit Configuration screen that
+  still exposes only drilling's registry leaves the same gap PR #94 shipped, just in a different
+  screen mode.
 - **FR-016**: A plain numeric left-pane field (diameter, hole depth, available power, target RPM in
   Fixed RPM mode, and Milling's additional geometry fields) MUST become editable the moment it is
   selected/highlighted — typing a
@@ -294,7 +310,10 @@ User Story 1's navigation shell rather than exited or reset.
   a UI relocation of the existing tool choice — as the reasonable default consistent with "feature
   parity, not feature growth" (017's own operating assumption), but flags (b) explicitly for
   `/speckit-clarify` to confirm or override before `/speckit-plan`, since it changes whether any
-  core/`processes.machining.drilling` code needs to change at all.
+  core/`processes.machining.drilling` code needs to change at all. **This question also covers
+  where Milling's own End-Milling/Face-Milling choice (FR-009a) lives** — tree or left pane — since
+  FR-009 requires Milling to follow Drilling's pattern exactly; `/speckit-clarify`'s answer here
+  should address both operations' placement together, not just Drilling's.
 - **The 25×80 minimum terminal size (017's FR-011) likely needs raising, not just carrying
   forward, based on the recommended prototype's measured pane height.** Milling's left pane (13
   fields including the always-present available-power field, 14 with Fixed RPM's extra target-RPM
