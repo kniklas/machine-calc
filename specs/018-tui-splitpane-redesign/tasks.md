@@ -274,7 +274,7 @@ is usable end to end (quickstart.md Scenarios 1-6).
 
 ## Phase 7: Convergence
 
-- [ ] T040 Reconcile `contracts/console-tui-splitpane-contract.md` §5's "no `tui.*` key from 017 is
+- [X] T040 Reconcile `contracts/console-tui-splitpane-contract.md` §5's "no `tui.*` key from 017 is
       retired solely by this feature" note with `tui.configuration.select_material_type`'s removal
       (Configuration's rewrite to a static, all-registries view made its per-type-selection dialog
       obsolete, so the key is genuinely unused — confirmed absent from `src/`/`tests/`) — amend §5 to

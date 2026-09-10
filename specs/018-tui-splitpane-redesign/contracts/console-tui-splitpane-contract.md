@@ -94,7 +94,13 @@ the same contract test.
 - Every new message key introduced by this feature is namespaced `tui.*`, the same namespace 017
   already established — no new namespace needed, and no `tui.*` key from 017 is retired solely by
   this feature (menu bar/tree/pane labels reuse or extend that catalog; only the widgets rendering
-  them change).
+  them change). **Named exception**: `tui.configuration.select_material_type` ("View materials for
+  type:") is retired — it labeled 017's Configuration dialog's per-type selection prompt, and
+  FR-014's view-only resolution replaced that whole interactive flow with a single static listing
+  covering all three registries (FR-015), so the prompt it labeled no longer exists anywhere for it
+  to label. This is the one case in this feature where the widget rendering a key is removed
+  entirely, not just changed — the key's *continued existence with no consumer* would itself be
+  Principle VIII drift (an orphaned catalog entry), not a way of honoring this rule.
 - `tests/static/test_console_catalogue_ownership.py` already scans every non-`locales` file under
   `mfgparams/console/` (017's generalization) — no further generalization needed; new files this
   feature adds under `tui/` are covered automatically.
