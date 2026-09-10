@@ -99,7 +99,11 @@ def render_menu_bar(
             fragments.append((style, entry.label))
             continue
         pos = entry.label.lower().index(mnemonic)
-        before, marked, after = entry.label[:pos], entry.label[pos : pos + 1], entry.label[pos + 1 :]
+        before, marked, after = (
+            entry.label[:pos],
+            entry.label[pos : pos + 1],
+            entry.label[pos + 1 :],
+        )
         fragments.append((style, before))
         fragments.append((f"{style} class:mnemonic", marked))
         fragments.append((style, after))

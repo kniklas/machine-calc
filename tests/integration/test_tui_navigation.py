@@ -52,7 +52,12 @@ def _drive(key_batches: list[str]) -> list[tuple]:
         if ui is None:
             return
         snapshots.append(
-            (view.body_mode, ui.tree.expanded, ui.tree.drilling_expanded, ui.open_operation is not None)
+            (
+                view.body_mode,
+                ui.tree.expanded,
+                ui.tree.drilling_expanded,
+                ui.open_operation is not None,
+            )
         )
 
     run_headless(target, key_batches, on_batch=on_batch)
@@ -167,3 +172,55 @@ def test_reopening_drilling_preserves_its_state_across_a_tree_collapse():
     # Every snapshot while Drilling was open is the *same* object -- the
     # tree toggle in between did not discard and recreate it.
     assert all(s is drilling_screens[0] for s in drilling_screens)
+
+
+def test_collapsing_the_tree_does_not_hide_tool_selection_from_the_left_pane():
+    """018-tui-splitpane-redesign tasks.md T018 -- contract §2's own
+    invariant, checked at the exact granularity it's stated at: FR-005's
+    tool-selection field (not just "some screen is open") must still be
+    present and reachable in the left pane's row list once the tree is
+    collapsed, since FR-005a's whole point is that it was never
+    exclusively tree-resident in the first place."""
+
+    from mfgparams.console.tui.app import FieldId
+    from mfgparams.console.tui.screens.drilling import rows_for
+
+    locale = get_locale()
+    display_locale = get_raw_locale()
+    holder: dict = {}
+
+    def target() -> None:
+        app, ui, view = app_mod.build_app(None, locale, display_locale)
+        holder["ui"] = ui
+        holder["view"] = view
+        app.run()
+
+    field_id_sets = []
+
+    def on_batch() -> None:
+        ui = holder.get("ui")
+        if ui is None or ui.open_operation is None or ui.open_operation.operation != "drilling":
+            return
+        rows = rows_for(ui.open_operation, None, locale, display_locale)
+        field_id_sets.append({row.field_id for row in rows})
+
+    run_headless(
+        target,
+        [
+            "m",  # expand Machining, focus tree
+            "j",  # Drilling row
+            "\r",  # toggle its tool-selection shortcut open
+            "j",  # Tool row
+            "\r",  # opens Drilling
+            "\x1b",  # focus back to bar; Drilling stays open
+            "m",  # re-select Machining from the bar: collapses the tree
+            "\x1b",  # closes Drilling
+            "\x1b",  # nothing open -> exit
+        ],
+        on_batch=on_batch,
+    )
+
+    assert field_id_sets, "Drilling was never open while inspected"
+    assert all(
+        FieldId.TOOL in ids for ids in field_id_sets
+    ), "tool selection dropped out of the left pane's row list while the tree was collapsed"

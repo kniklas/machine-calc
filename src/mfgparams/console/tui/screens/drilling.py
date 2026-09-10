@@ -1,16 +1,20 @@
-"""The Drilling parameter-entry screen (FR-002).
+"""The Drilling operation screen (FR-002/FR-004/FR-005).
 
-Ports `console/cli.py`'s `_run_drilling_session` prompt sequence (research.md
-#3) onto `forms.py`'s dialog primitives, calling `mfgparams.calculate`
-unchanged. `DrillingSessionState` mirrors `_DrillingSessionState`: one
-instance lives for the whole app session (owned by `tui/app.py`), so
-revisiting this screen after a calculation offers the previous answers as
-defaults, exactly as the REPL's loop did (FR-002, SC-005 parity).
+`DrillingSessionState` mirrors `console/cli.py`'s (retired) `_DrillingSessionState`
+unchanged (FR-012): one instance lives for the whole app session (owned by
+`SessionUI`), so revisiting this screen after a calculation offers the
+previous answers as defaults, exactly as the REPL's loop did (FR-002,
+SC-005 parity). `rows_for` builds this screen's own `split_pane.Row` list
+(T021) every render -- later rows' presence/options can depend on earlier
+rows' committed values (material depends on material_type; target_rpm only
+applies in Fixed RPM mode), the same reason `machining_menu.tree_rows`
+recomputes its row list every render rather than caching it.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import cast
 
 from mfgparams import (
     CalculationMode,
@@ -20,12 +24,19 @@ from mfgparams import (
     list_materials,
     list_tools,
 )
-from mfgparams.config import Configuration
-from mfgparams.console.i18n import DEFAULT_LOCALE, translate
+from mfgparams.console.i18n import translate
 from mfgparams.console.tui import forms
-from mfgparams.validation import validate_depth_mm, validate_diameter_mm
+from mfgparams.console.tui.app import FieldId, OperationScreen
+from mfgparams.console.tui.screens import split_pane
+from mfgparams.models import CalculationResult
+from mfgparams.processes.machining.drilling.tools import get_tool
+from mfgparams.registry import get_material
 
-_DEFAULT_CONFIG = Configuration()
+_MODE_OPTION_KEYS = {
+    CalculationMode.STANDARD: "tui.mode.standard",
+    CalculationMode.POWER_CONSTRAINED: "tui.mode.power_constrained",
+    CalculationMode.FIXED_RPM: "tui.mode.fixed_rpm",
+}
 
 
 @dataclass
@@ -44,118 +55,6 @@ class DrillingSessionState:
     mode: CalculationMode = CalculationMode.STANDARD
     target_rpm: float | None = None
     previous_mode: CalculationMode = CalculationMode.STANDARD
-
-
-def run_drilling_screen(
-    state: DrillingSessionState,
-    materials_config_path: str | None,
-    locale: str,
-    display_locale: str,
-) -> None:
-    """Run one drilling prompt/calculate/display pass, or return early
-    ("go back" to the Machining menu) if the user cancels any field."""
-
-    material_types = list_material_types(config_path=materials_config_path)
-    tools = list_tools(config_path=materials_config_path)
-
-    unit_system = forms.ask_unit_system(default=state.unit_system, locale=locale)
-    if unit_system is None:
-        return
-    _convert_on_unit_change(state, unit_system)
-    state.unit_system = unit_system
-    labels = forms.UNIT_LABELS[state.unit_system]
-
-    mode = forms.ask_mode(default=state.mode, locale=locale)
-    if mode is None:
-        return
-    # Mode switch (mirrors cli.py's _run_drilling_session): the new mode's
-    # power/RPM field(s) shouldn't default to a value carried over from a
-    # *different* mode. Committing that to `state` happens only once
-    # `_prompt_power_or_rpm` below actually succeeds, not here -- otherwise
-    # cancelling anywhere after this point would permanently discard the
-    # previous mode's still-valid power/RPM values for nothing.
-    mode_changed = mode is not state.previous_mode
-
-    material_type = forms.ask_material_type(
-        material_types=material_types, default=state.material_type, locale=locale
-    )
-    if material_type is None:
-        return
-    state.material_type = material_type
-
-    materials = list_materials(config_path=materials_config_path, material_type=state.material_type)
-    material = forms.ask_material(
-        names=materials,
-        config_path=materials_config_path,
-        default=state.material,
-        locale=locale,
-        display_locale=display_locale,
-    )
-    if material is None:
-        return
-    state.material = material
-
-    tool = forms.ask_drilling_tool(
-        names=tools,
-        config_path=materials_config_path,
-        default=state.tool,
-        locale=locale,
-        display_locale=display_locale,
-    )
-    if tool is None:
-        return
-    state.tool = tool
-
-    diameter = forms.ask_number(
-        title=translate(locale, "tui.drilling.title"),
-        label=translate(locale, "tui.label.diameter"),
-        unit=labels["diameter"],
-        default=state.diameter,
-        locale=locale,
-        validate=lambda mm: validate_diameter_mm(
-            _to_mm(mm, state.unit_system), _DEFAULT_CONFIG, DEFAULT_LOCALE
-        ),
-    )
-    if diameter is None:
-        return
-    state.diameter = diameter
-
-    depth = forms.ask_number(
-        title=translate(locale, "tui.drilling.title"),
-        label=translate(locale, "tui.label.depth"),
-        unit=labels["depth"],
-        default=state.depth,
-        locale=locale,
-        validate=lambda mm: validate_depth_mm(
-            _to_mm(mm, state.unit_system), _DEFAULT_CONFIG, DEFAULT_LOCALE
-        ),
-    )
-    if depth is None:
-        return
-    state.depth = depth
-
-    if not _prompt_power_or_rpm(state, labels, locale, mode, mode_changed):
-        return
-
-    result = calculate(
-        diameter=state.diameter,
-        depth=state.depth,
-        material=state.material,
-        tool=state.tool,
-        unit_system=state.unit_system,
-        available_power=state.available_power,
-        locale=locale,
-        mode=state.mode,
-        target_rpm=state.target_rpm,
-        materials_config_path=materials_config_path,
-    )
-    forms.show_result(result, labels, locale)
-
-
-def _to_mm(value: float, unit_system: UnitSystem) -> float:
-    from mfgparams.units import in_to_mm
-
-    return in_to_mm(value) if unit_system is UnitSystem.IMPERIAL else value
 
 
 def _convert_on_unit_change(state: DrillingSessionState, unit_system: UnitSystem) -> None:
@@ -178,82 +77,212 @@ def _convert_on_unit_change(state: DrillingSessionState, unit_system: UnitSystem
         )
 
 
-def _prompt_power_or_rpm(
-    state: DrillingSessionState,
-    labels: dict[str, str],
-    locale: str,
-    mode: CalculationMode,
-    mode_changed: bool,
-) -> bool:
-    """The mode-dependent power/RPM screen(s); returns False on cancel.
+def _number_row(
+    field_id: FieldId, label: str, unit: str, value: float | None, required: bool, setter
+) -> split_pane.NumberRow:
+    def on_edit(buffer: str) -> None:
+        text = buffer.strip()
+        if not text:
+            setter(None)
+            return
+        try:
+            setter(float(text))
+        except ValueError:
+            # FR-006b: an unparseable buffer never touches committed state --
+            # the buffer itself (still visible, still editable) carries the
+            # invalid text; `split_pane.render_right_pane` reads the buffer
+            # directly to decide whether to show FR-006b's message.
+            pass
 
-    Extracted from `run_drilling_screen` (Constitution Principle I /
-    complexity gate) -- this is the same three-way branch
-    `_run_drilling_session` had, just isolated to its own function.
+    def on_nudge(direction: int) -> None:
+        current = value if value is not None else 0.0
+        new_value = current + direction * split_pane.NUDGE_STEP
+        setter(None if new_value <= 0 else new_value)
 
-    ``mode``/``mode_changed`` are locals, not read from ``state`` --
-    ``state.mode``/``state.previous_mode``/``state.target_rpm``/
-    ``state.available_power`` are committed here, together, only once this
-    function actually succeeds (see `run_drilling_screen`'s comment on
-    `mode_changed`).
-    """
-
-    title = translate(locale, "tui.drilling.title")
-
-    if mode is CalculationMode.POWER_CONSTRAINED:
-        power = forms.ask_required_number(
-            title=title,
-            label=translate(locale, "tui.label.power_required"),
-            unit=labels["power"],
-            default=None if mode_changed else state.available_power,
-            locale=locale,
-            invalid_message_key="tui.prompt.power_required.invalid",
-        )
-        if power is None:
-            return False
-        state.mode = mode
-        state.previous_mode = mode
-        state.target_rpm = None
-        state.available_power = power
-        return True
-
-    if mode is CalculationMode.FIXED_RPM:
-        target_rpm = forms.ask_required_number(
-            title=title,
-            label=translate(locale, "tui.label.target_rpm"),
-            unit="RPM",
-            default=None if mode_changed else state.target_rpm,
-            locale=locale,
-            invalid_message_key="tui.prompt.target_rpm.invalid",
-        )
-        if target_rpm is None:
-            return False
-        available_power = forms.ask_optional_number(
-            title=title,
-            label=translate(locale, "tui.label.power"),
-            unit=labels["power"],
-            default=None if mode_changed else state.available_power,
-            locale=locale,
-        )
-        if available_power is forms.CANCELLED:
-            return False
-        state.mode = mode
-        state.previous_mode = mode
-        state.target_rpm = target_rpm
-        state.available_power = available_power
-        return True
-
-    available_power = forms.ask_optional_number(
-        title=title,
-        label=translate(locale, "tui.label.power"),
-        unit=labels["power"],
-        default=None if mode_changed else state.available_power,
-        locale=locale,
+    return split_pane.NumberRow(
+        field_id=field_id,
+        label=label,
+        unit=unit,
+        value=value,
+        required=required,
+        on_edit=on_edit,
+        on_nudge=on_nudge,
     )
-    if available_power is forms.CANCELLED:
-        return False
-    state.mode = mode
-    state.previous_mode = mode
-    state.target_rpm = None
-    state.available_power = available_power
-    return True
+
+
+def rows_for(
+    screen: OperationScreen, materials_config_path: str | None, locale: str, display_locale: str
+) -> list[split_pane.Row]:
+    """This screen's `split_pane.Row` list, in FR-005's field order."""
+
+    state = screen.session_state
+    assert isinstance(state, DrillingSessionState)
+    labels = forms.UNIT_LABELS[state.unit_system]
+    rows: list[split_pane.Row] = []
+
+    def _set_unit_system(value: str) -> None:
+        new_unit_system = UnitSystem.METRIC if value == "metric" else UnitSystem.IMPERIAL
+        _convert_on_unit_change(state, new_unit_system)
+        state.unit_system = new_unit_system
+
+    rows.append(
+        split_pane.RadioRow(
+            field_id=FieldId.UNIT_SYSTEM,
+            label=translate(locale, "tui.label.unit_system"),
+            options=[
+                ("metric", translate(locale, "tui.unit_system.metric")),
+                ("imperial", translate(locale, "tui.unit_system.imperial")),
+            ],
+            value="metric" if state.unit_system is UnitSystem.METRIC else "imperial",
+            on_select=_set_unit_system,
+        )
+    )
+
+    def _set_mode(value: str) -> None:
+        new_mode = CalculationMode(value)
+        if new_mode is not state.previous_mode:
+            # A mode's power/RPM field(s) shouldn't default to a value
+            # carried over from a *different* mode (mirrors the pre-018
+            # dialog chain's identically-motivated `mode_changed` guard).
+            state.available_power = None
+            state.target_rpm = None
+        state.mode = new_mode
+        state.previous_mode = new_mode
+
+    rows.append(
+        split_pane.RadioRow(
+            field_id=FieldId.MODE,
+            label=translate(locale, "tui.label.mode"),
+            options=[
+                (mode.value, translate(locale, key)) for mode, key in _MODE_OPTION_KEYS.items()
+            ],
+            value=state.mode.value,
+            on_select=_set_mode,
+        )
+    )
+
+    material_types = list_material_types(config_path=materials_config_path)
+
+    def _set_material_type(value: str) -> None:
+        if value != state.material_type:
+            state.material = None
+        state.material_type = value
+
+    rows.append(
+        split_pane.RadioRow(
+            field_id=FieldId.MATERIAL_TYPE,
+            label=translate(locale, "tui.label.material_type"),
+            options=[(mt, forms.material_type_label(mt, locale)) for mt in material_types],
+            value=state.material_type,
+            on_select=_set_material_type,
+        )
+    )
+
+    if state.material_type is not None:
+        material_names = list_materials(
+            config_path=materials_config_path, material_type=state.material_type
+        )
+        materials = {name: get_material(name, materials_config_path) for name in material_names}
+        display = {
+            name: forms.display_label(material, display_locale, locale)
+            for name, material in materials.items()
+            if material is not None
+        }
+        rows.append(
+            split_pane.RadioRow(
+                field_id=FieldId.MATERIAL,
+                label=translate(locale, "tui.label.material"),
+                options=list(forms.unique_labels(display).items()),
+                value=state.material,
+                on_select=lambda value: setattr(state, "material", value),
+            )
+        )
+
+    tool_names = list_tools(config_path=materials_config_path)
+    tools = {name: get_tool(name, materials_config_path) for name in tool_names}
+    tool_display = {
+        name: forms.display_label(tool, display_locale, locale)
+        for name, tool in tools.items()
+        if tool is not None
+    }
+    rows.append(
+        split_pane.RadioRow(
+            field_id=FieldId.TOOL,
+            label=translate(locale, "tui.label.tool"),
+            options=list(forms.unique_labels(tool_display).items()),
+            value=state.tool,
+            on_select=lambda value: setattr(state, "tool", value),
+        )
+    )
+
+    rows.append(
+        _number_row(
+            FieldId.DIAMETER,
+            translate(locale, "tui.label.diameter"),
+            labels["diameter"],
+            state.diameter,
+            True,
+            lambda value: setattr(state, "diameter", value),
+        )
+    )
+    rows.append(
+        _number_row(
+            FieldId.DEPTH,
+            translate(locale, "tui.label.depth"),
+            labels["depth"],
+            state.depth,
+            True,
+            lambda value: setattr(state, "depth", value),
+        )
+    )
+
+    def _power_row(label_key: str, required: bool) -> split_pane.NumberRow:
+        return _number_row(
+            FieldId.AVAILABLE_POWER,
+            translate(locale, label_key),
+            labels["power"],
+            state.available_power,
+            required,
+            lambda value: setattr(state, "available_power", value),
+        )
+
+    def _rpm_row() -> split_pane.NumberRow:
+        return _number_row(
+            FieldId.TARGET_RPM,
+            translate(locale, "tui.label.target_rpm"),
+            "RPM",
+            state.target_rpm,
+            True,
+            lambda value: setattr(state, "target_rpm", value),
+        )
+
+    rows.extend(
+        split_pane.power_and_rpm_rows(
+            power_constrained=state.mode is CalculationMode.POWER_CONSTRAINED,
+            fixed_rpm=state.mode is CalculationMode.FIXED_RPM,
+            power_row=_power_row,
+            rpm_row=_rpm_row,
+        )
+    )
+
+    return rows
+
+
+def calculate_result(
+    state: DrillingSessionState, materials_config_path: str | None, locale: str
+) -> CalculationResult:
+    """The `calculate()` call `split_pane.render_right_pane` invokes once
+    every required field (per `rows_for`) holds a value (FR-006/FR-006a)."""
+
+    return calculate(
+        diameter=cast(float, state.diameter),
+        depth=cast(float, state.depth),
+        material=cast(str, state.material),
+        tool=cast(str, state.tool),
+        unit_system=state.unit_system,
+        available_power=state.available_power,
+        locale=locale,
+        mode=state.mode,
+        target_rpm=state.target_rpm,
+        materials_config_path=materials_config_path,
+    )

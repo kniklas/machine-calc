@@ -1,14 +1,18 @@
 """Integration test: a terminal resize mid-form-entry does not discard
-already-entered input (tasks.md T013a, FR-008, Edge Cases,
-/speckit-analyze finding E2).
+already-entered input (018-tui-splitpane-redesign FR-013a, tasks.md T029).
 
 **Scope note**: prompt-toolkit's `Application` redraws in place on a resize
-(`_on_resize`) without touching widget/buffer state -- this test exercises
-that real mechanism directly (calling `_on_resize()` on the actual
-`Application` instance `forms.ask_number` constructs, captured via a thin
-wrapper around `prompt_toolkit.shortcuts.input_dialog`), rather than
-re-testing prompt-toolkit's own internals from scratch. A second test
-guards the part that *is* this project's own responsibility: nothing under
+(`_on_resize`) without touching widget/buffer state. 017's version of this
+test exercised that mechanism against a short-lived, per-dialog
+`Application` (`forms.ask_number`'s own, captured via a wrapper around
+`prompt_toolkit.shortcuts.input_dialog`) -- both the dialog and that
+wrapper are gone (research.md's consolidated decisions table; `forms.py`
+no longer constructs any `Application` at all). This feature's persistent,
+long-lived `Application` (`app.py`'s `build_app`) is a materially
+different shape (constructed once, not per screen -- this file's own
+module docstring note on FR-013a), so this needs re-verifying against
+*that* shape specifically, not assumed carried over. A second test guards
+the part that *is* this project's own responsibility: nothing under
 `console/tui/` re-checks `terminal_capability` or tears down/reconstructs a
 running screen mid-session, which is what would actually be capable of
 discarding in-progress input on a resize.
@@ -17,66 +21,60 @@ discarding in-progress input on a resize.
 from __future__ import annotations
 
 import ast
-import contextvars
-import threading
-import time
-from unittest import mock
 
-from prompt_toolkit.application import create_app_session
-from prompt_toolkit.input import create_pipe_input
-from prompt_toolkit.output import DummyOutput
-from prompt_toolkit.shortcuts import dialogs as pt_dialogs
+from _tui_test_support import run_headless
 
-from mfgparams.console.tui import forms
+from mfgparams.console.i18n import get_locale
+from mfgparams.console.tui import app as app_mod
+from mfgparams.console.tui.screens.drilling import DrillingSessionState
+from mfgparams.i18n import get_raw_locale
+
+_OPEN_DRILLING_AND_SELECT_DIAMETER = [
+    "m",  # bar mnemonic: Machining
+    "j",  # tree: Milling -> Drilling
+    "\r",  # toggle Drilling's tool-selection shortcut open
+    "j",  # tree: Drilling -> Tool
+    "\r",  # opens Drilling, selected on the Tool field
+    "k",  # up to Material type
+    "\x1b[C",  # first material type
+    "j",
+    "\x1b[C",  # first material
+    "j",
+    "\x1b[C",  # first tool
+    "j",  # down to Diameter
+]
 
 
 def test_resize_mid_entry_does_not_discard_already_typed_text():
-    captured_apps = []
-    real_input_dialog = pt_dialogs.input_dialog
+    """Every keystroke is followed by a resize (`on_batch` fires between
+    every send) -- a stronger version of "one resize mid-typing", since a
+    digit typed under continuous resize pressure is the harder case to get
+    wrong, not just a single well-timed one."""
 
-    def capturing_input_dialog(*args, **kwargs):
-        app = real_input_dialog(*args, **kwargs)
-        captured_apps.append(app)
-        return app
+    holder: dict = {}
 
-    with create_pipe_input() as pipe_input:
-        with create_app_session(input=pipe_input, output=DummyOutput()):
-            result_holder = {}
+    def target() -> None:
+        application, ui, view = app_mod.build_app(None, get_locale(), get_raw_locale())
+        holder["app"] = application
+        holder["ui"] = ui
+        application.run()
 
-            def worker():
-                with mock.patch.object(forms, "input_dialog", capturing_input_dialog):
-                    result_holder["value"] = forms.ask_number(
-                        title="Drilling",
-                        label="Drill diameter",
-                        unit="mm",
-                        default=None,
-                        locale="en",
-                    )
+    def on_batch() -> None:
+        application = holder.get("app")
+        if application is not None:
+            application._on_resize()
 
-            ctx = contextvars.copy_context()
-            thread = threading.Thread(target=lambda: ctx.run(worker), daemon=True)
-            thread.start()
+    run_headless(
+        target,
+        _OPEN_DRILLING_AND_SELECT_DIAMETER + ["1", "0", "\x1b", "\x1b", "\x1b"],
+        on_batch=on_batch,
+    )
 
-            # Wait for the dialog to exist, then type a partial value.
-            deadline = time.time() + 5
-            while not captured_apps and time.time() < deadline:
-                time.sleep(0.02)
-            assert captured_apps, "input_dialog was never constructed"
-            pipe_input.send_text("1")
-            time.sleep(0.2)
-
-            # Simulate a terminal resize mid-entry.
-            captured_apps[0]._on_resize()
-            time.sleep(0.2)
-
-            # Finish typing and submit.
-            pipe_input.send_text("0\r\r")
-            thread.join(timeout=10)
-
-    assert not thread.is_alive()
+    ui = holder["ui"]
+    assert isinstance(ui.drilling_state, DrillingSessionState)
     assert (
-        result_holder.get("value") == 10.0
-    ), "the digit typed before the resize was lost -- resize discarded in-progress input"
+        ui.drilling_state.diameter == 10.0
+    ), "a digit typed while a resize kept firing was lost -- resize discarded in-progress input"
 
 
 def test_no_tui_module_rechecks_terminal_capability_after_startup():

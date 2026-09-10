@@ -106,6 +106,9 @@ MESSAGES: dict[str, str] = {
     # FR-006/FR-006a) -- "Result" reads correctly whether it labels a modal
     # dialog (017) or a persistent pane (018).
     "tui.result.title": "Result",
+    # 018-tui-splitpane-redesign FR-006: the right pane's placeholder state
+    # while required left-pane inputs are still incomplete.
+    "tui.result.placeholder": "Enter every input to see a result.",
     "tui.result.spindle_speed": "Spindle speed:     {value} RPM{mode_suffix}",
     "tui.result.spindle_speed.mode_suffix": " ({label})",
     "tui.result.spindle_speed.mode.standard": "recommended",
@@ -125,7 +128,11 @@ MESSAGES: dict[str, str] = {
     "tui.configuration.section.material_types": "Material types: {items}",
     "tui.configuration.section.materials": "Materials ({material_type}): {items}",
     "tui.configuration.section.tools": "Drilling tools: {items}",
-    "tui.configuration.select_material_type": "View materials for type:",
+    # 018-tui-splitpane-redesign FR-015: closes the gap PR #94's review found
+    # (Configuration only loaded the drilling registry) -- same screen being
+    # rebuilt for this feature, don't patch it twice.
+    "tui.configuration.section.end_mill_tools": "End-mill tools: {items}",
+    "tui.configuration.section.face_mill_tools": "Face-mill tools: {items}",
     # --- About screen ---
     "tui.about.title": "About",
     "tui.about.text": (

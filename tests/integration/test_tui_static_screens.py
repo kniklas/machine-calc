@@ -15,14 +15,12 @@ against their output.
 
 from __future__ import annotations
 
-from _tui_test_support import run_headless
-
 import mfgparams
 from mfgparams.console.i18n import translate
 from mfgparams.console.tui import machining_menu
 from mfgparams.console.tui.app import MachiningTree
 from mfgparams.console.tui.screens.about import render_about
-from mfgparams.console.tui.screens.configuration import run_configuration_screen
+from mfgparams.console.tui.screens.configuration import render_configuration
 from mfgparams.console.tui.screens.help import render_help
 
 
@@ -70,16 +68,16 @@ def test_help_screen_is_reachable_and_non_crashing():
     assert fragments  # non-empty -- reachable, has content (FR-009 placeholder)
 
 
-def test_configuration_screen_views_a_material_type_then_backs_out():
-    """Unchanged from 017 -- `configuration.py` itself is not touched until
-    tasks.md T024 (US2), still its own separate dialog-chain screen (not
-    yet embedded in the persistent Application's body -- see T012's own
-    placeholder body_mode="configuration" rendering, which T024 replaces
-    with the real thing). Pick the first material-type choice (Tab,
-    Enter -> default), view it, dismiss the resulting message dialog, then
-    cancel out of the loop."""
+def test_configuration_screen_is_a_static_view_covering_all_three_registries():
+    """FR-014/FR-015 (T024): view-only, and -- closing the gap PR #94's
+    review found -- covering all three tool registries, not just
+    Drilling's, now that this screen is being rebuilt anyway."""
 
-    run_headless(
-        lambda: run_configuration_screen(None, "en"),
-        ["\t\r", "\r", "\t\t\r"],
-    )
+    text = "".join(t for _, t in render_configuration(None, "en", "en"))
+    assert translate("en", "tui.configuration.title") in text
+    assert "Drilling tools:" in text
+    assert "End-mill tools:" in text
+    assert "Face-mill tools:" in text
+    # At least one bundled material type/material is actually listed, not
+    # just the section headers.
+    assert "Mild Steel" in text or "Oak" in text

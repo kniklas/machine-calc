@@ -137,32 +137,32 @@ order, confirm every change is reflected without leaving the pane (quickstart.md
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T014 [P] [US2] Integration test: rewrite `tests/integration/test_tui_drilling.py` — every
+- [X] T014 [P] [US2] Integration test: rewrite `tests/integration/test_tui_drilling.py` — every
       FR-005 field visible/editable without a screen transition (Acceptance Scenario 1),
       unit-system carryover (Acceptance Scenario 3, PR #94's fix), all three modes, asserting
       against the actual rendered/displayed result (spec's Carried-Over Items table — not just
       porting the old dialog-chain assertions)
-- [ ] T015 [P] [US2] Integration test: rewrite `tests/integration/test_tui_milling.py` — same
+- [X] T015 [P] [US2] Integration test: rewrite `tests/integration/test_tui_milling.py` — same
       pattern (Acceptance Scenario 4), both End-Milling/Face-Milling sub-operations × all three
       modes, sub-operation choice (FR-009a) reachable
-- [ ] T016 [P] [US2] Integration test: numeric-field instant-edit (typing a digit immediately
+- [X] T016 [P] [US2] Integration test: numeric-field instant-edit (typing a digit immediately
       edits, no separate start-editing action) and Left/Right nudge, in
       `tests/integration/test_tui_field_editing.py` (new file, FR-016/FR-017)
-- [ ] T017 [P] [US2] Integration test: extend `tests/integration/test_tui_validation.py` for
+- [X] T017 [P] [US2] Integration test: extend `tests/integration/test_tui_validation.py` for
       FR-006b — text that can't parse as a number stays editable with a clear message, never
       reaches `calculate()` (Acceptance Scenario 5 of User Story 2)
-- [ ] T018 [P] [US2] Integration test: extend `tests/integration/test_tui_navigation.py` (T009) —
+- [X] T018 [P] [US2] Integration test: extend `tests/integration/test_tui_navigation.py` (T009) —
       collapsing the Machining tree while Drilling's screen is open does not hide tool selection
       (FR-005a; quickstart.md Scenario 5 — the specific regression this feature's
       `/speckit-clarify` session exists to guard against)
-- [ ] T019 [P] [US2] Integration test: data-driven material-type category set — with a
+- [X] T019 [P] [US2] Integration test: data-driven material-type category set — with a
       `--materials-config` fixture registering a category beyond Metal/Wood, confirm the left
       pane's material-type radio includes it (spec User Story 2, quickstart.md Scenario 6),
       extending the existing materials-config test fixture pattern
 
 ### Implementation for User Story 2
 
-- [ ] T020 [US2] Prune `src/mfgparams/console/tui/forms.py`: remove the dialog-shortcut widgets
+- [X] T020 [US2] Prune `src/mfgparams/console/tui/forms.py`: remove the dialog-shortcut widgets
       this feature replaces (`ask_choice`, `ask_number`, `ask_required_number`,
       `ask_optional_number`, `ask_unit_system`, `ask_mode`, `ask_material_type`, `ask_material`,
       `ask_tool`, `ask_drilling_tool`, `show_result`, and the now-unneeded `Cancelled`/`CANCELLED`
@@ -170,20 +170,20 @@ order, confirm every change is reflected without leaving the pane (quickstart.md
       Keep unchanged: `UNIT_LABELS`, `convert_length`, `convert_power`, `render_error`,
       `display_label`, `material_type_label`, `unique_labels`, `format_result` (research.md's
       consolidated table; confirmed reusable in the pre-plan prototype)
-- [ ] T021 [US2] Implement the shared left/right split-pane component both Drilling and Milling
+- [X] T021 [US2] Implement the shared left/right split-pane component both Drilling and Milling
       reuse (FR-009's identical-pattern requirement) — instant-edit numeric fields (FR-016),
       Left/Right nudge with a floor at zero (FR-017), radio-field cycling, right-pane text wrap
       (FR-018) — in a new `src/mfgparams/console/tui/screens/split_pane.py` (depends on T003, T020)
-- [ ] T022 [US2] Rewrite `src/mfgparams/console/tui/screens/drilling.py`: keep
+- [X] T022 [US2] Rewrite `src/mfgparams/console/tui/screens/drilling.py`: keep
       `DrillingSessionState`'s fields/semantics/default-carryover unchanged (FR-012); replace
       `run_drilling_screen`'s sequential-dialog orchestration with T021's shared component; tool
       selection always present in the left pane (FR-005), with the Machining tree's shortcut (T011)
       navigating into the same field, never a separate/duplicate value (FR-005a) (depends on T021)
-- [ ] T023 [US2] Rewrite `src/mfgparams/console/tui/screens/milling.py`: same shape for
+- [X] T023 [US2] Rewrite `src/mfgparams/console/tui/screens/milling.py`: same shape for
       `MillingSessionState`, calling `calculate_end_milling()`/`calculate_face_milling()`
       unchanged; the End-Milling/Face-Milling choice (FR-009a) is a left-pane field following
       Drilling's placement resolution (depends on T021)
-- [ ] T024 [US2] Extend `src/mfgparams/console/tui/screens/configuration.py`: still view-only
+- [X] T024 [US2] Extend `src/mfgparams/console/tui/screens/configuration.py`: still view-only
       (FR-014, resolved via `/speckit-clarify`), now covers all three tool registries — add
       end-mill and face-mill sections alongside the existing drilling-only
       `tui.configuration.section.tools` (FR-015, closing the gap PR #94's review found and
@@ -208,23 +208,23 @@ app is back at the navigation shell, not restarted.
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T025 [P] [US3] Integration test: the right pane's three states — placeholder while incomplete
+- [X] T025 [P] [US3] Integration test: the right pane's three states — placeholder while incomplete
       (Acceptance Scenario 1), a result once complete/valid with no separate confirmation
       (Acceptance Scenario 2), and the resulting error when `calculate()` rejects a
       complete-but-invalid combination (Acceptance Scenario 3, FR-006a) — plus automatic refresh on
       any input change (FR-007), in `tests/integration/test_tui_results.py` (new file, exercising
       both Drilling and Milling against the shared T021 component)
-- [ ] T026 [P] [US3] Integration test: for identical inputs, the TUI's displayed result is
+- [X] T026 [P] [US3] Integration test: for identical inputs, the TUI's displayed result is
       byte-identical to calling `calculate()`/`calculate_end_milling()`/`calculate_face_milling()`
       directly (SC-004), in `tests/integration/test_tui_calculation_parity.py` (new file)
 
 ### Implementation for User Story 3
 
-- [ ] T027 [US3] Complete T021's right-pane state machine: exactly the three states contract §3
+- [X] T027 [US3] Complete T021's right-pane state machine: exactly the three states contract §3
       names, never a fourth, with `last_result` invalidated/recomputed whenever the cached input
       tuple no longer matches current session-state values (data-model.md's `OperationScreen`
       validation rule) (depends on T021, T022, T023)
-- [ ] T028 [US3] Implement "return to the main menu" and "repeat calculation" actions on the
+- [X] T028 [US3] Implement "return to the main menu" and "repeat calculation" actions on the
       operation screen (FR-008), wiring `SessionUI.open_operation = None` on return without
       touching `SessionUI.tree`'s own state (Acceptance Scenario 5 — "not necessarily still
       expanded to the same leaf") (depends on T012, T022, T023)
@@ -236,19 +236,19 @@ is usable end to end (quickstart.md Scenarios 1-6).
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T029 [P] Rewrite `tests/integration/test_tui_resize_preserves_input.py` against the new
+- [X] T029 [P] Rewrite `tests/integration/test_tui_resize_preserves_input.py` against the new
       persistent `Application` (FR-013a) — 017's version tested per-screen resize behavior that no
       longer exists in that shape
-- [ ] T030 [P] Rewrite `tests/performance/test_tui_redraw_latency.py` to measure the real reactive
+- [X] T030 [P] Rewrite `tests/performance/test_tui_redraw_latency.py` to measure the real reactive
       redraw this feature introduces (SC-006, Constitution Check row V) — the old version's timer
       started before input and stopped at dialog exit, never observing an actual redraw (Carried-
       Over Items table)
-- [ ] T031 [P] Re-verify `tests/performance/test_tui_startup_budget.py` against the new persistent
+- [X] T031 [P] Re-verify `tests/performance/test_tui_startup_budget.py` against the new persistent
       `Application`'s baseline memory footprint; extend only if research.md's assumption (no
       material difference from the old per-screen baseline) turns out wrong
 - [X] T032 [P] Update `tests/integration/test_tui_terminal_too_small.py` for the new 30×80 floor
       (T001)
-- [ ] T033 [P] Confirm (and update only where they construct the now-replaced `NavigationState`/
+- [X] T033 [P] Confirm (and update only where they construct the now-replaced `NavigationState`/
       screen-stack directly) `tests/integration/test_tui_no_tty_fallback.py`,
       `tests/integration/test_tui_app_run.py`, `tests/integration/test_tui_static_screens.py`, and
       `tests/integration/test_tui_i18n.py` still pass against the rewritten `app.py` — research.md
@@ -259,9 +259,9 @@ is usable end to end (quickstart.md Scenarios 1-6).
 - [ ] T035 [P] Update Sphinx end-user docs: replace the old menu/dialog-chain navigation
       instructions with the new persistent menu-bar/tree/split-pane model (Constitution Principle
       VII)
-- [ ] T036 Bump `src/mfgparams/__init__.py`'s `__version__` from `"2.0.0"` to `"2.1.0"` (MINOR, not
+- [X] T036 Bump `src/mfgparams/__init__.py`'s `__version__` from `"2.0.0"` to `"2.1.0"` (MINOR, not
       MAJOR — contract §7; Constitution Principle IV)
-- [ ] T037 Add a `CHANGELOG.md` `[Unreleased]` entry under `### Changed` describing the navigation
+- [X] T037 Add a `CHANGELOG.md` `[Unreleased]` entry under `### Changed` describing the navigation
       model change and the raised terminal-size floor (contract §7)
 - [ ] T038 Run every scenario in `quickstart.md` manually, end-to-end, on a real terminal — SC-005's
       first-time/non-technical-user walkthrough and 017's own tasks.md T037, both folded into this

@@ -1,12 +1,16 @@
-"""The Milling parameter-entry screen (FR-002): end milling and face milling.
+"""The Milling operation screen (FR-002/FR-004/FR-005/FR-009): end milling
+and face milling.
 
-Ports `console/cli.py`'s `_prompt_milling_sub_operation`/
-`_prompt_milling_inputs`/`_run_end_milling_session`/`_run_face_milling_session`
-(research.md #3) onto `forms.py`'s dialog primitives. `MillingSessionState`
-mirrors `_MillingSessionState`: one instance per sub-operation lives for the
-whole app session (owned by `tui/app.py`), so re-selecting the same
-sub-operation offers its own previous answers as defaults without the other
-sub-operation's answers leaking in (FR-002 parity).
+`MillingSessionState` mirrors `console/cli.py`'s (retired)
+`_MillingSessionState` unchanged: one instance per sub-operation lives for
+the whole app session (`SessionUI.milling_states`), so re-selecting the
+same sub-operation offers its own previous answers as defaults without the
+other sub-operation's answers leaking in (FR-002 parity). The
+End-Milling/Face-Milling choice itself (FR-009a) is a `split_pane.RadioRow`
+like any other FR-005 field, following Drilling's placement resolution
+(FR-005a) -- selecting a different value swaps which `MillingSessionState`
+the open `OperationScreen.session_state` points at, in place, without
+closing and reopening the screen.
 """
 
 from __future__ import annotations
@@ -25,22 +29,25 @@ from mfgparams import (
     list_material_types,
     list_materials,
 )
-from mfgparams.config import Configuration
-from mfgparams.console.i18n import DEFAULT_LOCALE, translate
+from mfgparams.console.i18n import translate
 from mfgparams.console.tui import forms
+from mfgparams.console.tui.app import FieldId, OperationScreen, SessionUI
+from mfgparams.console.tui.screens import split_pane
+from mfgparams.models import CalculationResult
 from mfgparams.processes.machining.milling.end_milling.tools import get_end_mill_tool
 from mfgparams.processes.machining.milling.face_milling.tools import get_face_mill_tool
-from mfgparams.units import in_to_mm
-from mfgparams.validation import (
-    validate_depth_of_cut_mm,
-    validate_engagement_mm,
-    validate_feed_per_tooth_mm,
-    validate_length_of_cut_mm,
-    validate_mill_diameter_mm,
-    validate_tooth_count,
-)
+from mfgparams.registry import get_material
 
-_DEFAULT_CONFIG = Configuration()
+_MODE_OPTION_KEYS = {
+    CalculationMode.STANDARD: "tui.mode.standard",
+    CalculationMode.POWER_CONSTRAINED: "tui.mode.power_constrained",
+    CalculationMode.FIXED_RPM: "tui.mode.fixed_rpm",
+}
+
+_SUB_OPERATION_OPTION_KEYS = {
+    MillingSubOperation.END_MILLING: "tui.milling_sub_operation.end_milling",
+    MillingSubOperation.FACE_MILLING: "tui.milling_sub_operation.face_milling",
+}
 
 
 @dataclass
@@ -63,16 +70,9 @@ class MillingSessionState:
     previous_mode: CalculationMode = CalculationMode.STANDARD
 
 
-def _to_mm(value: float, unit_system: UnitSystem) -> float:
-    return in_to_mm(value) if unit_system is UnitSystem.IMPERIAL else value
-
-
 def _convert_on_unit_change(state: MillingSessionState, unit_system: UnitSystem) -> None:
     """Keep remembered geometry/power meaning their original physical
-    quantity across a unit-system switch, rather than re-offering the same
-    raw number relabeled under the new unit (Copilot review on PR #94: a
-    remembered 10 mm silently became a defaulted "10 in"). Must run before
-    `state.unit_system` is overwritten -- it is the "from" system here.
+    quantity across a unit-system switch (Copilot review on PR #94).
     `number_of_teeth`/`target_rpm` are pure counts/RPM and never converted.
     """
 
@@ -102,220 +102,318 @@ def _convert_on_unit_change(state: MillingSessionState, unit_system: UnitSystem)
         )
 
 
-def _prompt_tool(
-    sub_operation: MillingSubOperation,
-    state: MillingSessionState,
-    materials_config_path: str | None,
-    locale: str,
-    display_locale: str,
-) -> tuple[str | None, str]:
-    """The end-mill/face-mill tool screen, plus which engagement label this
-    sub-operation uses. Extracted from `run_milling_screen` (complexity
-    gate); the two sub-operations differ only in which registry/label they
-    use, not in the prompting logic itself."""
+def current_sub_operation(ui: SessionUI, state: MillingSessionState) -> MillingSubOperation:
+    """Reverse-lookup: which sub-operation `state` belongs to, by identity
+    against `ui.milling_states` -- the only place that mapping lives (no
+    `sub_operation` field on `MillingSessionState` itself, mirroring how
+    `MachiningTree` has no field naming "which leaf is selected" either)."""
 
-    resolve: Callable[[str, str | None], object | None]
+    for sub_operation, candidate in ui.milling_states.items():
+        if candidate is state:
+            return sub_operation
+    raise AssertionError("session_state is not one of ui.milling_states' values")
+
+
+def _number_row(
+    field_id: FieldId, label: str, unit: str, value: float | None, required: bool, setter
+) -> split_pane.NumberRow:
+    def on_edit(buffer: str) -> None:
+        text = buffer.strip()
+        if not text:
+            setter(None)
+            return
+        try:
+            setter(float(text))
+        except ValueError:
+            pass  # FR-006b: see drilling.py's identically-shaped helper.
+
+    def on_nudge(direction: int) -> None:
+        current = value if value is not None else 0.0
+        new_value = current + direction * split_pane.NUDGE_STEP
+        setter(None if new_value <= 0 else new_value)
+
+    return split_pane.NumberRow(
+        field_id=field_id,
+        label=label,
+        unit=unit,
+        value=value,
+        required=required,
+        on_edit=on_edit,
+        on_nudge=on_nudge,
+    )
+
+
+def _tool_registry_for(
+    sub_operation: MillingSubOperation, materials_config_path: str | None
+) -> tuple[list[str], Callable[[str, str | None], object | None], str, str]:
+    """The one structural difference between End Milling and Face Milling:
+    which tool registry/label/engagement-field label applies. Extracted
+    from `rows_for` (Constitution Principle I / complexity gate) -- the two
+    sub-operations differ only in *which registry*, not in how a row is
+    built from it."""
+
     if sub_operation is MillingSubOperation.END_MILLING:
-        tool_names = list_end_mill_tools(config_path=materials_config_path)
-        resolve, label_key = get_end_mill_tool, "tui.label.end_mill_tool"
-        engagement_label_key = "cli.label.radial_depth_of_cut"
-    else:
-        tool_names = list_face_mill_tools(config_path=materials_config_path)
-        resolve, label_key = get_face_mill_tool, "tui.label.face_mill_tool"
-        engagement_label_key = "cli.label.width_of_cut"
-
-    tool = forms.ask_tool(
-        names=tool_names,
-        resolve=resolve,
-        label_key=label_key,
-        config_path=materials_config_path,
-        default=state.tool,
-        locale=locale,
-        display_locale=display_locale,
+        return (
+            list_end_mill_tools(config_path=materials_config_path),
+            get_end_mill_tool,
+            "tui.label.end_mill_tool",
+            "cli.label.radial_depth_of_cut",
+        )
+    return (
+        list_face_mill_tools(config_path=materials_config_path),
+        get_face_mill_tool,
+        "tui.label.face_mill_tool",
+        "cli.label.width_of_cut",
     )
-    return tool, engagement_label_key
 
 
-def run_milling_screen(
-    states: dict[MillingSubOperation, MillingSessionState],
+def rows_for(
+    ui: SessionUI,
+    screen: OperationScreen,
     materials_config_path: str | None,
     locale: str,
     display_locale: str,
-) -> None:
-    """Ask which sub-operation, then run its prompt/calculate/display pass."""
+) -> list[split_pane.Row]:
+    """This screen's `split_pane.Row` list. Unlike `drilling.rows_for`,
+    needs `ui` (not just `state`) so the sub-operation row's `on_select` can
+    swap `screen.session_state` in place (FR-009a)."""
 
-    sub_options = {
-        MillingSubOperation.END_MILLING.value: translate(
-            locale, "tui.milling_sub_operation.end_milling"
-        ),
-        MillingSubOperation.FACE_MILLING.value: translate(
-            locale, "tui.milling_sub_operation.face_milling"
-        ),
-    }
-    choice = forms.ask_choice(
-        title=translate(locale, "tui.milling.title"),
-        label=translate(locale, "tui.label.milling_sub_operation"),
-        options=sub_options,
-        default=MillingSubOperation.END_MILLING.value,
-        locale=locale,
-    )
-    if choice is None:
-        return
-    sub_operation = MillingSubOperation(choice)
-    state = states[sub_operation]
-
-    unit_system = forms.ask_unit_system(default=state.unit_system, locale=locale)
-    if unit_system is None:
-        return
-    _convert_on_unit_change(state, unit_system)
-    state.unit_system = unit_system
+    state = screen.session_state
+    assert isinstance(state, MillingSessionState)
+    sub_operation = current_sub_operation(ui, state)
     labels = forms.UNIT_LABELS[state.unit_system]
+    rows: list[split_pane.Row] = []
 
-    mode = forms.ask_mode(default=state.mode, locale=locale)
-    if mode is None:
-        return
-    # Mode switch: the new mode's power/RPM field(s) shouldn't default to a
-    # value carried over from a *different* mode. Committing that to `state`
-    # happens only once `_prompt_power_or_rpm` below actually succeeds, not
-    # here -- otherwise cancelling anywhere after this point would
-    # permanently discard the previous mode's still-valid power/RPM values
-    # for nothing (mirrors drilling.py's identically-shaped fix).
-    mode_changed = mode is not state.previous_mode
+    def _set_unit_system(value: str) -> None:
+        new_unit_system = UnitSystem.METRIC if value == "metric" else UnitSystem.IMPERIAL
+        _convert_on_unit_change(state, new_unit_system)
+        state.unit_system = new_unit_system
+
+    rows.append(
+        split_pane.RadioRow(
+            field_id=FieldId.UNIT_SYSTEM,
+            label=translate(locale, "tui.label.unit_system"),
+            options=[
+                ("metric", translate(locale, "tui.unit_system.metric")),
+                ("imperial", translate(locale, "tui.unit_system.imperial")),
+            ],
+            value="metric" if state.unit_system is UnitSystem.METRIC else "imperial",
+            on_select=_set_unit_system,
+        )
+    )
+
+    def _set_mode(value: str) -> None:
+        new_mode = CalculationMode(value)
+        if new_mode is not state.previous_mode:
+            state.available_power = None
+            state.target_rpm = None
+        state.mode = new_mode
+        state.previous_mode = new_mode
+
+    rows.append(
+        split_pane.RadioRow(
+            field_id=FieldId.MODE,
+            label=translate(locale, "tui.label.mode"),
+            options=[
+                (mode.value, translate(locale, key)) for mode, key in _MODE_OPTION_KEYS.items()
+            ],
+            value=state.mode.value,
+            on_select=_set_mode,
+        )
+    )
+
+    def _set_sub_operation(value: str) -> None:
+        screen.session_state = ui.milling_states[MillingSubOperation(value)]
+
+    rows.append(
+        split_pane.RadioRow(
+            field_id=FieldId.SUB_OPERATION,
+            label=translate(locale, "tui.label.milling_sub_operation"),
+            options=[
+                (sub.value, translate(locale, key))
+                for sub, key in _SUB_OPERATION_OPTION_KEYS.items()
+            ],
+            value=sub_operation.value,
+            on_select=_set_sub_operation,
+        )
+    )
 
     material_types = list_material_types(config_path=materials_config_path)
-    material_type = forms.ask_material_type(
-        material_types=material_types, default=state.material_type, locale=locale
-    )
-    if material_type is None:
-        return
-    state.material_type = material_type
 
-    materials = list_materials(config_path=materials_config_path, material_type=state.material_type)
-    material = forms.ask_material(
-        names=materials,
-        config_path=materials_config_path,
-        default=state.material,
-        locale=locale,
-        display_locale=display_locale,
-    )
-    if material is None:
-        return
-    state.material = material
+    def _set_material_type(value: str) -> None:
+        if value != state.material_type:
+            state.material = None
+        state.material_type = value
 
-    tool, engagement_label_key = _prompt_tool(
-        sub_operation, state, materials_config_path, locale, display_locale
-    )
-    if tool is None:
-        return
-    state.tool = tool
-
-    if not _prompt_geometry(state, engagement_label_key, labels, locale):
-        return
-
-    if not _prompt_power_or_rpm(state, labels, locale, mode, mode_changed):
-        return
-
-    result = _calculate(sub_operation, state, materials_config_path, locale)
-    forms.show_result(result, labels, locale)
-
-
-def _prompt_power_or_rpm(
-    state: MillingSessionState,
-    labels: dict[str, str],
-    locale: str,
-    mode: CalculationMode,
-    mode_changed: bool,
-) -> bool:
-    """The mode-dependent power/RPM screen(s); returns False on cancel.
-
-    Extracted from `run_milling_screen` (Constitution Principle I /
-    complexity gate) -- mirrors drilling.py's identically-shaped helper,
-    including committing `state.mode`/`previous_mode`/`target_rpm`/
-    `available_power` together, only on success (see `run_milling_screen`'s
-    comment on `mode_changed`).
-    """
-
-    title = translate(locale, "tui.milling.title")
-
-    if mode is CalculationMode.POWER_CONSTRAINED:
-        power = forms.ask_required_number(
-            title=title,
-            label=translate(locale, "tui.label.power_required"),
-            unit=labels["power"],
-            default=None if mode_changed else state.available_power,
-            locale=locale,
-            invalid_message_key="tui.prompt.power_required.invalid",
+    rows.append(
+        split_pane.RadioRow(
+            field_id=FieldId.MATERIAL_TYPE,
+            label=translate(locale, "tui.label.material_type"),
+            options=[(mt, forms.material_type_label(mt, locale)) for mt in material_types],
+            value=state.material_type,
+            on_select=_set_material_type,
         )
-        if power is None:
-            return False
-        state.mode = mode
-        state.previous_mode = mode
-        state.target_rpm = None
-        state.available_power = power
-        return True
-
-    if mode is CalculationMode.FIXED_RPM:
-        target_rpm = forms.ask_required_number(
-            title=title,
-            label=translate(locale, "tui.label.target_rpm"),
-            unit="RPM",
-            default=None if mode_changed else state.target_rpm,
-            locale=locale,
-            invalid_message_key="tui.prompt.target_rpm.invalid",
-        )
-        if target_rpm is None:
-            return False
-        available_power = forms.ask_optional_number(
-            title=title,
-            label=translate(locale, "tui.label.power"),
-            unit=labels["power"],
-            default=None if mode_changed else state.available_power,
-            locale=locale,
-        )
-        if available_power is forms.CANCELLED:
-            return False
-        state.mode = mode
-        state.previous_mode = mode
-        state.target_rpm = target_rpm
-        state.available_power = available_power
-        return True
-
-    available_power = forms.ask_optional_number(
-        title=title,
-        label=translate(locale, "tui.label.power"),
-        unit=labels["power"],
-        default=None if mode_changed else state.available_power,
-        locale=locale,
     )
-    if available_power is forms.CANCELLED:
-        return False
-    state.mode = mode
-    state.previous_mode = mode
-    state.target_rpm = None
-    state.available_power = available_power
-    return True
+
+    if state.material_type is not None:
+        material_names = list_materials(
+            config_path=materials_config_path, material_type=state.material_type
+        )
+        materials = {name: get_material(name, materials_config_path) for name in material_names}
+        display = {
+            name: forms.display_label(material, display_locale, locale)
+            for name, material in materials.items()
+            if material is not None
+        }
+        rows.append(
+            split_pane.RadioRow(
+                field_id=FieldId.MATERIAL,
+                label=translate(locale, "tui.label.material"),
+                options=list(forms.unique_labels(display).items()),
+                value=state.material,
+                on_select=lambda value: setattr(state, "material", value),
+            )
+        )
+
+    tool_names, tool_resolve, tool_label_key, engagement_label_key = _tool_registry_for(
+        sub_operation, materials_config_path
+    )
+    tools = {name: tool_resolve(name, materials_config_path) for name in tool_names}
+    tool_display = {
+        name: forms.display_label(tool, display_locale, locale)  # type: ignore[arg-type]
+        for name, tool in tools.items()
+        if tool is not None
+    }
+    rows.append(
+        split_pane.RadioRow(
+            field_id=FieldId.TOOL,
+            label=translate(locale, tool_label_key),
+            options=list(forms.unique_labels(tool_display).items()),
+            value=state.tool,
+            on_select=lambda value: setattr(state, "tool", value),
+        )
+    )
+
+    rows.append(
+        _number_row(
+            FieldId.DIAMETER,
+            translate(locale, "tui.label.mill_diameter"),
+            labels["diameter"],
+            state.diameter,
+            True,
+            lambda value: setattr(state, "diameter", value),
+        )
+    )
+    rows.append(
+        _number_row(
+            FieldId.AXIAL_DEPTH_OF_CUT,
+            translate(locale, "cli.label.axial_depth_of_cut"),
+            labels["depth"],
+            state.axial_depth_of_cut,
+            True,
+            lambda value: setattr(state, "axial_depth_of_cut", value),
+        )
+    )
+    rows.append(
+        _number_row(
+            FieldId.RADIAL_ENGAGEMENT,
+            translate(locale, engagement_label_key),
+            labels["depth"],
+            state.radial_engagement,
+            True,
+            lambda value: setattr(state, "radial_engagement", value),
+        )
+    )
+    rows.append(
+        _number_row(
+            FieldId.FEED_PER_TOOTH,
+            translate(locale, "tui.label.feed_per_tooth"),
+            labels["feed_per_tooth"],
+            state.feed_per_tooth,
+            True,
+            lambda value: setattr(state, "feed_per_tooth", value),
+        )
+    )
+    rows.append(
+        _number_row(
+            FieldId.NUMBER_OF_TEETH,
+            translate(locale, "tui.label.number_of_teeth"),
+            translate(locale, "tui.unit.teeth"),
+            state.number_of_teeth,
+            True,
+            lambda value: setattr(state, "number_of_teeth", value),
+        )
+    )
+    rows.append(
+        _number_row(
+            FieldId.LENGTH_OF_CUT,
+            translate(locale, "tui.label.length_of_cut"),
+            labels["depth"],
+            state.length_of_cut,
+            True,
+            lambda value: setattr(state, "length_of_cut", value),
+        )
+    )
+
+    def _power_row(label_key: str, required: bool) -> split_pane.NumberRow:
+        return _number_row(
+            FieldId.AVAILABLE_POWER,
+            translate(locale, label_key),
+            labels["power"],
+            state.available_power,
+            required,
+            lambda value: setattr(state, "available_power", value),
+        )
+
+    def _rpm_row() -> split_pane.NumberRow:
+        return _number_row(
+            FieldId.TARGET_RPM,
+            translate(locale, "tui.label.target_rpm"),
+            "RPM",
+            state.target_rpm,
+            True,
+            lambda value: setattr(state, "target_rpm", value),
+        )
+
+    rows.extend(
+        split_pane.power_and_rpm_rows(
+            power_constrained=state.mode is CalculationMode.POWER_CONSTRAINED,
+            fixed_rpm=state.mode is CalculationMode.FIXED_RPM,
+            power_row=_power_row,
+            rpm_row=_rpm_row,
+        )
+    )
+
+    return rows
 
 
-def _calculate(
-    sub_operation: MillingSubOperation,
-    state: MillingSessionState,
-    materials_config_path: str | None,
-    locale: str,
-):
-    """Dispatch to `calculate_end_milling`/`calculate_face_milling` with the
-    resolved inputs. Extracted from `run_milling_screen` (complexity gate)."""
+def calculate_result(
+    ui: SessionUI, state: MillingSessionState, materials_config_path: str | None, locale: str
+) -> CalculationResult:
+    """The `calculate_end_milling()`/`calculate_face_milling()` call
+    `split_pane.render_right_pane` invokes once every required field holds
+    a value (FR-006/FR-006a)."""
 
-    inputs = _resolved(state)
+    sub_operation = current_sub_operation(ui, state)
+    diameter = cast(float, state.diameter)
+    axial_depth_of_cut = cast(float, state.axial_depth_of_cut)
+    engagement = cast(float, state.radial_engagement)
+    feed_per_tooth = cast(float, state.feed_per_tooth)
+    number_of_teeth = cast(float, state.number_of_teeth)
+    length_of_cut = cast(float, state.length_of_cut)
+    material = cast(str, state.material)
+    tool = cast(str, state.tool)
+
     if sub_operation is MillingSubOperation.END_MILLING:
         return calculate_end_milling(
-            diameter=inputs.diameter,
-            axial_depth_of_cut=inputs.axial_depth_of_cut,
-            radial_depth_of_cut=inputs.radial_engagement,
-            feed_per_tooth=inputs.feed_per_tooth,
-            number_of_teeth=inputs.number_of_teeth,
-            length_of_cut=inputs.length_of_cut,
-            material=inputs.material,
-            tool=inputs.tool,
+            diameter=diameter,
+            axial_depth_of_cut=axial_depth_of_cut,
+            radial_depth_of_cut=engagement,
+            feed_per_tooth=feed_per_tooth,
+            number_of_teeth=number_of_teeth,
+            length_of_cut=length_of_cut,
+            material=material,
+            tool=tool,
             unit_system=state.unit_system,
             available_power=state.available_power,
             locale=locale,
@@ -324,145 +422,18 @@ def _calculate(
             materials_config_path=materials_config_path,
         )
     return calculate_face_milling(
-        diameter=inputs.diameter,
-        axial_depth_of_cut=inputs.axial_depth_of_cut,
-        width_of_cut=inputs.radial_engagement,
-        feed_per_tooth=inputs.feed_per_tooth,
-        number_of_teeth=inputs.number_of_teeth,
-        length_of_cut=inputs.length_of_cut,
-        material=inputs.material,
-        tool=inputs.tool,
+        diameter=diameter,
+        axial_depth_of_cut=axial_depth_of_cut,
+        width_of_cut=engagement,
+        feed_per_tooth=feed_per_tooth,
+        number_of_teeth=number_of_teeth,
+        length_of_cut=length_of_cut,
+        material=material,
+        tool=tool,
         unit_system=state.unit_system,
         available_power=state.available_power,
         locale=locale,
         mode=state.mode,
         target_rpm=state.target_rpm,
         materials_config_path=materials_config_path,
-    )
-
-
-def _prompt_geometry(
-    state: MillingSessionState, engagement_label_key: str, labels: dict[str, str], locale: str
-) -> bool:
-    """Prompt the six milling geometry inputs; returns False on cancel."""
-
-    unit_system = state.unit_system
-    title = translate(locale, "tui.milling.title")
-
-    diameter = forms.ask_number(
-        title=title,
-        label=translate(locale, "tui.label.mill_diameter"),
-        unit=labels["diameter"],
-        default=state.diameter,
-        locale=locale,
-        validate=lambda mm: validate_mill_diameter_mm(
-            _to_mm(mm, unit_system), _DEFAULT_CONFIG, DEFAULT_LOCALE
-        ),
-    )
-    if diameter is None:
-        return False
-    state.diameter = diameter
-
-    axial = forms.ask_number(
-        title=title,
-        label=translate(locale, "cli.label.axial_depth_of_cut"),
-        unit=labels["depth"],
-        default=state.axial_depth_of_cut,
-        locale=locale,
-        validate=lambda mm: validate_depth_of_cut_mm(
-            _to_mm(mm, unit_system), _DEFAULT_CONFIG, DEFAULT_LOCALE, "cli.label.axial_depth_of_cut"
-        ),
-    )
-    if axial is None:
-        return False
-    state.axial_depth_of_cut = axial
-
-    diameter_mm = _to_mm(state.diameter, unit_system)
-    engagement = forms.ask_number(
-        title=title,
-        label=translate(locale, engagement_label_key),
-        unit=labels["depth"],
-        default=state.radial_engagement,
-        locale=locale,
-        validate=lambda mm: (
-            validate_depth_of_cut_mm(
-                _to_mm(mm, unit_system), _DEFAULT_CONFIG, DEFAULT_LOCALE, engagement_label_key
-            )
-            or validate_engagement_mm(
-                _to_mm(mm, unit_system), diameter_mm, DEFAULT_LOCALE, engagement_label_key
-            )
-        ),
-    )
-    if engagement is None:
-        return False
-    state.radial_engagement = engagement
-
-    feed = forms.ask_number(
-        title=title,
-        label=translate(locale, "tui.label.feed_per_tooth"),
-        unit=labels["feed_per_tooth"],
-        default=state.feed_per_tooth,
-        locale=locale,
-        validate=lambda mm: validate_feed_per_tooth_mm(_to_mm(mm, unit_system), DEFAULT_LOCALE),
-    )
-    if feed is None:
-        return False
-    state.feed_per_tooth = feed
-
-    teeth = forms.ask_number(
-        title=title,
-        label=translate(locale, "tui.label.number_of_teeth"),
-        unit=translate(locale, "tui.unit.teeth"),
-        default=state.number_of_teeth,
-        locale=locale,
-        # Tooth count is a pure count, never unit-converted.
-        validate=lambda value: validate_tooth_count(value, DEFAULT_LOCALE),
-    )
-    if teeth is None:
-        return False
-    state.number_of_teeth = teeth
-
-    length = forms.ask_number(
-        title=title,
-        label=translate(locale, "tui.label.length_of_cut"),
-        unit=labels["depth"],
-        default=state.length_of_cut,
-        locale=locale,
-        validate=lambda mm: validate_length_of_cut_mm(
-            _to_mm(mm, unit_system), _DEFAULT_CONFIG, DEFAULT_LOCALE
-        ),
-    )
-    if length is None:
-        return False
-    state.length_of_cut = length
-    return True
-
-
-@dataclass(frozen=True)
-class _ResolvedMillingInputs:
-    """A fully-answered milling input set, ready to pass to the library.
-    Ported from `console/cli.py`'s identically-named class (research.md #3)."""
-
-    material: str
-    tool: str
-    diameter: float
-    axial_depth_of_cut: float
-    radial_engagement: float
-    feed_per_tooth: float
-    number_of_teeth: float
-    length_of_cut: float
-
-
-def _resolved(state: MillingSessionState) -> _ResolvedMillingInputs:
-    """Fully-answered geometry/material/tool, per `_MillingSessionState.resolved`."""
-
-    return _ResolvedMillingInputs(
-        material=cast(str, state.material),
-        tool=cast(str, state.tool),
-        diameter=cast(float, state.diameter),
-        axial_depth_of_cut=cast(float, state.axial_depth_of_cut),
-        radial_engagement=cast(float, state.radial_engagement),
-        feed_per_tooth=cast(float, state.feed_per_tooth),
-        number_of_teeth=cast(float, state.number_of_teeth),
-        length_of_cut=cast(float, state.length_of_cut),
     )

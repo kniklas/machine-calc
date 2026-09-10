@@ -74,7 +74,9 @@ def render_tree(
 
     rows = tree_rows(tree)
     mnemonics = tree_mnemonics(rows, locale)
-    fragments: StyleAndTextTuples = [("class:pane-title", f"{translate(locale, 'tui.machining_menu.title')}\n")]
+    fragments: StyleAndTextTuples = [
+        ("class:pane-title", f"{translate(locale, 'tui.machining_menu.title')}\n")
+    ]
     for index, (row, mnemonic) in enumerate(zip(rows, mnemonics)):
         style = "class:selected" if focused and index == selected_index else ""
         indent = "  " * (row.indent + 1)

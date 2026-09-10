@@ -23,18 +23,28 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 from prompt_toolkit.formatted_text import StyleAndTextTuples
 
 from mfgparams.console.i18n import get_locale
 from mfgparams.console.tui.menu import MenuEntry
-from mfgparams.console.tui.screens.drilling import DrillingSessionState
-from mfgparams.console.tui.screens.milling import MillingSessionState
 from mfgparams.i18n import get_raw_locale
 from mfgparams.i18n import translate as _translate_core
 from mfgparams.models import CalculationResult, MillingSubOperation
 from mfgparams.registry_config import RegistryConfigError
+
+if TYPE_CHECKING:
+    # Deferred to type-checking only: `screens/drilling.py`/`screens/milling.py`
+    # import `FieldId`/`OperationScreen` *from this module* at their own
+    # module level (T022/T023), so importing them back here eagerly would be
+    # a circular import. Safe as a type-only import because
+    # `from __future__ import annotations` (above) means `OperationScreen`'s
+    # `session_state` annotation below is never evaluated at runtime.
+    from prompt_toolkit.application import Application
+
+    from mfgparams.console.tui.screens.drilling import DrillingSessionState
+    from mfgparams.console.tui.screens.milling import MillingSessionState
 
 
 # -- 018-tui-splitpane-redesign: UI-state entities (data-model.md) --------
@@ -147,12 +157,29 @@ class SessionUI:
     menu_bar: MenuBar
     tree: MachiningTree = field(default_factory=MachiningTree)
     open_operation: OperationScreen | None = None
-    drilling_state: DrillingSessionState = field(default_factory=DrillingSessionState)
+    drilling_state: DrillingSessionState = field(default_factory=lambda: _default_drilling_state())
     milling_states: dict[MillingSubOperation, MillingSessionState] = field(
-        default_factory=lambda: {sub: MillingSessionState() for sub in MillingSubOperation}
+        default_factory=lambda: _default_milling_states()
     )
     locale: str = "en"
     materials_config_path: str | None = None
+
+
+def _default_drilling_state() -> DrillingSessionState:
+    """Deferred import (see the `TYPE_CHECKING` block above): only called at
+    `SessionUI()` construction time, well after both modules have finished
+    importing, so this cannot hit the drilling.py<->app.py import cycle a
+    module-level import of `DrillingSessionState` would."""
+
+    from mfgparams.console.tui.screens.drilling import DrillingSessionState
+
+    return DrillingSessionState()
+
+
+def _default_milling_states() -> dict[MillingSubOperation, MillingSessionState]:
+    from mfgparams.console.tui.screens.milling import MillingSessionState
+
+    return {sub: MillingSessionState() for sub in MillingSubOperation}
 
 
 def _resolve_materials_config(materials_config_path: str | None, locale: str) -> None:
@@ -203,15 +230,14 @@ class _ViewState:
 
 
 def _render_body(ui: SessionUI, view: _ViewState, display_locale: str) -> StyleAndTextTuples:
-    """Dispatch on ``view.body_mode``. Operation-screen and Configuration
-    content are placeholders here -- US2 (T021-T023) and US2's T024
-    replace them with the real split-pane/registry-view content; this
-    phase (US1) only needs *something* to open per operation, per its own
-    "independent of what that screen's panes contain" Independent Test.
-    """
+    """Dispatch on ``view.body_mode`` for every body *except* an open
+    operation screen -- that one is a split-pane (left+right), not a
+    single-pane body, and is rendered separately by ``build_app``'s
+    ``DynamicContainer`` (see its own docstring)."""
 
     from mfgparams.console.tui import machining_menu
     from mfgparams.console.tui.screens.about import render_about
+    from mfgparams.console.tui.screens.configuration import render_configuration
     from mfgparams.console.tui.screens.help import render_help
 
     if view.body_mode == "tree":
@@ -221,49 +247,60 @@ def _render_body(ui: SessionUI, view: _ViewState, display_locale: str) -> StyleA
     if view.body_mode == "help":
         return render_help(ui.locale)
     if view.body_mode == "configuration":
-        return [("class:pane-title", "Configuration\n\n"), ("", "(view-only; T024)")]
-    if view.body_mode in ("drilling", "milling") and ui.open_operation is not None:
-        op = ui.open_operation
-        return [
-            ("class:pane-title", f"{op.operation.title()}\n\n"),
-            ("", f"selected field: {op.selected_field.value} (T021-T023)"),
-        ]
+        return render_configuration(ui.materials_config_path, ui.locale, display_locale)
     return [("class:hint", "Select Machining, Configuration, About, or Help.")]
 
 
-def _open_milling(ui: SessionUI, view: _ViewState) -> None:
+def _open_milling(
+    ui: SessionUI, view: _ViewState, materials_config_path: str | None, display_locale: str
+) -> None:
     """Opens with whichever sub-operation's state was last active
-    (defaulting to End Milling); FR-009a's actual sub-operation *field* and
-    its state-switching behavior is T023's job, not this shell phase's."""
+    (defaulting to End Milling, FR-009a)."""
+
+    from mfgparams.console.tui.screens import milling, split_pane
 
     state = ui.milling_states[MillingSubOperation.END_MILLING]
-    ui.open_operation = OperationScreen(
+    screen = OperationScreen(
         operation="milling", session_state=state, selected_field=FieldId.UNIT_SYSTEM
     )
+    ui.open_operation = screen
     view.body_mode = "milling"
+    rows = milling.rows_for(ui, screen, materials_config_path, ui.locale, display_locale)
+    split_pane.sync_buffer(rows, screen)
 
 
-def _open_drilling(ui: SessionUI, *, selected_field: FieldId) -> OperationScreen:
+def _open_drilling(
+    ui: SessionUI,
+    *,
+    selected_field: FieldId,
+    materials_config_path: str | None,
+    display_locale: str,
+) -> OperationScreen:
     """Reuses the existing ``OperationScreen`` if Drilling is already open
     (FR-012 carryover -- re-entering must not discard it), only replacing
     ``selected_field`` so the tree's tool-selection shortcut (FR-005a)
     actually lands focus on that field rather than always resetting to the
     first one."""
 
+    from mfgparams.console.tui.screens import drilling, split_pane
+
     existing = ui.open_operation
     if existing is not None and existing.operation == "drilling":
-        existing.selected_field = selected_field
-        return existing
-    screen = OperationScreen(
-        operation="drilling", session_state=ui.drilling_state, selected_field=selected_field
-    )
-    ui.open_operation = screen
+        screen = existing
+        screen.selected_field = selected_field
+    else:
+        screen = OperationScreen(
+            operation="drilling", session_state=ui.drilling_state, selected_field=selected_field
+        )
+        ui.open_operation = screen
+    rows = drilling.rows_for(screen, materials_config_path, ui.locale, display_locale)
+    split_pane.sync_buffer(rows, screen)
     return screen
 
 
-def build_app(
+def build_app(  # noqa: C901
     materials_config_path: str | None, locale: str, display_locale: str
-) -> tuple["Application[None]", SessionUI, _ViewState]:
+) -> tuple[Application[None], SessionUI, _ViewState]:
     """Construct the persistent `Application` plus its `SessionUI`/
     `_ViewState`, without running it -- split out from `run()` so tests can
     drive the returned `Application` headlessly (`_tui_test_support.py`'s
@@ -285,16 +322,33 @@ def build_app(
     exits unconditionally.
     """
 
+    # noqa: C901 justification -- this is a composition root, not deep
+    # logic: it wires ~25 independently-trivial key-binding handlers (each
+    # a few lines, no nested branching of its own) around one persistent
+    # `Application`'s `ui`/`view`/`app`/`bar_control`/`left_control`/
+    # `right_control` closures. Every self-contained decision block that
+    # *was* extractable without fragmenting that shared closure state
+    # already has been (`split_pane.power_and_rpm_rows`,
+    # `milling._tool_registry_for`, the top-level
+    # `_render_body`/`_open_milling`/`_open_drilling` helpers). Extracting
+    # the key-binding registrations themselves would require threading 6+
+    # shared mutable references through new top-level functions (or a
+    # mutable-`Application`-ref indirection, since `app` does not exist
+    # until after the bindings that close over it are defined) -- net less
+    # readable than the current flat, docstring-annotated registration, not
+    # more.
     from prompt_toolkit.application import Application
     from prompt_toolkit.filters import Condition
     from prompt_toolkit.key_binding import KeyBindings
     from prompt_toolkit.keys import Keys
-    from prompt_toolkit.layout import HSplit, Layout, Window
+    from prompt_toolkit.layout import DynamicContainer, HSplit, Layout, VSplit, Window
     from prompt_toolkit.layout.controls import FormattedTextControl
     from prompt_toolkit.styles import Style
 
-    from mfgparams.console.tui import machining_menu
+    from mfgparams.console.i18n import translate
+    from mfgparams.console.tui import forms, machining_menu
     from mfgparams.console.tui.menu import _assign_mnemonics, default_entries, render_menu_bar
+    from mfgparams.console.tui.screens import drilling, milling, split_pane
 
     bar_entries = default_entries(locale)
     bar_mnemonics = _assign_mnemonics(bar_entries)
@@ -320,6 +374,64 @@ def build_app(
 
     def _current_tree_row_count() -> int:
         return len(machining_menu.tree_rows(ui.tree))
+
+    def _current_pane_rows() -> list[split_pane.Row]:
+        """The open operation's `split_pane.Row` list, recomputed fresh on
+        every access (like `_current_tree_row_count`'s tree-row recompute)
+        since a row's presence/options can depend on another row's just-
+        committed value (T021's `rows_for` docstring)."""
+
+        op = ui.open_operation
+        if op is None:
+            return []
+        if op.operation == "drilling":
+            return drilling.rows_for(op, materials_config_path, ui.locale, display_locale)
+        return milling.rows_for(ui, op, materials_config_path, ui.locale, display_locale)
+
+    def _render_left_pane() -> StyleAndTextTuples:
+        op = ui.open_operation
+        assert op is not None
+        title_key = "tui.drilling.title" if op.operation == "drilling" else "tui.milling.title"
+        return split_pane.render_left_pane(
+            _current_pane_rows(),
+            op,
+            translate(ui.locale, title_key),
+            ui.locale,
+            focused=not on_bar(),
+        )
+
+    def _calculate_current_operation() -> CalculationResult:
+        op = ui.open_operation
+        assert op is not None
+        if op.operation == "drilling":
+            return drilling.calculate_result(
+                cast("DrillingSessionState", op.session_state), materials_config_path, ui.locale
+            )
+        return milling.calculate_result(
+            ui, cast("MillingSessionState", op.session_state), materials_config_path, ui.locale
+        )
+
+    def _render_right_pane() -> StyleAndTextTuples:
+        op = ui.open_operation
+        assert op is not None
+        labels = forms.UNIT_LABELS[op.session_state.unit_system]
+        return split_pane.render_right_pane(
+            _current_pane_rows(), op, _calculate_current_operation, labels, ui.locale
+        )
+
+    left_control = FormattedTextControl(_render_left_pane, focusable=True)
+    right_control = FormattedTextControl(_render_right_pane, focusable=False)
+
+    def _current_body():
+        if view.body_mode in ("drilling", "milling") and ui.open_operation is not None:
+            return VSplit(
+                [
+                    Window(content=left_control),
+                    Window(width=1, char="│"),
+                    Window(content=right_control),
+                ]
+            )
+        return Window(content=body_control)
 
     def _activate_bar_entry() -> None:
         entry = bar_entries[view.bar_selected]
@@ -347,13 +459,20 @@ def build_app(
         rows = machining_menu.tree_rows(ui.tree)
         row = rows[view.tree_selected]
         if row.action == "open_milling":
-            _open_milling(ui, view)
+            _open_milling(ui, view, materials_config_path, display_locale)
+            app.layout.focus(left_control)
         elif row.action == "toggle_drilling":
             ui.tree.drilling_expanded = not ui.tree.drilling_expanded
             view.tree_selected = min(view.tree_selected, _current_tree_row_count() - 1)
         elif row.action == "open_drilling_tool":
-            _open_drilling(ui, selected_field=FieldId.TOOL)
+            _open_drilling(
+                ui,
+                selected_field=FieldId.TOOL,
+                materials_config_path=materials_config_path,
+                display_locale=display_locale,
+            )
             view.body_mode = "drilling"
+            app.layout.focus(left_control)
 
     bindings = KeyBindings()
 
@@ -361,7 +480,11 @@ def build_app(
     def _escape_bar(event) -> None:
         if ui.open_operation is not None:
             ui.open_operation = None
-            view.body_mode = None
+            # Acceptance Scenario 5: "land back at the menu bar/tree", not a
+            # blank body -- if the tree is still expanded (it isn't touched
+            # by closing an operation, FR-005a), show it rather than the
+            # generic hint.
+            view.body_mode = "tree" if ui.tree.expanded else None
         else:
             event.app.exit()
 
@@ -427,11 +550,56 @@ def build_app(
                 _activate_tree_row()
                 return
 
+    pane_focused = Condition(
+        lambda: not on_bar()
+        and view.body_mode in ("drilling", "milling")
+        and ui.open_operation is not None
+    )
+
+    @bindings.add("up", filter=pane_focused)
+    @bindings.add("k", filter=pane_focused)
+    def _pane_up(event) -> None:
+        assert ui.open_operation is not None
+        split_pane.move_selection(_current_pane_rows(), ui.open_operation, -1)
+
+    @bindings.add("down", filter=pane_focused)
+    @bindings.add("j", filter=pane_focused)
+    def _pane_down(event) -> None:
+        assert ui.open_operation is not None
+        split_pane.move_selection(_current_pane_rows(), ui.open_operation, 1)
+
+    @bindings.add("left", filter=pane_focused)
+    def _pane_left(event) -> None:
+        assert ui.open_operation is not None
+        split_pane.nudge_selected(_current_pane_rows(), ui.open_operation, -1)
+
+    @bindings.add("right", filter=pane_focused)
+    def _pane_right(event) -> None:
+        assert ui.open_operation is not None
+        split_pane.nudge_selected(_current_pane_rows(), ui.open_operation, 1)
+
+    @bindings.add("backspace", filter=pane_focused)
+    def _pane_backspace(event) -> None:
+        assert ui.open_operation is not None
+        split_pane.backspace_selected(_current_pane_rows(), ui.open_operation)
+
+    @bindings.add(Keys.Any, filter=pane_focused)
+    def _pane_char(event) -> None:
+        """FR-016: typing a digit (or `.`/`-`) immediately edits the
+        selected numeric field -- a no-op on a `RadioRow` (`edit_selected`'s
+        own guard) and on any other character (radios never take free
+        text; contract §4 has no mnemonic requirement for pane rows)."""
+
+        assert ui.open_operation is not None
+        data = event.data
+        if data and (data.isdigit() or data in ".-"):
+            split_pane.edit_selected(_current_pane_rows(), ui.open_operation, data)
+
     root = HSplit(
         [
             Window(content=bar_control, height=1),
             Window(height=1, char="─"),
-            Window(content=body_control),
+            DynamicContainer(_current_body),
         ]
     )
     app: Application[None] = Application(
