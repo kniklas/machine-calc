@@ -221,6 +221,17 @@ User Story 1's navigation shell rather than exited or reset.
   the left pane),
   and plain fields for diameter, hole depth (Drilling) or the equivalent geometry fields (Milling),
   and available power.
+- **FR-005a**: FR-005's "simultaneously visible and editable" guarantee MUST hold regardless of how
+  the two placement-related Assumptions below resolve — specifically, if `/speckit-clarify` places
+  Drilling's tool selection in the Machining tree (drilling-type Assumption, reading (a)), then
+  collapsing that tree MUST NOT be able to hide the tool selector while Drilling's operation screen
+  remains open (tree-collapse Assumption). These two Assumptions were flagged independently and
+  each individually reasonable, but their combination can silently violate FR-005/SC-001's
+  all-inputs-visible contract, leaving a required field unreachable. `/speckit-clarify` MUST resolve
+  tool-selection placement and tree-collapse behavior as one coupled decision, not two independent
+  ones — e.g. by preventing the tree from collapsing while an operation depending on its contents is
+  open, by closing that operation screen on collapse, or by keeping the tool selector in the
+  operation pane regardless of where the tree-level "drilling type" choice itself ends up.
 - **FR-006**: The right pane MUST display the calculation result once every required left-pane
   input holds a valid value, and MUST NOT display a result computed from a different, no-longer-
   current set of inputs.
@@ -382,7 +393,8 @@ User Story 1's navigation shell rather than exited or reset.
   core/`processes.machining.drilling` code needs to change at all. **This question also covers
   where Milling's own End-Milling/Face-Milling choice (FR-009a) lives** — tree or left pane — since
   FR-009 requires Milling to follow Drilling's pattern exactly; `/speckit-clarify`'s answer here
-  should address both operations' placement together, not just Drilling's.
+  should address both operations' placement together, not just Drilling's. It is also coupled to
+  the tree-collapse Assumption below, per FR-005a's normative constraint on the combination.
 - **Whether collapsing the Machining tree while a leaf operation's screen is open closes that
   screen is a third genuinely open question** (Edge Cases above), alongside Configuration scope and
   drilling-type/sub-operation placement — the checklist and PR test plan's "two open Assumptions"
@@ -396,7 +408,8 @@ User Story 1's navigation shell rather than exited or reset.
   mutually-exclusive-state by construction, so it neither supports nor rules out this feature's
   persistent layout answering the question either way. This is a genuinely fresh architectural
   decision for this feature, not a carryover — flagged for `/speckit-clarify` to confirm or
-  override.
+  override. This default is coupled to the drilling-type Assumption above, not independent of it —
+  per FR-005a's normative constraint on the combination.
 - **The 25×80 minimum terminal size (017's FR-011) likely needs raising, not just carrying
   forward, based on the recommended prototype's measured pane height.** Milling's left pane (13
   fields including the always-present available-power field, 14 with Fixed RPM's extra target-RPM
