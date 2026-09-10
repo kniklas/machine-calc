@@ -4,12 +4,26 @@ Not a test module itself (no ``test_*`` functions) -- pytest does not collect
 it, matching this repo's convention of test-support modules living directly
 in the directory that uses them.
 
-Drives a synchronous, blocking text-GUI call (e.g. `run_drilling_screen`)
-with a scripted key sequence, entirely offscreen: `prompt_toolkit.output
-.DummyOutput` renders nowhere, and `prompt_toolkit.input.create_pipe_input`
-feeds keystrokes instead of a real keyboard -- the same technique the
-pre-plan technical spike used (spike-tui-framework.md) to probe framework
-candidates headlessly.
+Drives a synchronous, blocking text-GUI call with a scripted key sequence,
+entirely offscreen: `prompt_toolkit.output.DummyOutput` renders nowhere, and
+`prompt_toolkit.input.create_pipe_input` feeds keystrokes instead of a real
+keyboard -- the same technique the pre-plan technical spike used
+(spike-tui-framework.md) to probe framework candidates headlessly.
+
+**018-tui-splitpane-redesign (research.md #2)**: 017's dialog-chain screens
+were a *sequence* of separate, completed `Application.run()` calls, so a
+test only ever needed the *final* state once `target()` returned. This
+feature's persistent, single `Application` (`tui/app.py`) makes that
+insufficient on its own -- e.g. confirming the right pane shows a
+placeholder mid-session, before every field is complete, needs inspecting
+state *while* the app is still running, not just after it exits. `run_headless`
+below gained an optional `on_batch` hook for exactly this: it does not
+capture rendered terminal output itself (a `DummyOutput` records nothing to
+read back) -- instead, a caller closes over its own state object and a pure
+render function (mirroring the pre-plan prototype's own pattern: rendering
+is a plain function of state, independent of the `Application`/`Layout`
+wiring) and asserts against that. The underlying thread/`contextvars`
+mechanism is identical for both shapes; only the assertion pattern differs.
 
 **Why a background thread with explicit `contextvars` propagation**: the
 target call is synchronous and blocking (it calls `.run()` on a chain of
@@ -66,14 +80,32 @@ _STEP_DELAY_SECONDS = 0.65
 _JOIN_TIMEOUT_SECONDS = 20.0
 
 
-def run_headless(target: Callable[[], None], key_batches: list[str]) -> None:
-    """Run ``target`` (a no-argument callable wrapping the real screen call)
-    against a scripted, staggered sequence of key batches, headlessly.
+def run_headless(
+    target: Callable[[], None],
+    key_batches: list[str],
+    *,
+    on_batch: Callable[[], None] | None = None,
+) -> None:
+    """Run ``target`` (a no-argument callable wrapping the real screen/app
+    call) against a scripted, staggered sequence of key batches, headlessly.
+
+    ``on_batch``, if given, is called once before each batch is sent --
+    reflecting the *previous* batch's now-settled effect (or the app's
+    initial state, before the first batch), using the same
+    :data:`_STEP_DELAY_SECONDS` wait that already happens there, so this
+    adds no extra wall-clock cost. Also called once more after the final
+    batch settles, so the last batch's effect is inspectable too. This is
+    the 018-tui-splitpane-redesign mid-session-inspection hook (module
+    docstring): a caller closes over its own state object/pure render
+    function and asserts inside ``on_batch``, since this module has no way
+    to capture rendered terminal output itself and stays deliberately
+    unaware of what "state" means for the screen being driven. Not called
+    if ``target`` has already returned (nothing left to inspect).
 
     Raises ``AssertionError`` if ``target`` has not returned within
     :data:`_JOIN_TIMEOUT_SECONDS` of the last batch being sent -- almost
-    always means the key script under-supplies a step (a dialog is still
-    open, waiting), not a hang in the product code itself.
+    always means the key script under-supplies a step (a dialog/the app is
+    still open, waiting), not a hang in the product code itself.
 
     Re-raises, on the calling thread, any exception ``target`` itself
     raised on its worker thread (Copilot review on PR #94: this previously
@@ -101,11 +133,22 @@ def run_headless(target: Callable[[], None], key_batches: list[str]) -> None:
                 thread.join(timeout=_STEP_DELAY_SECONDS)
                 if not thread.is_alive():
                     break
+                if on_batch is not None:
+                    on_batch()
                 pipe_input.send_text(batch)
+            else:
+                # Only reached if the loop completed without `break` (i.e.
+                # `target` was still alive through the last batch) -- let
+                # that last batch settle, then give `on_batch` one final
+                # look, mirroring the per-batch call above.
+                if on_batch is not None:
+                    thread.join(timeout=_STEP_DELAY_SECONDS)
+                    if thread.is_alive():
+                        on_batch()
             thread.join(timeout=_JOIN_TIMEOUT_SECONDS)
             assert not thread.is_alive(), (
                 "target did not complete -- the key-batch script likely "
-                "under-supplies a step (a dialog is still open)"
+                "under-supplies a step (a dialog/the app is still open, waiting for input)"
             )
     if captured:
         raise captured[0]

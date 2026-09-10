@@ -24,12 +24,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Callable
+from typing import Callable, Literal
 
 from mfgparams.console.i18n import get_locale
+from mfgparams.console.tui.menu import MenuEntry
+from mfgparams.console.tui.screens.drilling import DrillingSessionState
+from mfgparams.console.tui.screens.milling import MillingSessionState
 from mfgparams.i18n import get_raw_locale
 from mfgparams.i18n import translate as _translate_core
-from mfgparams.models import MillingSubOperation
+from mfgparams.models import CalculationResult, MillingSubOperation
 from mfgparams.registry_config import RegistryConfigError
 
 
@@ -78,6 +81,127 @@ class NavigationState:
 
         self.current_screen = self.screen_stack.pop() if self.screen_stack else ScreenId.MENU
         return self.current_screen
+
+
+# -- 018-tui-splitpane-redesign: new UI-state entities (data-model.md) -----
+#
+# `ScreenId`/`NavigationState` above model 017's mutually-exclusive,
+# one-screen-at-a-time dialog chain and are superseded by the entities
+# below once T012 rewrites `run()`/the menu-bar and tree wiring around them
+# (both sets temporarily coexist between T003 and T012, since
+# `menu.py`/`machining_menu.py`/`run()` still depend on the old ones until
+# then). The new model is a single persistent layout where the menu bar,
+# the Machining tree, and an open operation screen can all be simultaneously
+# present -- `SessionUI` replaces `NavigationState` as the single source of
+# truth for that.
+
+
+class FieldId(Enum):
+    """Every left-pane field either operation can present (FR-005/FR-009),
+    the union across Drilling and Milling -- a screen's own field order
+    (data-model.md's `OperationScreen`) selects the subset relevant to its
+    operation and current mode, mirroring the pre-plan prototype's own
+    field-ordering approach (spec's Recommended Next Steps)."""
+
+    UNIT_SYSTEM = "unit_system"
+    MODE = "mode"
+    MATERIAL_TYPE = "material_type"
+    MATERIAL = "material"
+    TOOL = "tool"
+    SUB_OPERATION = "sub_operation"
+    DIAMETER = "diameter"
+    DEPTH = "depth"
+    AXIAL_DEPTH_OF_CUT = "axial_depth_of_cut"
+    RADIAL_ENGAGEMENT = "radial_engagement"
+    FEED_PER_TOOTH = "feed_per_tooth"
+    NUMBER_OF_TEETH = "number_of_teeth"
+    LENGTH_OF_CUT = "length_of_cut"
+    TARGET_RPM = "target_rpm"
+    AVAILABLE_POWER = "available_power"
+
+
+@dataclass(frozen=True)
+class MenuBar:
+    """FR-001's persistent horizontal bar -- a fixed, closed entry set
+    (unlike 017's `run_top_level_menu`, which built a *fresh* entry list per
+    screen instance; this one never changes at runtime). Reuses `menu.py`'s
+    existing `MenuEntry(value, label)` shape rather than inventing a new
+    entry type."""
+
+    entries: tuple[MenuEntry, ...]
+
+
+@dataclass
+class MachiningTree:
+    """FR-002/FR-003's collapsible Milling/Drilling navigation, replacing
+    `machining_menu.py`'s full-screen submenu. `drilling_expanded` is only
+    meaningful while `expanded` is `True`; collapsing Machining implicitly
+    collapses it too (data-model.md's validation rule) -- there is no
+    independent sub-state to preserve across a Machining collapse/expand.
+
+    Milling has no equivalent sub-expansion: FR-002/FR-003 define
+    tree-level expansion for Drilling only (/speckit-analyze finding I1),
+    so there is no `milling_expanded` field here.
+    """
+
+    expanded: bool = False
+    drilling_expanded: bool = False
+
+    def toggle_machining(self) -> None:
+        """Acceptance Scenarios 2/4: expand if collapsed; collapse (and
+        implicitly collapse the Drilling sub-node too) if expanded."""
+
+        self.expanded = not self.expanded
+        if not self.expanded:
+            self.drilling_expanded = False
+
+    def toggle_drilling(self) -> None:
+        """Acceptance Scenario 3: only meaningful while `expanded`; a no-op
+        otherwise (there is nothing to expand into if Machining itself is
+        collapsed)."""
+
+        if self.expanded:
+            self.drilling_expanded = not self.drilling_expanded
+
+
+@dataclass
+class OperationScreen:
+    """FR-004's left/right split-pane screen for whichever operation
+    (Drilling or Milling, FR-009's identical pattern) is currently open.
+
+    `last_result`/`last_result_key` implement FR-006's "MUST NOT display a
+    result computed from a different, no-longer-current set of inputs" as
+    a cache keyed on the exact input tuple that produced it (mirroring the
+    pre-plan prototype's own `_last_result_key` pattern), not a bare flag.
+    """
+
+    operation: Literal["drilling", "milling"]
+    session_state: DrillingSessionState | MillingSessionState
+    selected_field: FieldId
+    field_buffer: str = ""
+    last_result: CalculationResult | None = None
+    last_result_key: tuple[object, ...] | None = None
+
+
+@dataclass
+class SessionUI:
+    """The single persistent session object `run()` owns for the whole run
+    (018-tui-splitpane-redesign), replacing `NavigationState`. `tree` and
+    `open_operation` are deliberately independent fields with no code path
+    writing both from the same handler (FR-005a's invariant, enforced by
+    construction -- see `test_session_ui.py`): collapsing/expanding the
+    tree never affects which operation screen is open, and vice versa.
+    """
+
+    menu_bar: MenuBar
+    tree: MachiningTree = field(default_factory=MachiningTree)
+    open_operation: OperationScreen | None = None
+    drilling_state: DrillingSessionState = field(default_factory=DrillingSessionState)
+    milling_states: dict[MillingSubOperation, MillingSessionState] = field(
+        default_factory=lambda: {sub: MillingSessionState() for sub in MillingSubOperation}
+    )
+    locale: str = "en"
+    materials_config_path: str | None = None
 
 
 def _resolve_materials_config(materials_config_path: str | None, locale: str) -> None:

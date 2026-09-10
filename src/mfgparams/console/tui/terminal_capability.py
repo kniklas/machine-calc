@@ -14,9 +14,12 @@ import shutil
 import sys
 from dataclasses import dataclass
 
-#: FR-011's target minimum terminal size.
+#: 018-tui-splitpane-redesign FR-013/research.md #1: raised from 017's 25 --
+#: the complete layout (menu bar + tree + an operation's left/right panes)
+#: no longer reliably fits the old floor. MIN_COLUMNS is unaffected (the
+#: prototype's combined pane width already fit comfortably within 80).
 MIN_COLUMNS = 80
-MIN_LINES = 25
+MIN_LINES = 30
 
 
 @dataclass(frozen=True)

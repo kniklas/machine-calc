@@ -36,10 +36,10 @@ Single project — `src/mfgparams/`, `tests/` at repository root (plan.md's Proj
 changes. Unlike 017, no new dependency or package skeleton is needed here — `console/tui/` already
 exists.
 
-- [ ] T001 [P] Raise `MIN_LINES` from `25` to `30` in
+- [X] T001 [P] Raise `MIN_LINES` from `25` to `30` in
       `src/mfgparams/console/tui/terminal_capability.py`; keep `MIN_COLUMNS` at `80` unchanged
       (research.md #1 — the complete layout no longer reliably fits the old floor)
-- [ ] T002 [P] Adapt `tests/integration/_tui_test_support.py`'s headless-driving helper for a
+- [X] T002 [P] Adapt `tests/integration/_tui_test_support.py`'s headless-driving helper for a
       single persistent `Application` (research.md #2): keep the existing thread +
       `contextvars.copy_context()` propagation technique, but change the call shape to drive one
       `app.py` entry point for the whole session and add a way to capture the currently-rendered
@@ -55,12 +55,12 @@ exists.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T003 [P] Define `MenuBar`, `MachiningTree`, `FieldId` (per-operation enum/literal),
+- [X] T003 [P] Define `MenuBar`, `MachiningTree`, `FieldId` (per-operation enum/literal),
       `OperationScreen`, and `SessionUI` (replacing `NavigationState`) in
       `src/mfgparams/console/tui/app.py`, per data-model.md — pure dataclasses/enums at this point,
       no rendering logic yet; `MenuBar` reuses 017's existing `MenuEntry` shape from `menu.py`
       rather than inventing a new entry type
-- [ ] T004 [P] Add the new `tui.*` keys this feature needs to
+- [X] T004 [P] Add the new `tui.*` keys this feature needs to
       `src/mfgparams/console/locales/en.py`: a `tui.menu.exit` label (Exit is new to the bar,
       FR-001) and a tree drilling-type/tool-selection leaf label. Reuse existing keys rather than
       duplicating: the right pane's title is already `tui.result.title` ("Result"); FR-006b's
@@ -68,13 +68,13 @@ exists.
       ("Please enter a numeric value.") rather than a new key — confirm this reuse still reads
       correctly in the new inline-field context, not just the old dialog context, before assuming
       it needs no wording change
-- [ ] T005 [P] Unit test: `SessionUI`'s `tree`/`open_operation` independence — collapsing/expanding
+- [X] T005 [P] Unit test: `SessionUI`'s `tree`/`open_operation` independence — collapsing/expanding
       `tree` never changes `open_operation`, and vice versa (FR-005a's invariant as a data-model
       constraint) — in `tests/unit/console/tui/test_session_ui.py`
-- [ ] T006 [P] Unit test: `MachiningTree`'s expand/collapse state transitions, including the
+- [X] T006 [P] Unit test: `MachiningTree`'s expand/collapse state transitions, including the
       `drilling_expanded` MUST-be-`False`-when-`expanded`-is-`False` validation rule, in
       `tests/unit/console/tui/test_machining_tree.py`
-- [ ] T007 [P] Update the existing terminal-size unit test for the new 30-row floor (mock terminal
+- [X] T007 [P] Update the existing terminal-size unit test for the new 30-row floor (mock terminal
       sizes above/below 30×80, not 25×80) in `tests/unit/console/tui/test_terminal_capability.py`
 
 **Checkpoint**: Foundation ready — user story implementation can now begin.
@@ -246,7 +246,7 @@ is usable end to end (quickstart.md Scenarios 1-6).
 - [ ] T031 [P] Re-verify `tests/performance/test_tui_startup_budget.py` against the new persistent
       `Application`'s baseline memory footprint; extend only if research.md's assumption (no
       material difference from the old per-screen baseline) turns out wrong
-- [ ] T032 [P] Update `tests/integration/test_tui_terminal_too_small.py` for the new 30×80 floor
+- [X] T032 [P] Update `tests/integration/test_tui_terminal_too_small.py` for the new 30×80 floor
       (T001)
 - [ ] T033 [P] Confirm (and update only where they construct the now-replaced `NavigationState`/
       screen-stack directly) `tests/integration/test_tui_no_tty_fallback.py`,

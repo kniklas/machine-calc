@@ -23,9 +23,19 @@ MESSAGES: dict[str, str] = {
     "tui.menu.configuration": "Configuration",
     "tui.menu.about": "About",
     "tui.menu.help": "Help",
+    # 018-tui-splitpane-redesign FR-001: new to the persistent bar -- 017 had
+    # no labeled Exit item, only an unlabeled Escape/Ctrl-Q handler.
+    "tui.menu.exit": "Exit",
     "tui.machining_menu.title": "Machining",
     "tui.machining_menu.milling": "Milling",
     "tui.machining_menu.drilling": "Drilling",
+    # 018-tui-splitpane-redesign FR-003/FR-005a: the Machining tree's
+    # drilling-type leaf -- a navigation shortcut into the same
+    # tool-selection field FR-005's left pane always shows (not a
+    # duplicate/independent value); "Tool" not "Drilling tool" since it's
+    # already nested under Drilling, mirroring how "Milling"/"Drilling"
+    # themselves don't repeat "Machining".
+    "tui.machining_menu.drilling_tool": "Tool",
     # --- Shared dialog chrome ---
     "tui.action.ok": "OK",
     "tui.action.back": "Back",
@@ -85,9 +95,16 @@ MESSAGES: dict[str, str] = {
     # --- Numeric input prompt/validation (shared) ---
     "tui.prompt.number": "{label} ({unit})",
     "tui.prompt.number.with_default": "{label} ({unit}, default {default})",
+    # Reused unchanged for 018-tui-splitpane-redesign FR-006b's unparseable-
+    # number message: still a complete, actionable sentence shown next to
+    # the field, not just inside 017's now-replaced modal dialog -- no
+    # wording change needed for the new inline context.
     "tui.prompt.number.invalid": "Please enter a numeric value.",
     "tui.prompt.power.optional_hint": "Leave blank if unknown.",
     # --- Result display ---
+    # Reused unchanged as the right pane's title (018-tui-splitpane-redesign
+    # FR-006/FR-006a) -- "Result" reads correctly whether it labels a modal
+    # dialog (017) or a persistent pane (018).
     "tui.result.title": "Result",
     "tui.result.spindle_speed": "Spindle speed:     {value} RPM{mode_suffix}",
     "tui.result.spindle_speed.mode_suffix": " ({label})",
