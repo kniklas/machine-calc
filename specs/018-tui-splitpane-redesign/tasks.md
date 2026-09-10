@@ -267,7 +267,7 @@ is usable end to end (quickstart.md Scenarios 1-6).
       first-time/non-technical-user walkthrough and 017's own tasks.md T037, both folded into this
       feature's acceptance validation per spec's Carried-Over Items table (do not repeat 017's
       "not done as such" gap if an interactive terminal is available this time)
-- [ ] T039 Run `/speckit-analyze` to confirm spec.md/plan.md/tasks.md are still mutually consistent
+- [X] T039 Run `/speckit-analyze` to confirm spec.md/plan.md/tasks.md are still mutually consistent
       before implementation sign-off
 
 ---
