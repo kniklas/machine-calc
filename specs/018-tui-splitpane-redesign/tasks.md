@@ -440,9 +440,12 @@ is unaffected (quickstart.md Scenarios 1, 2, 5).
 ### Polish for this phase
 
 - [ ] T051 [P] Update `README.md`'s "Use the interactive text GUI" section and its
-      `console/tui/` architecture note, and `docs/source/{drilling,milling}.rst`, for the floating
-      window and `RadioList` rendering — both currently describe the now-superseded embedded-pane/
-      inline-radio-text shape from the first implementation pass
+      `console/tui/` architecture note, `docs/source/{drilling,milling}.rst`, and `CHANGELOG.md`'s
+      `[Unreleased]` entry, for the floating window and `RadioList` rendering — all currently
+      describe the now-superseded embedded-pane/inline-radio-text shape from the first
+      implementation pass (`/speckit-analyze` finding F3: `CHANGELOG.md`'s "support a Left/Right
+      nudge" line needs to say that applies to numeric fields only, now that radio fields use
+      `RadioList`'s own Up/Down/Enter/Space)
 - [ ] T052 Run the full suite (`pytest tests/ -q --no-cov`), `mypy src/mfgparams`,
       `ruff check src/mfgparams tests/`, `black --check src/mfgparams tests/`, and
       `bandit -r src/mfgparams -ll -q` — confirm green/clean before this phase is considered done

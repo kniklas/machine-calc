@@ -224,8 +224,9 @@ User Story 1's navigation shell rather than exited or reset.
   Drilling has no tree-level sub-expansion: it is a direct leaf under Machining, exactly like
   Milling (FR-002). Tool selection lives only in Drilling's left pane (FR-005) — the tree-level
   "drilling-type" navigation shortcut this requirement originally described no longer exists.
-- **FR-004**: Selecting a leaf operation (a specific drilling choice, or Milling) MUST open a
-  centered, bordered floating window (with a shadow, matching PR #94's existing dialog styling —
+- **FR-004**: Selecting a leaf operation (Drilling or Milling — both flat tree leaves, FR-002/
+  FR-003) MUST open a centered, bordered floating window (with a shadow, matching PR #94's
+  existing dialog styling —
   the pre-plan prototype's own confirmed finding, below), overlaid on top of the persistent menu
   bar and Machining tree rather than replacing them inline, containing a left pane (inputs) and a
   right pane (results) for that operation (resolved via `/speckit-clarify`, reopened after

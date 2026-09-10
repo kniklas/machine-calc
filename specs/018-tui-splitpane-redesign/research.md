@@ -28,9 +28,10 @@ labels) add meaningful width).
 the larger of the two operations: 16-17 rows for the left pane's 13-14 fields (already including
 its title line) + 1 divider + 1-2 for the merged status row + 2-3 for the floating frame's
 border/shadow = 20-22 rows for the operation screen alone. Adding FR-001's menu bar (1 row) and an
-expanded Machining tree (FR-002/FR-003: Machining + Milling + Drilling + the drilling-type/
-tool-selection shortcut leaf, 3-4 rows including the tree's own visual nesting) gives 24-27 rows.
-30 leaves an explicit ~3-6 row margin above that upper estimate — enough to absorb the imprecision
+expanded Machining tree (FR-002: Machining + Milling + Drilling, 3 rows, flat — item #4 below
+retired Drilling's tree-level tool-selection shortcut, so there is no further sub-expansion row to
+add here) gives 24-25 rows. 30 leaves an explicit ~5-6 row margin above that upper estimate — enough
+to absorb the imprecision
 the original Assumption already flagged (its own numbers are "a reasoned estimate... not a verified
 measurement of the full screen... together") without needing a second prototype pass purely to
 shave rows off an already-tight floor. A too-small floor fails open into FR-006's-equivalent

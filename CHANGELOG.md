@@ -11,14 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The console text GUI's navigation model is replaced: a persistent
   horizontal menu bar (Exit, Machining, Configuration, About, Help) with a
-  collapsible Machining tree (Milling, Drilling) and a left/right split-pane
-  operation screen (every input simultaneously visible/editable in the left
-  pane, a live, auto-refreshing result in the right pane), replacing 017's
-  sequential dialog chain (specs/018-tui-splitpane-redesign). Numeric fields
-  are instant-edit (typing immediately edits, no separate "start editing"
-  step) and support a Left/Right nudge in addition to typing a value
-  outright. The Configuration screen now covers all three tool registries
-  (drilling, end-mill, face-mill), not just drilling's.
+  collapsible Machining tree (Milling, Drilling, both flat leaves) stays
+  visible underneath a floating operation window — a centered, bordered
+  left/right split pane (every input simultaneously visible/editable in the
+  left pane, a live, auto-refreshing result in the right pane) opened over
+  the bar/tree rather than replacing them — replacing 017's sequential
+  dialog chain (specs/018-tui-splitpane-redesign). Numeric fields are
+  instant-edit (typing immediately edits, no separate "start editing" step)
+  and support a Left/Right nudge in addition to typing a value outright;
+  radio fields (unit system, mode, material type, material, tool) render as
+  a vertically-stacked, arrow-highlighted list when focused, navigated with
+  Up/Down and committed with Enter/Space. The Configuration screen now
+  covers all three tool registries (drilling, end-mill, face-mill), not
+  just drilling's.
 - The minimum supported terminal size is raised from 25×80 to **30×80** —
   the persistent menu bar and tree, shown alongside an operation screen's two
   panes, no longer reliably fit the previous floor.
