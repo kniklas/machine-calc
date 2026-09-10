@@ -368,3 +368,87 @@ split-pane component reused twice, vs. 017's five independent screen types built
 Revisit only if implementation reveals the diff is unreviewable in one pass — e.g. if `split_pane.py`
 (T021) grows large enough that reviewing it together with both `drilling.py`/`milling.py` rewrites
 in one PR becomes impractical.
+
+---
+
+## Phase 8: UI Revision — Floating window, flat tree, RadioList (per `/speckit-clarify`, reopened after implementation)
+
+**Why this phase exists**: T001-T040 above are the feature's *first* implementation pass, already
+shipped. `/speckit-clarify` was reopened per user feedback on PR #96 preferring the discarded
+pre-plan prototype's UI, revising FR-003 (retired), FR-004, and FR-005 — `/speckit-plan` was
+re-run against that revision (commit `818895b`). This phase is the resulting task list: touching
+only what the revision actually changed (research.md's Project Structure notes name each file's
+UNCHANGED/REWRITTEN status precisely) — it does not repeat T001-T040's now-settled work.
+
+**Goal**: An open Drilling or Milling screen renders as a centered, bordered floating window over
+the (now flat, two-leaf) Machining tree; every radio field renders as a `RadioList` when focused
+and a one-line summary otherwise (research.md #3-4).
+
+**Independent Test**: Launch the app, expand Machining (two flat leaves, no further expansion under
+either), select Drilling — its floating window opens directly over the bar/tree; navigate onto a
+radio field and confirm it expands into a `RadioList` navigable with Up/Down, collapsing back to a
+summary when focus moves elsewhere; collapse the tree from the bar and confirm the floating window
+is unaffected (quickstart.md Scenarios 1, 2, 5).
+
+### Tests for this phase ⚠️ (write first, confirm they fail before implementing)
+
+- [ ] T041 [P] Unit test: rewrite `tests/unit/console/tui/test_machining_tree.py` — `MachiningTree`
+      has only `expanded`; every test covering `toggle_drilling()`/`drilling_expanded` is removed,
+      not updated, since that method/field no longer exists (data-model.md)
+- [ ] T042 [P] Contract test: rewrite `tests/contract/test_console_tui_contract.py`'s tree-structure
+      assertions — Machining's only children are the two flat leaves Milling/Drilling, no
+      tool-selection-shortcut row or its mnemonic (contract §2)
+- [ ] T043 [P] Integration test: rewrite `tests/integration/test_tui_navigation.py` — every
+      "toggle Drilling's shortcut, then select Tool" key sequence becomes "select Drilling"
+      directly (a flat leaf); keep the FR-005a tree-collapse-never-closes-the-floating-window
+      coverage, simplified to reflect it now holding trivially (research.md #3)
+- [ ] T044 [P] Integration test: rewrite `tests/integration/test_tui_field_editing.py`'s radio-field
+      assertions — Left/Right no longer cycles a radio field's value; Up/Down navigates an open
+      `RadioList`'s options and Enter/Space commits the highlighted one (research.md #4). Numeric
+      instant-edit/nudge assertions (FR-016/FR-017) are unchanged and stay as-is.
+- [ ] T045 [P] Integration test: update `tests/integration/test_tui_app_run.py`'s and
+      `tests/integration/test_tui_resize_preserves_input.py`'s key sequences for the flat tree (no
+      more shortcut-toggle step to reach Drilling) — the scenarios themselves (a full calculation
+      end-to-end; a resize mid-entry) are unchanged
+
+### Implementation for this phase
+
+- [ ] T046 Rewrite `MachiningTree` in `src/mfgparams/console/tui/app.py`: drop `drilling_expanded`
+      and `toggle_drilling()` entirely; `toggle_machining()` is `expanded`'s only transition
+      (data-model.md) (depends on T041)
+- [ ] T047 Rewrite `src/mfgparams/console/tui/machining_menu.py`: `tree_rows()` always returns
+      exactly the two flat leaves (Milling, Drilling), each opening its floating window directly;
+      no further row for Drilling's tool selection (depends on T042, T046)
+- [ ] T048 Rewrite `src/mfgparams/console/tui/screens/split_pane.py`: `RadioRow` renders as
+      `prompt_toolkit.widgets.RadioList` when it is the currently-selected field, and a one-line
+      `Label: value` summary otherwise (research.md #4's accordion pattern); replace `RadioRow`'s
+      Left/Right-cycles-the-value handling with `RadioList`'s own Up/Down/Enter/Space bindings,
+      falling through to the previous/next field at the first/last option; `NumberRow`'s
+      instant-edit/nudge behavior (FR-016/FR-017) is unchanged. Also construct the bordered `Frame`
+      wrapper the operation screen renders inside (research.md #3) (depends on T044)
+- [ ] T049 Rewrite `src/mfgparams/console/tui/app.py`'s `Application`/`Layout` construction: the
+      root container becomes a `prompt_toolkit.layout.FloatContainer` wrapping the existing bar+tree
+      `HSplit`, with a single `Float` (T048's `Frame`-wrapped operation screen) added when
+      `SessionUI.open_operation` is set and removed when it is cleared (research.md #3); the bar+tree
+      `HSplit` itself and FR-013a's resize guarantee are otherwise unchanged (depends on T046, T047,
+      T048)
+- [ ] T050 [P] Confirm `src/mfgparams/console/tui/screens/drilling.py`/`milling.py` need no changes:
+      `rows_for()`'s field list/order and `RadioRow`/`NumberRow` construction are presentation-agnostic
+      (plan.md's Project Structure) — verify this holds once T048 lands rather than assuming it
+      (depends on T048)
+
+### Polish for this phase
+
+- [ ] T051 [P] Update `README.md`'s "Use the interactive text GUI" section and its
+      `console/tui/` architecture note, and `docs/source/{drilling,milling}.rst`, for the floating
+      window and `RadioList` rendering — both currently describe the now-superseded embedded-pane/
+      inline-radio-text shape from the first implementation pass
+- [ ] T052 Run the full suite (`pytest tests/ -q --no-cov`), `mypy src/mfgparams`,
+      `ruff check src/mfgparams tests/`, `black --check src/mfgparams tests/`, and
+      `bandit -r src/mfgparams -ll -q` — confirm green/clean before this phase is considered done
+- [ ] T053 Manually walk `quickstart.md` Scenarios 1, 2, and 5 against the real terminal-rendered
+      app (not just headless tests) — the specific scenarios this phase's revision touches; folds
+      into T038's still-outstanding full walkthrough rather than duplicating it
+
+**Checkpoint**: The shipped implementation matches the prototype's UI per the resolved
+`/speckit-clarify` session — floating windows, a flat tree, and `RadioList`-rendered selections.
