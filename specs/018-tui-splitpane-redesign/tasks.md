@@ -93,12 +93,12 @@ Scenario 1).
 
 ### Tests for User Story 1 ⚠️ (write first, confirm they fail before implementing)
 
-- [ ] T008 [P] [US1] Contract test: rewrite `tests/contract/test_console_tui_contract.py` in place
+- [X] T008 [P] [US1] Contract test: rewrite `tests/contract/test_console_tui_contract.py` in place
       against `contracts/console-tui-splitpane-contract.md` §2 — exact menu-bar entry set (5
       items), exact tree structure (Machining → Milling/Drilling, Drilling →
       tool-selection shortcut), and pairwise-unique mnemonics within the bar and within the tree
       (research.md's decision to rewrite in place, not add a second contract test file)
-- [ ] T009 [P] [US1] Integration test: headless navigation shell — launch, expand Machining
+- [X] T009 [P] [US1] Integration test: headless navigation shell — launch, expand Machining
       (Acceptance Scenario 2), expand Drilling's shortcut (Acceptance Scenario 3), collapse back
       (Acceptance Scenario 4), select a leaf and confirm the corresponding operation screen opens
       — in `tests/integration/test_tui_navigation.py` (new file; 017's `test_tui_app_run.py` tested
@@ -106,18 +106,18 @@ Scenario 1).
 
 ### Implementation for User Story 1
 
-- [ ] T010 [US1] Rewrite `src/mfgparams/console/tui/menu.py` as the persistent horizontal
+- [X] T010 [US1] Rewrite `src/mfgparams/console/tui/menu.py` as the persistent horizontal
       menu-bar widget rendering `MenuBar`'s 5 entries (T003, T004), reusing `_assign_mnemonics`
       unchanged (research.md — not full-screen-dialog-specific)
-- [ ] T011 [US1] Replace `src/mfgparams/console/tui/machining_menu.py` with the collapsible
+- [X] T011 [US1] Replace `src/mfgparams/console/tui/machining_menu.py` with the collapsible
       `MachiningTree` widget (Milling/Drilling children, Drilling's tool-selection-shortcut leaf),
       rendering `SessionUI.tree`'s state (T003) (depends on T010)
-- [ ] T012 [US1] Rewrite `src/mfgparams/console/tui/app.py`'s `Application`/`Layout`/key-binding
+- [X] T012 [US1] Rewrite `src/mfgparams/console/tui/app.py`'s `Application`/`Layout`/key-binding
       wiring around `SessionUI` (T003): one persistent `Application` constructed once per session
       (not a while-loop dispatching between short-lived per-screen `Application`s), with the Exit
       bar entry as the app's own exit action (FR-001's "no root screen to Escape from" — an
       explicit action now, not a bare Escape/Ctrl-Q handler) (depends on T003, T010, T011)
-- [ ] T013 [US1] Wire `about.py`/`help.py` (content unchanged) into the new menu bar's About/Help
+- [X] T013 [US1] Wire `about.py`/`help.py` (content unchanged) into the new menu bar's About/Help
       entries (FR-001's "only its menu-bar placement changes") (depends on T012)
 
 **Checkpoint**: Navigation shell fully functional and independently testable — quickstart.md

@@ -1,40 +1,33 @@
-"""The top-level menu screen, and the generic mnemonic-driven menu widget
-`run_menu` that `machining_menu.py` also uses (FR-009, FR-010).
+"""The persistent horizontal menu bar (018-tui-splitpane-redesign FR-001),
+and the mnemonic-assignment logic the Machining tree also reuses.
 
-Built as a hand-rolled `Application`, not a `shortcuts` dialog: none of
-prompt-toolkit's bundled dialogs support a direct single-key
-mnemonic/accelerator per item (contracts/console-tui-contract.md §3), only
-sequential (arrow/Tab) navigation.
+Rendering only: this module owns *what the bar's entries are and how they
+look*, not the `Application`/`Layout`/key-binding wiring that shows them --
+that now lives in `app.py`, since the bar is one row of a single persistent
+`Layout` rather than its own full-screen `Application` (017's `run_menu`
+built one; that shape no longer fits a bar that stays visible alongside
+whatever else is on screen). `_assign_mnemonics` is unchanged from 017
+(research.md's consolidated table): picking pairwise-unique accelerator
+characters from a label list has nothing to do with how the labels are
+laid out.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from prompt_toolkit.application import Application
 from prompt_toolkit.formatted_text import StyleAndTextTuples
-from prompt_toolkit.key_binding import KeyBindings
-from prompt_toolkit.layout import HSplit, Layout, Window
-from prompt_toolkit.layout.controls import FormattedTextControl
-from prompt_toolkit.styles import Style
 
 from mfgparams.console.i18n import translate
-
-_STYLE = Style.from_dict(
-    {
-        "mnemonic": "underline bold",
-        "selected": "reverse",
-        "hint": "italic",
-    }
-)
 
 
 @dataclass(frozen=True)
 class MenuEntry:
-    """One selectable row (data-model.md's MenuEntry).
+    """One selectable item (data-model.md's `MenuBar`/`MenuEntry`).
 
-    ``mnemonic`` is derived by :func:`run_menu`, not stored here — see its
-    docstring for why (translated labels change which letters are free).
+    ``mnemonic`` is derived by :func:`_assign_mnemonics`, not stored here —
+    see its docstring for why (translated labels change which letters are
+    free).
     """
 
     value: str
@@ -68,106 +61,46 @@ def _assign_mnemonics(entries: list[MenuEntry]) -> list[str | None]:
     return mnemonics
 
 
-def _render_entry(entry: MenuEntry, mnemonic: str | None, style: str) -> StyleAndTextTuples:
-    """One menu row's fragments, with its mnemonic character underlined."""
+def default_entries(locale: str) -> list[MenuEntry]:
+    """FR-001's exact, closed entry set: Exit, Machining, Configuration,
+    About, Help, in that order. Machining/Configuration/About/Help carry
+    forward 017's FR-009 item set unchanged; Exit is new (017 had no
+    labeled Exit item, only an unlabeled Escape/Ctrl-Q handler -- see
+    ``app.py``'s bar-level Escape handling)."""
 
-    if mnemonic is None:
-        return [(style, f"  {entry.label}"), ("", "\n")]
-    pos = entry.label.lower().index(mnemonic)
-    before, marked, after = entry.label[:pos], entry.label[pos : pos + 1], entry.label[pos + 1 :]
     return [
-        (style, "  "),
-        (style, before),
-        (f"{style} class:mnemonic", marked),
-        (style, after),
-        ("", "\n"),
-    ]
-
-
-def _build_key_bindings(
-    entries: list[MenuEntry], mnemonics: list[str | None], selected: list[int]
-) -> KeyBindings:
-    """Arrow/vi navigation, Enter/Escape, and one mnemonic-jump binding per
-    entry that has one -- extracted from `run_menu` (complexity gate)."""
-
-    bindings = KeyBindings()
-
-    @bindings.add("up")
-    @bindings.add("k")
-    def _up(event) -> None:
-        selected[0] = (selected[0] - 1) % len(entries)
-
-    @bindings.add("down")
-    @bindings.add("j")
-    def _down(event) -> None:
-        selected[0] = (selected[0] + 1) % len(entries)
-
-    @bindings.add("enter")
-    def _enter(event) -> None:
-        event.app.exit(result=entries[selected[0]].value)
-
-    @bindings.add("escape")
-    @bindings.add("c-q")
-    def _cancel(event) -> None:
-        event.app.exit(result=None)
-
-    for index, mnemonic in enumerate(mnemonics):
-        if mnemonic is None:
-            continue
-
-        def _jump(event, target_index: int = index) -> None:
-            event.app.exit(result=entries[target_index].value)
-
-        bindings.add(mnemonic)(_jump)
-
-    return bindings
-
-
-def run_menu(*, title: str, entries: list[MenuEntry], locale: str) -> str | None:
-    """Show a full-screen menu of ``entries``; return the selected value, or
-    ``None`` if the user backs out (Escape, or Ctrl-Q at the top level).
-
-    Navigation (contracts/console-tui-contract.md §3): Up/Down (or j/k) move
-    the highlighted row, Enter selects it, and each row's mnemonic character
-    (visibly underlined) jumps to and selects it directly in one keystroke.
-    """
-
-    mnemonics = _assign_mnemonics(entries)
-    selected = [0]
-
-    def render() -> StyleAndTextTuples:
-        fragments: StyleAndTextTuples = [("", f"{title}\n\n")]
-        for index, (entry, mnemonic) in enumerate(zip(entries, mnemonics)):
-            style = "class:selected" if index == selected[0] else ""
-            fragments.extend(_render_entry(entry, mnemonic, style))
-        fragments.append(("class:hint", f"\n{translate(locale, 'tui.menu.hint')}"))
-        return fragments
-
-    control = FormattedTextControl(render, focusable=True)
-    root = HSplit([Window(content=control)])
-    bindings = _build_key_bindings(entries, mnemonics, selected)
-
-    app: Application[str | None] = Application(
-        layout=Layout(root, focused_element=control),
-        key_bindings=bindings,
-        style=_STYLE,
-        full_screen=True,
-    )
-    return app.run()
-
-
-def run_top_level_menu(*, locale: str) -> str | None:
-    """The top-level menu (FR-009): Machining, Configuration, About, Help.
-
-    Returns one of ``"machining"``, ``"configuration"``, ``"about"``,
-    ``"help"``, or ``None`` if the user exits the app (Escape/Ctrl-Q at the
-    root, where there is nothing to go "back" to).
-    """
-
-    entries = [
+        MenuEntry("exit", translate(locale, "tui.menu.exit")),
         MenuEntry("machining", translate(locale, "tui.menu.machining")),
         MenuEntry("configuration", translate(locale, "tui.menu.configuration")),
         MenuEntry("about", translate(locale, "tui.menu.about")),
         MenuEntry("help", translate(locale, "tui.menu.help")),
     ]
-    return run_menu(title=translate(locale, "tui.menu.title"), entries=entries, locale=locale)
+
+
+def render_menu_bar(
+    entries: list[MenuEntry],
+    mnemonics: list[str | None],
+    selected_index: int,
+    *,
+    focused: bool,
+) -> StyleAndTextTuples:
+    """One horizontal row, entries separated by two spaces, the currently
+    selected one reverse-video highlighted -- only while ``focused`` (FR-010:
+    the bar's own selection should not visually compete for attention once
+    the user has moved focus into the body, e.g. an open operation screen's
+    fields, per app.py's Escape-based focus model)."""
+
+    fragments: StyleAndTextTuples = []
+    for index, (entry, mnemonic) in enumerate(zip(entries, mnemonics)):
+        if index > 0:
+            fragments.append(("", "  "))
+        style = "class:selected" if focused and index == selected_index else ""
+        if mnemonic is None:
+            fragments.append((style, entry.label))
+            continue
+        pos = entry.label.lower().index(mnemonic)
+        before, marked, after = entry.label[:pos], entry.label[pos : pos + 1], entry.label[pos + 1 :]
+        fragments.append((style, before))
+        fragments.append((f"{style} class:mnemonic", marked))
+        fragments.append((style, after))
+    return fragments

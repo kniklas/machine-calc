@@ -10,11 +10,9 @@ fixture catalogs deterministically") -- since only English ships today.
 
 from __future__ import annotations
 
-from _tui_test_support import run_headless
-
 import mfgparams.console.i18n as console_i18n
 from mfgparams.console.tui.forms import render_error as forms_render_error
-from mfgparams.console.tui.menu import run_top_level_menu
+from mfgparams.console.tui.menu import _assign_mnemonics, default_entries
 
 _FIXTURE_LOCALE = "xx-tui-fixture"
 
@@ -27,33 +25,36 @@ def _clear_fixture_catalog() -> None:
     console_i18n._catalog_cache.pop(_FIXTURE_LOCALE, None)
 
 
-def test_top_level_menu_renders_in_a_registered_locale():
+def test_menu_bar_entries_render_in_a_registered_locale():
+    """018-tui-splitpane-redesign: `default_entries`/`_assign_mnemonics`
+    are pure functions now (no `Application` needed to exercise them --
+    017's equivalent test drove a whole headless dialog for this), so this
+    checks the translated label and its derived mnemonic directly."""
+
     # Deliberately distinct first letters (not a shared prefix) so each
     # entry's derived mnemonic is unambiguous and predictable for the
     # assertion below.
     _register_fixture_catalog(
         {
-            "tui.menu.title": "Ubytek",
+            "tui.menu.exit": "Vex",
             "tui.menu.machining": "Zeta",
             "tui.menu.configuration": "Wombat",
             "tui.menu.about": "Yonder",
             "tui.menu.help": "Xenon",
-            "tui.menu.hint": "Kliknij",
         }
     )
     try:
-        result_holder = {}
-
-        def target():
-            result_holder["value"] = run_top_level_menu(locale=_FIXTURE_LOCALE)
-
-        run_headless(target, ["z"])
-        # "z" is the mnemonic derived from "Zeta" -- confirms the fixture
-        # catalog's translated label (not the English default "Machining",
-        # whose mnemonic would be "m") is what got rendered and matched.
-        assert result_holder["value"] == "machining"
+        entries = default_entries(_FIXTURE_LOCALE)
+        mnemonics = _assign_mnemonics(entries)
     finally:
         _clear_fixture_catalog()
+
+    machining = next(e for e in entries if e.value == "machining")
+    assert machining.label == "Zeta"
+    # "z" is the mnemonic derived from "Zeta" -- confirms the fixture
+    # catalog's translated label (not the English default "Machining",
+    # whose mnemonic would be "m") is what got assigned.
+    assert mnemonics[entries.index(machining)] == "z"
 
 
 def test_validation_error_renders_via_the_catalog_not_a_hardcoded_english_string():

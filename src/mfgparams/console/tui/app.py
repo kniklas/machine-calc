@@ -1,30 +1,31 @@
-"""Navigation state and application wiring for the text GUI.
+"""UI-state entities and application wiring for the text GUI
+(018-tui-splitpane-redesign).
 
-See data-model.md's NavigationState entity. The actual screen-to-screen
-transitions are driven by the dialog-chain each screen module implements
-(a menu/form returns the next screen to show, or ``None`` for "go back");
-:class:`NavigationState` mirrors that as an explicit, independently testable
-data structure rather than being the sole dispatch mechanism -- useful for
-introspection (e.g. an About screen or future breadcrumb) and for T008's
-unit test to exercise push/pop/back semantics without needing a real
-terminal.
+See data-model.md's `SessionUI`/`MachiningTree`/`OperationScreen` entities.
+Unlike 017's dialog chain (a sequence of short-lived, separately-constructed
+`Application`s, one per screen), `run()` below constructs a single
+persistent `Application`/`Layout` for the whole session: the menu bar, the
+Machining tree, and an open operation screen are all fields on one
+`SessionUI` object rather than a "current screen" stack, and can coexist
+(FR-005a) rather than being mutually exclusive.
 
-Note on FR-008 (terminal resize, /speckit-analyze finding E2): every screen
-here is a prompt-toolkit `Application`/dialog `.run()` call, and
-prompt-toolkit's own event loop already redraws in place on a terminal
-resize (SIGWINCH) without losing in-progress widget state -- there is
-nothing this module needs to do to opt into that behavior. What matters is
-that no screen constructs a *new* Application mid-resize (which would
-discard not-yet-submitted input); this module never does, since each
-screen's dialog chain is a sequence of separate, completed `.run()` calls,
-not a resize-triggered reconstruction.
+Note on FR-013a (terminal resize): 017's `NavigationState`-based module
+docstring reasoned that prompt-toolkit's own resize handling needed no
+opt-in, since no screen there ever constructed a *new* `Application`
+mid-resize. That reasoning doesn't carry over unexamined here -- this
+feature's single, long-lived `Application` is a materially different shape
+(constructed once, not per screen), so whether in-progress left-pane input
+survives a resize needs re-verifying against *this* shape specifically
+(tasks.md T029), not assumed from 017's now-superseded architecture.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Callable, Literal
+from typing import Literal
+
+from prompt_toolkit.formatted_text import StyleAndTextTuples
 
 from mfgparams.console.i18n import get_locale
 from mfgparams.console.tui.menu import MenuEntry
@@ -36,64 +37,14 @@ from mfgparams.models import CalculationResult, MillingSubOperation
 from mfgparams.registry_config import RegistryConfigError
 
 
-class ScreenId(Enum):
-    """Every screen the text GUI can show (contracts/console-tui-contract.md §2)."""
-
-    MENU = "menu"
-    MACHINING_MENU = "machining_menu"
-    MILLING_FORM = "milling_form"
-    DRILLING_FORM = "drilling_form"
-    CONFIGURATION = "configuration"
-    ABOUT = "about"
-    HELP = "help"
-
-
-@dataclass
-class NavigationState:
-    """The text GUI's single source of truth for "what's on screen and how did we get here."
-
-    Not persisted (spec Assumptions: "No new persistence") -- held for the
-    lifetime of one session only.
-    """
-
-    current_screen: ScreenId = ScreenId.MENU
-    screen_stack: list[ScreenId] = field(default_factory=list)
-    locale: str = "en"
-    materials_config_path: str | None = None
-
-    def push(self, screen: ScreenId) -> None:
-        """Navigate to ``screen``, remembering the current one for "go back".
-
-        ``MENU`` is the root and is never pushed onto its own stack (there is
-        nothing to go back to from it).
-        """
-
-        if self.current_screen is not ScreenId.MENU:
-            self.screen_stack.append(self.current_screen)
-        self.current_screen = screen
-
-    def pop(self) -> ScreenId:
-        """Go back to the prior screen, or ``MENU`` if the stack is empty.
-
-        Never raises -- an empty stack is a normal state (already at the
-        menu, or one push deep), not an error.
-        """
-
-        self.current_screen = self.screen_stack.pop() if self.screen_stack else ScreenId.MENU
-        return self.current_screen
-
-
-# -- 018-tui-splitpane-redesign: new UI-state entities (data-model.md) -----
+# -- 018-tui-splitpane-redesign: UI-state entities (data-model.md) --------
 #
-# `ScreenId`/`NavigationState` above model 017's mutually-exclusive,
-# one-screen-at-a-time dialog chain and are superseded by the entities
-# below once T012 rewrites `run()`/the menu-bar and tree wiring around them
-# (both sets temporarily coexist between T003 and T012, since
-# `menu.py`/`machining_menu.py`/`run()` still depend on the old ones until
-# then). The new model is a single persistent layout where the menu bar,
-# the Machining tree, and an open operation screen can all be simultaneously
-# present -- `SessionUI` replaces `NavigationState` as the single source of
-# truth for that.
+# Supersedes 017's `ScreenId`/`NavigationState`, which modeled a mutually-
+# exclusive, one-screen-at-a-time dialog chain (each screen its own
+# short-lived `Application`). This feature's single persistent `Application`
+# can show the menu bar, the Machining tree, and an open operation screen
+# all at once, so `SessionUI` below is the single source of truth for that
+# instead -- not a stack of "current screen"s.
 
 
 class FieldId(Enum):
@@ -233,8 +184,267 @@ def _resolve_materials_config(materials_config_path: str | None, locale: str) ->
         print(_translate_core(locale, notice_key, **dict(notice_kwargs)))
 
 
+@dataclass
+class _ViewState:
+    """Which body is currently shown and which row is highlighted within
+    it -- pure UI-presentation state, deliberately *not* part of
+    :class:`SessionUI` (which holds session/business state that survives a
+    body change, per FR-012). ``body_mode`` names what the body currently
+    renders; it is independent of ``SessionUI.tree.expanded``/
+    ``open_operation`` (FR-005a) -- e.g. selecting Configuration from the
+    bar sets ``body_mode="configuration"`` without touching either.
+    """
+
+    body_mode: Literal["tree", "drilling", "milling", "configuration", "about", "help"] | None = (
+        None
+    )
+    bar_selected: int = 0
+    tree_selected: int = 0
+
+
+def _render_body(ui: SessionUI, view: _ViewState, display_locale: str) -> StyleAndTextTuples:
+    """Dispatch on ``view.body_mode``. Operation-screen and Configuration
+    content are placeholders here -- US2 (T021-T023) and US2's T024
+    replace them with the real split-pane/registry-view content; this
+    phase (US1) only needs *something* to open per operation, per its own
+    "independent of what that screen's panes contain" Independent Test.
+    """
+
+    from mfgparams.console.tui import machining_menu
+    from mfgparams.console.tui.screens.about import render_about
+    from mfgparams.console.tui.screens.help import render_help
+
+    if view.body_mode == "tree":
+        return machining_menu.render_tree(ui.tree, view.tree_selected, ui.locale, focused=True)
+    if view.body_mode == "about":
+        return render_about(ui.locale)
+    if view.body_mode == "help":
+        return render_help(ui.locale)
+    if view.body_mode == "configuration":
+        return [("class:pane-title", "Configuration\n\n"), ("", "(view-only; T024)")]
+    if view.body_mode in ("drilling", "milling") and ui.open_operation is not None:
+        op = ui.open_operation
+        return [
+            ("class:pane-title", f"{op.operation.title()}\n\n"),
+            ("", f"selected field: {op.selected_field.value} (T021-T023)"),
+        ]
+    return [("class:hint", "Select Machining, Configuration, About, or Help.")]
+
+
+def _open_milling(ui: SessionUI, view: _ViewState) -> None:
+    """Opens with whichever sub-operation's state was last active
+    (defaulting to End Milling); FR-009a's actual sub-operation *field* and
+    its state-switching behavior is T023's job, not this shell phase's."""
+
+    state = ui.milling_states[MillingSubOperation.END_MILLING]
+    ui.open_operation = OperationScreen(
+        operation="milling", session_state=state, selected_field=FieldId.UNIT_SYSTEM
+    )
+    view.body_mode = "milling"
+
+
+def _open_drilling(ui: SessionUI, *, selected_field: FieldId) -> OperationScreen:
+    """Reuses the existing ``OperationScreen`` if Drilling is already open
+    (FR-012 carryover -- re-entering must not discard it), only replacing
+    ``selected_field`` so the tree's tool-selection shortcut (FR-005a)
+    actually lands focus on that field rather than always resetting to the
+    first one."""
+
+    existing = ui.open_operation
+    if existing is not None and existing.operation == "drilling":
+        existing.selected_field = selected_field
+        return existing
+    screen = OperationScreen(
+        operation="drilling", session_state=ui.drilling_state, selected_field=selected_field
+    )
+    ui.open_operation = screen
+    return screen
+
+
+def build_app(
+    materials_config_path: str | None, locale: str, display_locale: str
+) -> tuple["Application[None]", SessionUI, _ViewState]:
+    """Construct the persistent `Application` plus its `SessionUI`/
+    `_ViewState`, without running it -- split out from `run()` so tests can
+    drive the returned `Application` headlessly (`_tui_test_support.py`'s
+    `on_batch` hook, research.md #2) while asserting directly against the
+    returned `ui`/`view` objects via pure inspection, not by trying to
+    capture rendered terminal output.
+
+    Focus model (018-tui-splitpane-redesign; no direct 017 precedent -- see
+    the design note recorded when this was decided): the bar and the body
+    are two focus regions in one persistent `Layout`, not separate
+    `Application`s. Escape from the body moves focus to the bar without
+    touching any `SessionUI` state (`tree`/`open_operation` untouched) --
+    this is how a user reaches the bar's Machining item to collapse the
+    tree without losing an open operation's field values (FR-005a,
+    quickstart.md Scenario 5). Escape from the bar itself closes the
+    current operation and returns to a blank top level if one was open, or
+    exits the app if nothing was open (mirroring 017's own
+    Escape-at-the-root-exits precedent). The bar's own Exit entry always
+    exits unconditionally.
+    """
+
+    from prompt_toolkit.application import Application
+    from prompt_toolkit.filters import Condition
+    from prompt_toolkit.key_binding import KeyBindings
+    from prompt_toolkit.keys import Keys
+    from prompt_toolkit.layout import HSplit, Layout, Window
+    from prompt_toolkit.layout.controls import FormattedTextControl
+    from prompt_toolkit.styles import Style
+
+    from mfgparams.console.tui import machining_menu
+    from mfgparams.console.tui.menu import _assign_mnemonics, default_entries, render_menu_bar
+
+    bar_entries = default_entries(locale)
+    bar_mnemonics = _assign_mnemonics(bar_entries)
+    ui = SessionUI(
+        menu_bar=MenuBar(entries=tuple(bar_entries)),
+        locale=locale,
+        materials_config_path=materials_config_path,
+    )
+    view = _ViewState()
+
+    style = Style.from_dict({"mnemonic": "underline bold", "selected": "reverse", "hint": "italic"})
+
+    bar_control = FormattedTextControl(
+        lambda: render_menu_bar(bar_entries, bar_mnemonics, view.bar_selected, focused=on_bar()),
+        focusable=True,
+    )
+    body_control = FormattedTextControl(
+        lambda: _render_body(ui, view, display_locale), focusable=True
+    )
+
+    def on_bar() -> bool:
+        return app.layout.has_focus(bar_control)
+
+    def _current_tree_row_count() -> int:
+        return len(machining_menu.tree_rows(ui.tree))
+
+    def _activate_bar_entry() -> None:
+        entry = bar_entries[view.bar_selected]
+        if entry.value == "exit":
+            app.exit()
+        elif entry.value == "machining":
+            ui.tree.toggle_machining()
+            if ui.tree.expanded:
+                view.body_mode = "tree"
+                view.tree_selected = 0
+                app.layout.focus(body_control)
+            elif view.body_mode == "tree":
+                view.body_mode = None
+        elif entry.value == "configuration":
+            view.body_mode = "configuration"
+            app.layout.focus(body_control)
+        elif entry.value == "about":
+            view.body_mode = "about"
+            app.layout.focus(body_control)
+        elif entry.value == "help":
+            view.body_mode = "help"
+            app.layout.focus(body_control)
+
+    def _activate_tree_row() -> None:
+        rows = machining_menu.tree_rows(ui.tree)
+        row = rows[view.tree_selected]
+        if row.action == "open_milling":
+            _open_milling(ui, view)
+        elif row.action == "toggle_drilling":
+            ui.tree.drilling_expanded = not ui.tree.drilling_expanded
+            view.tree_selected = min(view.tree_selected, _current_tree_row_count() - 1)
+        elif row.action == "open_drilling_tool":
+            _open_drilling(ui, selected_field=FieldId.TOOL)
+            view.body_mode = "drilling"
+
+    bindings = KeyBindings()
+
+    @bindings.add("escape", filter=Condition(on_bar))
+    def _escape_bar(event) -> None:
+        if ui.open_operation is not None:
+            ui.open_operation = None
+            view.body_mode = None
+        else:
+            event.app.exit()
+
+    @bindings.add("escape", filter=Condition(lambda: not on_bar()))
+    def _escape_body(event) -> None:
+        event.app.layout.focus(bar_control)
+
+    @bindings.add("left", filter=Condition(on_bar))
+    @bindings.add("h", filter=Condition(on_bar))
+    def _bar_left(event) -> None:
+        view.bar_selected = (view.bar_selected - 1) % len(bar_entries)
+
+    @bindings.add("right", filter=Condition(on_bar))
+    @bindings.add("l", filter=Condition(on_bar))
+    def _bar_right(event) -> None:
+        view.bar_selected = (view.bar_selected + 1) % len(bar_entries)
+
+    @bindings.add("enter", filter=Condition(on_bar))
+    def _bar_enter(event) -> None:
+        _activate_bar_entry()
+
+    for index, mnemonic in enumerate(bar_mnemonics):
+        if mnemonic is None:
+            continue
+
+        def _bar_jump(event, target_index: int = index) -> None:
+            view.bar_selected = target_index
+            _activate_bar_entry()
+
+        bindings.add(mnemonic, filter=Condition(on_bar))(_bar_jump)
+
+    tree_focused = Condition(lambda: not on_bar() and view.body_mode == "tree")
+
+    @bindings.add("up", filter=tree_focused)
+    @bindings.add("k", filter=tree_focused)
+    def _tree_up(event) -> None:
+        view.tree_selected = (view.tree_selected - 1) % _current_tree_row_count()
+
+    @bindings.add("down", filter=tree_focused)
+    @bindings.add("j", filter=tree_focused)
+    def _tree_down(event) -> None:
+        view.tree_selected = (view.tree_selected + 1) % _current_tree_row_count()
+
+    @bindings.add("enter", filter=tree_focused)
+    def _tree_enter(event) -> None:
+        _activate_tree_row()
+
+    @bindings.add(Keys.Any, filter=tree_focused)
+    def _tree_mnemonic(event) -> None:
+        """Contract §4: tree leaves get mnemonics too, same as the bar's
+        own entries -- but unlike the bar's fixed entry set, the tree's row
+        set changes at runtime (`drilling_expanded`), so this can't be a
+        fixed per-character binding assigned once at startup the way the
+        bar's are; it re-derives the current rows'/mnemonics' mapping on
+        every keypress and only acts if the pressed key matches one."""
+
+        rows = machining_menu.tree_rows(ui.tree)
+        mnemonics = machining_menu.tree_mnemonics(rows, ui.locale)
+        pressed = event.data.lower()
+        for index, mnemonic in enumerate(mnemonics):
+            if mnemonic == pressed:
+                view.tree_selected = index
+                _activate_tree_row()
+                return
+
+    root = HSplit(
+        [
+            Window(content=bar_control, height=1),
+            Window(height=1, char="─"),
+            Window(content=body_control),
+        ]
+    )
+    app: Application[None] = Application(
+        layout=Layout(root, focused_element=bar_control),
+        key_bindings=bindings,
+        style=style,
+        full_screen=True,
+    )
+    return app, ui, view
+
+
 def run(materials_config_path: str | None = None) -> None:
-    """Run the text GUI until the user exits from the top-level menu.
+    """Run the text GUI until the user exits from the menu bar.
 
     Resolves the active locale exactly once, at startup (mirrors the REPL's
     same FR-019c guarantee), and holds one session-lifetime state object per
@@ -242,86 +452,11 @@ def run(materials_config_path: str | None = None) -> None:
     screen after a calculation offers the previous answers as defaults,
     exactly as the REPL's loop did (FR-002, SC-005 parity) -- Acceptance
     Scenario 3: the user can start another calculation without exiting and
-    relaunching the text GUI.
+    relaunching the text GUI. See `build_app` for the actual wiring.
     """
-
-    from mfgparams.console.tui.machining_menu import run_machining_menu
-    from mfgparams.console.tui.menu import run_top_level_menu
-    from mfgparams.console.tui.screens.about import run_about_screen
-    from mfgparams.console.tui.screens.configuration import run_configuration_screen
-    from mfgparams.console.tui.screens.drilling import DrillingSessionState, run_drilling_screen
-    from mfgparams.console.tui.screens.help import run_help_screen
-    from mfgparams.console.tui.screens.milling import MillingSessionState, run_milling_screen
 
     locale = get_locale()
     display_locale = get_raw_locale()
-
     _resolve_materials_config(materials_config_path, locale)
-
-    state = NavigationState(locale=locale, materials_config_path=materials_config_path)
-    drilling_state = DrillingSessionState()
-    milling_states = {sub: MillingSessionState() for sub in MillingSubOperation}
-
-    # Screens that just run once and pop back to whatever pushed them,
-    # regardless of whether that run ended in cancellation or a completed
-    # calculation -- MENU and MACHINING_MENU are handled separately below
-    # since they instead decide *which* screen to push next.
-    simple_screens: dict[ScreenId, Callable[[], None]] = {
-        ScreenId.MILLING_FORM: lambda: run_milling_screen(
-            milling_states, materials_config_path, locale, display_locale
-        ),
-        ScreenId.DRILLING_FORM: lambda: run_drilling_screen(
-            drilling_state, materials_config_path, locale, display_locale
-        ),
-        ScreenId.CONFIGURATION: lambda: run_configuration_screen(materials_config_path, locale),
-        ScreenId.ABOUT: lambda: run_about_screen(locale),
-        ScreenId.HELP: lambda: run_help_screen(locale),
-    }
-
-    # Driven by `state.current_screen`/`push`/`pop` (Copilot review on PR #94:
-    # this loop previously reset to MENU at the top of every iteration and
-    # never called `pop()`, so "go back" from Drilling/Milling skipped the
-    # Machining submenu entirely instead of returning to it one level at a
-    # time, per contract §3).
-    while True:
-        if state.current_screen is ScreenId.MENU:
-            choice = run_top_level_menu(locale=locale)
-            if choice is None:
-                return  # Escape/Ctrl-Q at the root: exit the app.
-            _push_top_level_choice(state, choice)
-            continue
-
-        if state.current_screen is ScreenId.MACHINING_MENU:
-            sub_choice = run_machining_menu(locale=locale)
-            _push_machining_choice(state, sub_choice)
-            continue
-
-        simple_screens[state.current_screen]()
-        state.pop()
-
-
-def _push_top_level_choice(state: NavigationState, choice: str) -> None:
-    """`run`'s MENU branch: which screen a top-level menu choice pushes.
-    Extracted from `run` (Constitution Principle I / complexity gate)."""
-
-    if choice == "machining":
-        state.push(ScreenId.MACHINING_MENU)
-    elif choice == "configuration":
-        state.push(ScreenId.CONFIGURATION)
-    elif choice == "about":
-        state.push(ScreenId.ABOUT)
-    elif choice == "help":
-        state.push(ScreenId.HELP)
-
-
-def _push_machining_choice(state: NavigationState, sub_choice: str | None) -> None:
-    """`run`'s MACHINING_MENU branch: which screen a submenu choice pushes,
-    or back to the top-level menu on cancel. Extracted from `run`
-    (Constitution Principle I / complexity gate)."""
-
-    if sub_choice == "milling":
-        state.push(ScreenId.MILLING_FORM)
-    elif sub_choice == "drilling":
-        state.push(ScreenId.DRILLING_FORM)
-    else:
-        state.pop()  # Escape/Ctrl-Q: back to the top-level menu.
+    app, _ui, _view = build_app(materials_config_path, locale, display_locale)
+    app.run()
