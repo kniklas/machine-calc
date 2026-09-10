@@ -87,10 +87,12 @@ corresponding operation screen — independent of what that screen's panes conta
 
 Having selected an operation (e.g. Drilling), the user sees a left pane containing every input for
 that calculation at once: unit system (radio, default metric), calculation mode (radio, default
-standard), material type (Metal/Wood radio, expanding to a further radio choice of the specific
-metal or wood), and plain editable fields for diameter, hole depth, and available power — plus tool
-selection, either here or in the Machining tree's drilling-type step, per FR-005's pending
-resolution. The user can move between and edit any of these without a screen transition.
+standard), material type (radio over every registered category — Metal and Wood are the bundled
+defaults, but a user-supplied materials config can register further categories, e.g. Plastic; see
+FR-005), expanding to a further radio choice of the specific material, and plain editable fields
+for diameter, hole depth, and available power — plus tool selection, either here or in the
+Machining tree's drilling-type step, per FR-005's pending resolution. The user can move between and
+edit any of these without a screen transition.
 
 **Why this priority**: This is the core usability improvement this feature exists to deliver —
 without it, the redesign offers no benefit over 017's dialog chain.
@@ -142,7 +144,10 @@ User Story 1's navigation shell rather than exited or reset.
 2. **Given** every left-pane input is complete and valid, **When** the last input is entered,
    **Then** the right pane shows the calculation result without a separate confirmation step.
 3. **Given** a result is showing, **When** the user changes any left-pane input, **Then** the
-   right pane's result updates to match, or clears until the inputs are complete again.
+   right pane's result updates to match, clears until the inputs are complete again, or — if every
+   input holds a value but the combination is rejected by calculation (e.g. an engagement value
+   invalid relative to diameter) — shows the resulting clear, actionable, localized error instead
+   of a blank pane (FR-006a).
 4. **Given** a result is showing, **When** the user chooses to run another calculation, **Then**
    they can do so from the same screen without restarting the application (mirroring PR #94's own
    Acceptance Scenario 3 parity guarantee).
@@ -166,9 +171,10 @@ User Story 1's navigation shell rather than exited or reset.
   tree while the left pane has partially-entered, unsaved input for the operation being left? (Per
   017's existing per-operation session-state pattern, each operation's own state should be
   preserved independently — switching away and back should not discard it.)
-- How does the system handle a left-pane input that becomes invalid only in combination with
-  another (e.g. an engagement value invalid relative to a diameter that was itself just changed) —
-  does the right pane clear, show an inline error, or something else?
+- **Resolved (FR-006a)**: a left-pane input that becomes invalid only in combination with another
+  (e.g. an engagement value invalid relative to a diameter that was itself just changed) shows the
+  clear, actionable, localized error `calculate()` already returns for it, rather than clearing the
+  pane to nothing.
 - What happens if the user collapses the Machining tree while a leaf operation's screen is open —
   does the operation screen close too, or only the tree's own visual state change?
 - The application must remain fully operable by keyboard alone, with no mouse/pointer interaction
@@ -195,8 +201,12 @@ User Story 1's navigation shell rather than exited or reset.
   screen with a left pane (inputs) and a right pane (results) for that operation.
 - **FR-005**: The left pane MUST present all of the following simultaneously, each editable
   without a screen transition: unit system (radio, default metric), calculation mode (radio,
-  default standard), material type (Metal/Wood radio, expanding to a further radio choice of the
-  specific material), tool selection (radio — for Drilling, whether this field lives in the left
+  default standard), material type (radio built from every category `list_material_types()`
+  currently returns for the active materials config, not hardcoded to Metal/Wood — those are only
+  the bundled defaults; a user-supplied config can register further categories, and PR #94's
+  existing `ask_material_type`/`forms.py` already builds this radio dynamically from that list, a
+  behavior this feature MUST preserve, not narrow), expanding to a further radio choice of the
+  specific material, tool selection (radio — for Drilling, whether this field lives in the left
   pane, in the Machining tree's drilling-type step, or both is pending the `/speckit-clarify`
   resolution the Assumptions below call for; Milling's tool selection is unaffected and stays in
   the left pane),
@@ -205,6 +215,15 @@ User Story 1's navigation shell rather than exited or reset.
 - **FR-006**: The right pane MUST display the calculation result once every required left-pane
   input holds a valid value, and MUST NOT display a result computed from a different, no-longer-
   current set of inputs.
+- **FR-006a**: When every required left-pane input holds *some* value but `calculate()`/
+  `calculate_end_milling()`/`calculate_face_milling()` rejects the combination (e.g. an engagement
+  value invalid relative to a diameter that was itself just changed), the right pane MUST show the
+  resulting clear, actionable, localized error message — not a blank pane or a silently-withheld
+  result. This reuses `ErrorInfo`/`forms.format_result()`'s existing error-rendering unchanged (the
+  same mechanism PR #94's dialogs already use), per FR-007's "calculate() calls already wired up";
+  it does not require new validation logic, only that this feature's right pane actually display
+  what that existing mechanism already produces. Mirrors 017's own clear-actionable-message
+  guarantee for invalid input (017 Acceptance Scenario 2).
 - **FR-007**: The right pane MUST refresh automatically when a left-pane input changes, without a
   separate manual "calculate" action, mirroring the same `calculate()`/`calculate_end_milling()`/
   `calculate_face_milling()` calls PR #94 already wires up.

@@ -40,9 +40,11 @@
   to the Configuration-scope Assumption, which — like 017's — is not referenced inside a MUST
   clause; only the drilling-type/sub-operation question changes this checkbox's answer.) Re-check
   this once `/speckit-clarify` resolves FR-003/FR-005/FR-009a's open question.
-- Every requirement itself (FR-001 through FR-018, FR-009a) is otherwise independently testable;
-  it is specifically FR-003/FR-005/FR-009a's shared open question — not the Configuration-scope
-  Assumption, and not any other requirement — that keeps the checkbox above unchecked.
+- Every requirement in spec.md's Functional Requirements section is otherwise independently
+  testable (not enumerated by ID here — that range has already gone stale twice this session as
+  requirements were added; check spec.md itself for the current list). It is specifically
+  FR-003/FR-005/FR-009a's shared open question — not the Configuration-scope Assumption, and not
+  any other requirement — that keeps the checkbox above unchecked.
 - **Done: a throwaway UX prototype was tried in a real terminal**, per the spec's own "Recommended
   Next Steps" section (now updated to record what it found). The remaining gate before
   `/speckit-plan` is `/speckit-clarify` on the two flagged Assumptions (Configuration scope;
