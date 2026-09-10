@@ -5,7 +5,12 @@
 Two genuine unknowns remained after `/speckit-clarify` resolved spec.md's three flagged
 Assumptions (Configuration scope; drilling-type/sub-operation reading; tool-selection placement +
 tree-collapse coupling — none of those needed further technical research, only a product
-decision). This phase resolves the two that do.
+decision). This phase resolves the two that do (items 1-2 below).
+
+**Revision (this plan re-run)**: `/speckit-clarify` was reopened after implementation, per user
+feedback on PR #96 preferring the pre-plan prototype's UI over what shipped — FR-004's floating
+window and FR-005's `RadioList` rendering are new requirements that raise two further technical
+unknowns, resolved as items 3-4 below.
 
 ## 1. Terminal-size floor for the complete layout
 
@@ -84,6 +89,90 @@ the part that's tied to the old chain-of-screens shape, not the thread/contextva
   mechanism**: rejected — would diverge from the spike's own validated headless-testing method
   (spike-tui-framework.md) that this repo has used consistently since 017, for no clear benefit.
 
+## 3. Floating-window construction and interaction with the bar/tree underneath it
+
+**Question**: `/speckit-clarify` (revision session, reopened after implementation per PR #96
+feedback) resolved FR-004 to a centered, bordered/shadowed floating window over the persistent
+menu bar/tree, matching the pre-plan prototype's own confirmed finding — but the prototype itself
+never had a menu bar/tree to float *over* (it was a standalone script, spec's Carried-Over Items
+table). What prompt-toolkit primitive builds this, and does the bar/tree stay visible and
+interactive behind/around the float, or does opening an operation screen hide them the way a modal
+would?
+
+**Decision**: `prompt_toolkit.layout.FloatContainer` wraps the existing bar+tree `HSplit` as its
+`content`, with a single `Float` (holding the operation screen's own `HSplit`/`VSplit`, wrapped in
+a `Frame` for the border) added to its `floats` list only while `SessionUI.open_operation` is set.
+The bar and tree remain visible underneath and keep their own state (FR-005a) — the float does not
+hide or replace them, only draws over the region it occupies, consistent with FR-004's "overlaid on
+top of... rather than replacing them inline." Keyboard focus moves to the float's content on open
+(mirroring 017's own per-dialog-focus precedent) and back to the bar on Escape (unchanged from the
+already-implemented focus model), so the bar/tree being visually present does not imply they are
+simultaneously *interactive* while the float has focus — only that collapsing/expanding the tree
+before or after the float is open never discards its state (FR-005a, unchanged guarantee).
+
+**Rationale**: `FloatContainer`/`Float` is prompt-toolkit's own primitive for exactly this shape
+(a layer drawn on top of a base layout, sized/positioned independently) — no custom overlay
+compositing needed. Keeping the bar/tree as the `FloatContainer`'s `content` (rather than, say,
+swapping the whole `Layout.container` when a float opens) means `SessionUI.tree`'s state genuinely
+never needs to be torn down or rebuilt across an operation screen opening/closing, which is what
+makes FR-005a's independence guarantee hold structurally, not just by convention.
+
+**Alternatives considered**:
+- **A second, nested `Application`** for the floating window: rejected outright — prompt-toolkit
+  does not support a nested `Application.run()` call (the same constraint that motivated 017's
+  About/Help/Configuration becoming pure render functions rather than their own dialogs remains
+  true here).
+- **Nothing floats; keep the current embedded `DynamicContainer` body-swap, only add a visible
+  border around it**: rejected per the revision's own explicit resolution (FR-004) — a bordered
+  embedded pane still replaces the bar/tree inline, which is exactly what this revision changes.
+
+## 4. RadioList integration: does the whole form fit if every radio field renders as a full list?
+
+**Question**: FR-005 (revised) requires every radio field (unit system, mode, material type,
+material, tool) to render as `prompt_toolkit.widgets.RadioList` — which draws **one row per
+option**, always, not a collapsed one-line summary. Drilling's material list alone (six bundled
+metals/woods, more with a `--materials-config` override) would need that many rows just for one
+field. If every radio field on the left pane expands simultaneously, the row math research.md #1
+already did (which assumed each field was a single summary line) no longer holds, and the 30-row
+floor is not enough for a form with several multi-option fields all open at once.
+
+**Decision**: Only the **currently-selected/focused** radio field renders as a full `RadioList`
+(every option, one per row, arrow-key-navigable); every other radio field on the same screen
+collapses to a single-line `Label: current value` summary, exactly like the shipped implementation
+already does for every field — expanding to the full list only when navigation brings focus to it,
+collapsing back to the summary line when focus moves away. This is the accordion pattern: at most
+one field is ever "open" on a given left pane at a time.
+
+**Rationale**: This is the only reading of "match the prototype exactly" that keeps the terminal
+floor math from research.md #1 intact — the prototype's own confirmed 16-17-row estimate for
+Milling's left pane (Assumptions, spec.md) already implies a single summary line per field
+(13-14 fields in ~16-17 rows is only possible if fields are mostly one row each), so the prototype
+itself cannot have shown every option of every radio field simultaneously either; the *widget*
+that changed is `RadioList` replacing the current inline `(•) label` renderer for whichever field
+is focused, not the overall one-line-per-field layout for the rest of the screen. FR-016's
+"the moment it is selected/highlighted" framing already establishes that a field's presentation
+changing on selection is expected, native behavior for this feature, not new.
+
+**Consequence for the keyboard contract (§4)**: `RadioList`'s own native bindings are Up/Down to
+move the highlighted option and Enter/Space to select it — not Left/Right cycling. While a radio
+field is focused and expanded, Up/Down navigates its options (replacing the shipped
+implementation's Left/Right-cycles-the-value behavior for radio fields specifically); Left/Right
+continue to nudge a focused *numeric* field by a step (FR-017, unchanged). Moving to a different
+left-pane field (collapsing the current one back to its summary line) uses the same Up/Down or
+Tab navigation already used to move between fields today — at the first/last option of an open
+`RadioList`, Up/Down continues past it to the previous/next field rather than stopping, so a
+single consistent key still moves both within and between fields.
+
+**Alternatives considered**:
+- **Show every option of every radio field simultaneously, all the time**: rejected — blows the
+  terminal floor past any reasonable size for a form with several multi-option fields, and was
+  ruled out by the row-math cross-check above regardless.
+- **Keep Left/Right cycling even for the new `RadioList` widget** (fighting the widget's own
+  native bindings): rejected — `RadioList` is a real, pre-built prompt-toolkit widget specifically
+  because it already has correct, tested Up/Down/Enter/Space handling; re-wiring it to ignore that
+  and respond to Left/Right instead reintroduces custom key-binding code for behavior the widget
+  already provides, undermining the point of adopting it.
+
 ## Consolidated decisions for Phase 1
 
 | Item | Decision |
@@ -94,3 +183,7 @@ the part that's tied to the old chain-of-screens shape, not the thread/contextva
 | `forms.py` split | Keep unchanged: `UNIT_LABELS`, `convert_length`, `convert_power`, `render_error`, `display_label`, `material_type_label`, `unique_labels`, `format_result`. Replace: `ask_choice`, `ask_number`, `ask_required_number`, `ask_optional_number`, `ask_unit_system`, `ask_mode`, `ask_material_type`, `ask_material`, `ask_tool`, `ask_drilling_tool`, `show_result`, and the `Cancelled`/`CANCELLED` sentinel (no longer needed once fields commit-on-navigate rather than an explicit per-dialog Back/Cancel button — confirmed by the prototype). |
 | `menu.py`'s `_assign_mnemonics` | Reusable as-is for the new menu bar's items and the tree's leaves — logic is about picking pairwise-unique accelerator characters from a label list, not tied to full-screen dialog rendering. |
 | Contract test file | Rewrite `tests/contract/test_console_tui_contract.py` in place against the new `contracts/console-tui-splitpane-contract.md` (017's contract described the now-replaced dialog-chain menu structure; no value in a second, differently-named contract test file for the same subsystem). |
+| Operation screen container | `prompt_toolkit.layout.FloatContainer` wrapping the existing bar+tree `HSplit`, with a `Float` (holding a bordered `Frame`) added/removed as `SessionUI.open_operation` is set/cleared (research.md #3). |
+| Radio field rendering | `prompt_toolkit.widgets.RadioList` for the currently-focused radio field only; every other radio field on the same screen shows a one-line `Label: value` summary (research.md #4, accordion pattern) — not every option of every field simultaneously. |
+| Radio field keyboard contract | Up/Down navigates an open `RadioList`'s options (its own native binding); Left/Right continues to nudge a focused numeric field only (FR-017, unchanged) — this revises contract §4's earlier "radio fields cycle on Left/Right" line, which described the now-superseded inline-summary renderer (research.md #4). |
+| Machining tree | Flattens: `MachiningTree` loses its `drilling_expanded` field entirely (Drilling has no tree-level sub-expansion any more, FR-003 retired) — `expanded` is now its only field. |

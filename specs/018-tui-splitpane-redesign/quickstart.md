@@ -23,20 +23,24 @@ mfgparams
 
 Expected: the menu bar (contract §2) is visible on launch — Exit, Machining, Configuration, About,
 Help, in that order, with on-screen mnemonic hints (contract §4). Select Machining; a tree expands
-in place showing Milling and Drilling, without a full-screen transition (spec User Story 1,
-Acceptance Scenarios 1-2). Select Drilling; it further expands to show the tool-selection shortcut,
-collapsible back to just Milling/Drilling (Acceptance Scenario 3). Collapse the tree; it returns to
+in place showing Milling and Drilling as flat leaves, without a full-screen transition (spec User
+Story 1, Acceptance Scenarios 1-2). Select Drilling; its floating operation window opens directly
+over the bar/tree (Acceptance Scenario 3 — no further tree-level expansion; FR-003 retired).
+Collapse the tree (from the bar, independent of whether a floating window is open); it returns to
 collapsed state without losing your place in the menu bar (Acceptance Scenario 4).
 
 ## Scenario 2 — Complete a Drilling calculation in one pane (User Story 2)
 
-From Scenario 1's tree, select Drilling's leaf (not the tool-selection shortcut — the full
-operation screen). Expected: a left pane shows every FR-005 field simultaneously — unit system,
-mode, material type (see Scenario 5 for the data-driven category set), tool selection, diameter,
-hole depth, available power — all editable without a screen transition (Acceptance Scenario 1).
-Change unit system after entering a diameter; confirm the diameter value survives, converted, not
-discarded (Acceptance Scenario 3, mirroring PR #94's unit-carryover fix). Type a numeric field
-directly, with no prior "start editing" keystroke (FR-016); nudge it with Left/Right (FR-017).
+From Scenario 1's tree, select Drilling's leaf. Expected: a floating window opens over the bar/tree
+(FR-004) whose left pane shows every FR-005 field simultaneously — unit system, mode, material type
+(see Scenario 5 for the data-driven category set), tool selection, diameter, hole depth, available
+power — all editable without a screen transition (Acceptance Scenario 1). Change unit system after
+entering a diameter; confirm the diameter value survives, converted, not discarded (Acceptance
+Scenario 3, mirroring PR #94's unit-carryover fix). Type a numeric field directly, with no prior
+"start editing" keystroke (FR-016); nudge it with Left/Right (FR-017). Navigate onto a radio field
+(e.g. material type); confirm it expands into a full `RadioList` of options, navigable with
+Up/Down, while every other radio field stays collapsed to its one-line summary (FR-005, research.md
+#4).
 Compare the eventual right-pane result against calling
 `mfgparams.processes.machining.drilling.calculate(...)` directly with the same arguments in a
 Python shell — they must match (SC-004).
@@ -61,12 +65,12 @@ confirm you land back at the menu bar/tree, not a relaunched process (Acceptance
 
 ## Scenario 5 — Tree-collapse never hides a required field (FR-005a, resolved via `/speckit-clarify`)
 
-With Drilling's operation screen open (Scenario 2) and the Machining tree still expanded from
-getting there, collapse the tree (without leaving the operation screen). Expected: the operation
-screen stays open, and tool selection — the one field the tree also offers as a shortcut — remains
-visible and editable in the left pane exactly as before. This is the specific regression FR-005a
-guards against; treat any case where a required field becomes unreachable here as a contract
-violation, not a cosmetic issue.
+With Drilling's floating window open (Scenario 2) and the Machining tree still expanded from
+getting there, focus the bar and collapse the tree (without closing the floating window). Expected:
+the floating window stays open exactly as before — it is not part of the tree's own container
+(research.md #3), so collapsing the tree cannot affect it. This is the specific regression FR-005a
+guards against; treat any case where a required field becomes unreachable or the window closes here
+as a contract violation, not a cosmetic issue.
 
 ## Scenario 6 — Data-driven material categories (FR-005)
 

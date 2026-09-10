@@ -43,33 +43,37 @@ data-driven (unlike material types).
 ### `MachiningTree`
 
 The collapsible Milling/Drilling navigation structure nested under the Machining bar entry
-(FR-002/FR-003), replacing `machining_menu.py`'s full-screen submenu.
+(FR-002), replacing `machining_menu.py`'s full-screen submenu. **Revised via `/speckit-clarify`
+(reopened after implementation)**: Drilling's tool-selection sub-expansion is retired (FR-003) —
+both children are now flat leaves, so this entity loses its `drilling_expanded` field entirely.
 
 | Field | Type | Notes |
 |---|---|---|
 | `expanded` | `bool` | Whether Machining's own children (Milling, Drilling) are shown. Default `False`. |
-| `drilling_expanded` | `bool` | Whether Drilling's own child (the tool-selection shortcut, FR-003) is shown. Only meaningful when `expanded` is `True`; collapsing Machining implicitly collapses this too (no independent state to preserve — re-expanding Machining starts from a collapsed Drilling sub-node, matching Acceptance Scenario 4's "returns to its collapsed state"). |
 
 **State transitions**:
 - Selecting Machining while `expanded=False` → `expanded=True`.
 - Selecting Machining again (or a dedicated collapse action) while `expanded=True` →
-  `expanded=False`, `drilling_expanded=False` (Acceptance Scenario 4).
-- Selecting Drilling while `expanded=True` and `drilling_expanded=False` → `drilling_expanded=True`
-  (Acceptance Scenario 3).
-- Selecting the tool-selection shortcut leaf, or Milling, opens the corresponding operation screen
-  (FR-004) **without** changing `MachiningTree`'s own expand state (FR-005a: collapsing/expanding
-  the tree never affects which operation screen is open, and vice versa — the two are independent,
-  by this feature's `/speckit-clarify` resolution).
+  `expanded=False` (Acceptance Scenario 4).
+- Selecting Milling or Drilling opens the corresponding operation's floating window (FR-004)
+  **without** changing `MachiningTree`'s own expand state (FR-005a: collapsing/expanding the tree
+  never affects which operation screen is open, and vice versa — the two are independent, and now
+  trivially so, since the floating window is not part of the tree's own container at all,
+  research.md #3).
 
-**Validation rule**: `drilling_expanded` MUST be `False` whenever `expanded` is `False` (no
-orphaned sub-expansion once the parent is collapsed).
+**Validation rule**: none beyond the type itself — with only one field, there is no longer a
+sub-state that could become orphaned relative to another.
 
 ### `OperationScreen`
 
 The FR-004 left/right split-pane screen for whichever operation (Drilling, or Milling — FR-009's
-identical pattern) is currently open. One shared shape; Drilling and Milling supply different field
-sets (FR-005) and a different `SessionState` instance (`DrillingSessionState`/
-`MillingSessionState`, reused unchanged above).
+identical pattern) is currently open, rendered inside the floating window described in research.md
+#3. One shared shape; Drilling and Milling supply different field sets (FR-005) and a different
+`SessionState` instance (`DrillingSessionState`/`MillingSessionState`, reused unchanged above).
+`selected_field` doubles as the accordion state for radio rendering (research.md #4): the row
+matching `selected_field` renders as a full `RadioList` if it's a radio field, every other radio
+row renders as a one-line summary — no separate "which radio is expanded" field is needed, since
+that's always exactly whichever field is currently selected.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -91,8 +95,10 @@ prototype's own field-ordering approach (spec's Recommended Next Steps).
   `selected_field` was numeric and `field_buffer` parses (FR-016); an unparseable buffer is
   discarded with a status message, not written to `session_state` (FR-006b), and navigation still
   proceeds.
-- Left/Right on a numeric field adjusts `field_buffer` by a small step (FR-017); on a radio field,
-  cycles `session_state`'s corresponding value.
+- Left/Right on a numeric field adjusts `field_buffer` by a small step (FR-017). On a radio field,
+  Up/Down navigates the expanded `RadioList`'s options and Enter/Space commits the highlighted one
+  into `session_state`'s corresponding value (research.md #4 — `RadioList`'s own native bindings,
+  not Left/Right cycling).
 - Any committed change recomputes `last_result` (FR-007) against the current, complete input tuple;
   an incomplete or `calculate()`-rejected tuple sets `last_result` to `None` or to the returned
   `ErrorInfo`-bearing result respectively (FR-006/FR-006a) — never a stale result from a
@@ -136,7 +142,7 @@ present (FR-005a).
 **Validation rule**: exactly the invariant FR-005a exists to guarantee — there is no code path
 where `tree`'s state alone determines whether a required `OperationScreen` field is reachable,
 since `OperationScreen`'s own fields (above) are always present in the left pane regardless of
-`tree.expanded`/`tree.drilling_expanded`.
+`tree.expanded`.
 
 ## Entity relationship summary
 

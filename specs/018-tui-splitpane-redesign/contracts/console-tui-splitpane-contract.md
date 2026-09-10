@@ -17,7 +17,7 @@ this feature exposes, not narrative documentation.
 | `mfgparams[console]` not installed | Unchanged: the existing, generic missing-extra message (`mfgparams/__main__.py`'s guard) — no change required here. |
 | No TTY / terminal too small | Exits with a clear, localized, catalog-sourced message and a non-zero, documented exit status — **before** any prompt-toolkit `Application` is constructed (FR-013's gating-mechanism-unchanged requirement). The size floor itself changes: **<30×80**, raised from 017's <25×80 (research.md #1) — the complete layout (menu bar + tree + an operation's left/right panes) no longer reliably fits the old floor. |
 
-## 2. Menu bar + Machining tree structure (FR-001/FR-002/FR-003)
+## 2. Menu bar + Machining tree structure (FR-001/FR-002)
 
 ```
 Menu bar (always visible, one row): Exit | Machining | Configuration | About | Help
@@ -25,12 +25,8 @@ Menu bar (always visible, one row): Exit | Machining | Configuration | About | H
                                     (selecting expands, in place)
                                               ▼
                                     Machining tree
-                                    ├── Milling
-                                    └── Drilling
-                                        └── (tool-selection shortcut — FR-003/FR-005a;
-                                             navigates the same tool-selection field
-                                             Drilling's left pane always shows, never
-                                             its sole location)
+                                    ├── Milling   (flat leaf — opens its floating window, FR-004)
+                                    └── Drilling  (flat leaf — opens its floating window, FR-004)
 ```
 
 **Invariant**: the menu bar's entry set is exact — Exit, Machining, Configuration, About, Help, in
@@ -38,15 +34,17 @@ that order (FR-001). Adding a future top-level concern adds a new bar entry; it 
 the other four. Enforced by `tests/contract/test_console_tui_contract.py`.
 
 **Invariant**: the Machining tree's structure is exact — Milling and Drilling as Machining's only
-children, Drilling's tool-selection shortcut as its only further expansion (FR-002/FR-003). Adding
-a future operation (Constitution Principle VI) adds a new leaf under Machining; it does not
-restructure the bar or the other leaf. Enforced by the same contract test.
+children, both flat leaves with no further sub-expansion under either (FR-002; FR-003 retired via
+`/speckit-clarify`, reopened after implementation). Adding a future operation (Constitution
+Principle VI) adds a new leaf under Machining; it does not restructure the bar or the other leaf.
+Enforced by the same contract test.
 
 **Invariant**: collapsing/expanding the tree never changes whether an open operation screen's own
 fields are reachable (FR-005a; data-model.md's `SessionUI`/`MachiningTree`/`OperationScreen`
-independence). This is the one invariant this feature's `/speckit-clarify` session exists to
-guarantee — enforced by an integration test that collapses the tree with Drilling's screen open and
-asserts every FR-005 field, including tool selection, is still visible and editable.
+independence). Now trivially true — the operation screen floats over the tree in a
+`FloatContainer` (research.md #3), not inside it — but still enforced by an integration test that
+collapses the tree with Drilling's screen open and asserts every FR-005 field, including tool
+selection, is still visible and editable.
 
 **Invariant**: every bar entry's and tree leaf's mnemonics are pairwise distinct within their own
 level (reusing `menu.py`'s existing `_assign_mnemonics` validation rule, research.md). Enforced by
@@ -54,10 +52,11 @@ the same contract test.
 
 ## 3. Left/right split-pane contract (FR-004 through FR-009a)
 
-- Selecting a leaf operation (Milling, or Drilling via either the tree shortcut or — per FR-005a —
-  simply opening Drilling's screen directly) opens **one persistent screen** with a left pane
-  (every FR-005 input, simultaneously visible and editable) and a right pane (the live result),
-  without a full-screen transition (FR-004).
+- Selecting a leaf operation (Milling or Drilling) opens **one persistent, centered, bordered
+  floating window** — a `prompt_toolkit.layout.Float` overlaid on the menu bar/tree, research.md
+  #3, not an embedded pane replacing them — with a left pane (every FR-005 input, simultaneously
+  visible and editable) and a right pane (the live result), without a full-screen transition
+  (FR-004).
 - The right pane holds exactly one of three states at any time (FR-006/FR-006a/FR-006b), never a
   fourth: **(a)** empty/placeholder, while required inputs are incomplete; **(b)** a valid result,
   once every required input holds a valid, calculate()-accepted value; **(c)** a clear, actionable,
@@ -82,10 +81,15 @@ the same contract test.
   hinted on-screen (§2).
 - A numeric left-pane field becomes editable the instant it is selected/highlighted — no separate
   "start editing" keystroke (FR-016). Left/Right on a selected numeric field nudges its value by a
-  small step instead of cycling (radio fields cycle on Left/Right/Space as before); a nudge that
-  would land at or below zero clears the field to unset rather than producing a non-positive value
-  (implementation detail, not a spec-level requirement, but consistent across both operations per
-  the shared component in Project Structure).
+  small step; a nudge that would land at or below zero clears the field to unset rather than
+  producing a non-positive value (implementation detail, not a spec-level requirement, but
+  consistent across both operations per the shared component in Project Structure).
+- A radio left-pane field renders as a `RadioList` (FR-005, research.md #4) when it has focus, and
+  a one-line summary otherwise — only one radio field is ever expanded at a time. While expanded,
+  Up/Down navigates its options and Enter/Space commits the highlighted one (the widget's own
+  native bindings); Up/Down past the first/last option continues on to the previous/next left-pane
+  field, collapsing the current one back to its summary line, so the same keys move both within
+  and between fields.
 - A "return to the main menu" action is available from any open operation screen (FR-008), and does
   not require the tree to be collapsed first (FR-005a).
 
