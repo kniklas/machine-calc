@@ -31,11 +31,16 @@
 
 ## Notes
 
-- Two genuinely open questions (Configuration's view-vs-edit scope; whether "drilling type" is a
-  new domain concept or a relocation of the existing tool-selection field) are recorded in
-  Assumptions with a reasonable default and an explicit flag for `/speckit-clarify`, rather than as
-  blocking `[NEEDS CLARIFICATION]` markers — following this repo's own established precedent for
-  the first of the two (017's Configuration-scope question was carried the same way across
-  `/speckit-plan`/`/speckit-tasks`/`/speckit-analyze` without blocking progress).
+- "Requirements are testable and unambiguous" is checked under the same interpretation 017's
+  checklist used: two genuinely open questions (Configuration's view-vs-edit scope; whether
+  "drilling type" is a new domain concept or a relocation of the existing tool-selection field) are
+  recorded in Assumptions with a reasonable default and an explicit flag for `/speckit-clarify`,
+  rather than as blocking `[NEEDS CLARIFICATION]` markers — following this repo's own established
+  precedent for the first of the two (017's Configuration-scope question was carried the same way
+  across `/speckit-plan`/`/speckit-tasks`/`/speckit-analyze` without blocking progress). Every
+  requirement itself (FR-001 through FR-018 — three added after a throwaway UX prototype confirmed
+  their interaction details, per spec.md's Recommended Next Steps) is independently testable as
+  written; it is the two
+  flagged Assumptions, not the requirements, that carry open questions.
 - Per the spec's own "Recommended Next Steps" section, `/speckit-plan` should not run until a
   throwaway UX prototype has been tried in a real terminal.

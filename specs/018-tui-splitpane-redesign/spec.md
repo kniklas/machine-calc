@@ -71,8 +71,8 @@ corresponding operation screen — independent of what that screen's panes conta
 **Acceptance Scenarios**:
 
 1. **Given** the app has just launched, **When** the user looks at the screen, **Then** a
-   horizontal menu bar reading Exit, Machining, Configuration, Help is visible and none of the
-   other menu items require navigating away from it to see.
+   horizontal menu bar reading Exit, Machining, Configuration, About, Help is visible and none of
+   the other menu items require navigating away from it to see.
 2. **Given** the menu bar is visible, **When** the user selects Machining, **Then** a tree expands
    in place showing Milling and Drilling, without replacing the whole screen.
 3. **Given** the Machining tree is expanded, **When** the user selects Drilling, **Then** it
@@ -88,8 +88,9 @@ corresponding operation screen — independent of what that screen's panes conta
 Having selected an operation (e.g. Drilling), the user sees a left pane containing every input for
 that calculation at once: unit system (radio, default metric), calculation mode (radio, default
 standard), material type (Metal/Wood radio, expanding to a further radio choice of the specific
-metal or wood), tool selection (radio), and plain editable fields for diameter, hole depth, and
-available power. The user can move between and edit any of these without a screen transition.
+metal or wood), and plain editable fields for diameter, hole depth, and available power — plus tool
+selection, either here or in the Machining tree's drilling-type step, per FR-005's pending
+resolution. The user can move between and edit any of these without a screen transition.
 
 **Why this priority**: This is the core usability improvement this feature exists to deliver —
 without it, the redesign offers no benefit over 017's dialog chain.
@@ -101,8 +102,9 @@ leaving the pane.
 **Acceptance Scenarios**:
 
 1. **Given** the Drilling screen is open, **When** the user views the left pane, **Then** unit
-   system, calculation mode, material type, tool selection, diameter, hole depth, and available
-   power are all visible and editable without a screen transition.
+   system, calculation mode, material type, diameter, hole depth, and available power are all
+   visible and editable without a screen transition, and tool selection is visible and editable
+   either here or in the Machining tree's drilling-type step per FR-005's pending resolution.
 2. **Given** the left pane is open, **When** the user selects "Metal" for material type, **Then**
    a further radio choice of specific metals expands in the same pane (and analogously for
    "Wood").
@@ -172,7 +174,13 @@ User Story 1's navigation shell rather than exited or reset.
 ### Functional Requirements
 
 - **FR-001**: The application MUST display a persistent horizontal top-level menu bar containing
-  exactly these items: Exit, Machining, Configuration, Help.
+  exactly these items: Exit, Machining, Configuration, About, Help. Machining/Configuration/About/
+  Help carry forward 017's FR-009 item set unchanged (About is not otherwise mentioned in this spec
+  because its own screen and content are out of scope for this redesign; only its menu-bar placement
+  changes from a full-screen menu item to a persistent bar item). Exit is new to this feature: 017
+  had no labeled "Exit" menu item, only an unlabeled Escape/Ctrl-Q handler at the root menu (see
+  `tui/app.py`'s `run` loop) — a persistent bar with no "root screen" to Escape from needs an
+  explicit, discoverable Exit entry instead.
 - **FR-002**: Selecting Machining MUST expand a collapsible tree showing Milling and Drilling as
   its children, without requiring a separate full-screen transition.
 - **FR-003**: Selecting Drilling MUST further expand/collapse to present a choice, within the
@@ -183,8 +191,12 @@ User Story 1's navigation shell rather than exited or reset.
 - **FR-005**: The left pane MUST present all of the following simultaneously, each editable
   without a screen transition: unit system (radio, default metric), calculation mode (radio,
   default standard), material type (Metal/Wood radio, expanding to a further radio choice of the
-  specific material), tool selection (radio), and plain fields for diameter, hole depth (Drilling)
-  or the equivalent geometry fields (Milling), and available power.
+  specific material), tool selection (radio — for Drilling, whether this field lives in the left
+  pane, in the Machining tree's drilling-type step, or both is pending the `/speckit-clarify`
+  resolution the Assumptions below call for; Milling's tool selection is unaffected and stays in
+  the left pane),
+  and plain fields for diameter, hole depth (Drilling) or the equivalent geometry fields (Milling),
+  and available power.
 - **FR-006**: The right pane MUST display the calculation result once every required left-pane
   input holds a valid value, and MUST NOT display a result computed from a different, no-longer-
   current set of inputs.
@@ -214,11 +226,25 @@ User Story 1's navigation shell rather than exited or reset.
 - **FR-015**: If the Configuration screen remains view-only, it MUST cover all three tool
   registries (drilling, end-mill, face-mill), not only drilling's — closing the gap Copilot's
   review of PR #94 found and deferred.
+- **FR-016**: A plain numeric left-pane field (diameter, hole depth, available power, target RPM in
+  Fixed RPM mode, and Milling's additional geometry fields) MUST become editable the moment it is
+  selected/highlighted — typing a
+  digit immediately edits it. No separate "start editing" action (e.g. pressing Enter first) may be
+  required. Confirmed practical in a throwaway prototype built against this spec (see Recommended
+  Next Steps): navigating onto a numeric field and typing directly, with the value committed
+  automatically on navigating away, reads naturally and needs no explicit "confirm" step either.
+- **FR-017**: A selected plain numeric field MUST support adjusting its value by a small fixed step
+  via a direct keyboard action, in addition to typing a value outright — validated in the same
+  prototype using Left/Right to nudge by 1 unit. The exact step size and any per-field bounds are an
+  implementation/plan-level decision, not fixed by this FR.
+- **FR-018**: The right pane's result text MUST wrap to fit the pane's width rather than being
+  truncated or overflowing it — `format_result`'s existing per-line output (label, value, unit) is
+  routinely wider than a narrow result pane, confirmed in the same prototype.
 
 ### Key Entities
 
-- **Top-level menu bar**: The four always-visible entry points (Exit, Machining, Configuration,
-  Help) — the FR-001 replacement for 017's full-screen top-level menu.
+- **Top-level menu bar**: The five always-visible entry points (Exit, Machining, Configuration,
+  About, Help) — the FR-001 replacement for 017's full-screen top-level menu.
 - **Machining tree**: The collapsible Milling/Drilling (and drilling-type) navigation structure
   nested under the Machining menu-bar item.
 - **Operation input pane (left pane)**: The set of simultaneously-editable inputs for one
@@ -234,8 +260,8 @@ User Story 1's navigation shell rather than exited or reset.
 
 - **SC-001**: A user can reach a completed Drilling or Milling calculation result while every
   input for that calculation remains visible on screen at the same time, with zero full-screen
-  transitions between entering the first and last input (down from 017's 9+ sequential dialogs for
-  Drilling).
+  transitions between entering the first and last input (down from 017's 8 sequential dialogs for
+  Drilling in standard/power-constrained mode, or 9 in fixed-RPM mode).
 - **SC-002**: A user can change any single already-entered input and see an updated result without
   re-entering any other input that did not need to change.
 - **SC-003**: A user can run a second calculation (same or different operation) after seeing a
@@ -269,10 +295,21 @@ User Story 1's navigation shell rather than exited or reset.
   parity, not feature growth" (017's own operating assumption), but flags (b) explicitly for
   `/speckit-clarify` to confirm or override before `/speckit-plan`, since it changes whether any
   core/`processes.machining.drilling` code needs to change at all.
-- The existing 25×80 minimum terminal size (017's FR-006/FR-008) is assumed as the initial target
-  for the new layout; the recommended prototype (see below) should confirm whether a menu bar plus
-  two simultaneous panes needs a larger floor, and this spec's requirements should be revisited if
-  so.
+- **The 25×80 minimum terminal size (017's FR-011) likely needs raising, not just carrying
+  forward, based on the recommended prototype's measured pane height.** Milling's left pane (13
+  fields including the always-present available-power field, 14 with Fixed RPM's extra target-RPM
+  field) needed a 16-17 row content area — already including its title line — to show every field
+  without scrolling. Adding a merged status row and a horizontal divider below it (~18-19 rows),
+  plus the floating frame's own border/shadow (~2-3 more) — roughly 20-22 rows for the operation
+  screen *alone*, with no menu bar or expanded Machining tree above it yet (both deliberately out of
+  scope for that prototype, per the Recommended Next Steps below). Adding FR-001's persistent menu
+  bar (1 row) and an expanded Machining tree (FR-002/FR-003: at minimum Machining + Milling +
+  Drilling, another 2-3 rows) plausibly pushes the real total past 25 rows. This is a reasoned
+  estimate from the prototype's own numbers, not a verified measurement of the full screen (menu bar
+  + tree + operation screen together) — confirming the actual floor needs a follow-up prototype pass
+  that adds those two pieces back in, before this Assumption is treated as settled. Drilling's
+  narrower left pane (8 fields including available power, 9 with Fixed RPM's extra field, matching
+  SC-001's dialog count below) stayed comfortably within 25 rows on its own.
 - No new persistence is introduced: as in 017, all state is held for the lifetime of one session
   only.
 - This feature does not change the underlying calculation formulas, validation rules, or supported
@@ -294,12 +331,29 @@ when each should be addressed relative to this feature:
 | 017's tasks.md T037 (real-terminal, non-technical-user usability walkthrough) was never performed | Fold into **this feature's own acceptance validation** — walk through the *new* UI on a real terminal once built, not the old one. |
 | `terminal_capability.py` doesn't detect an incapable real TTY (e.g. `TERM=dumb`) that is otherwise large enough | Independent of this feature and narrow in blast radius (unusual terminal type) — recommend a **small, separate follow-up fix**, not a blocker for this feature. |
 
-**Recommended next step before `/speckit-plan`: build a throwaway prototype first.** The primary
-open question here is UX feel and `prompt-toolkit`'s ergonomics for a persistent, multi-widget
-split-pane layout with a collapsible tree — not technical feasibility (the library itself is
-already confirmed suitable for this project's resource profile via 017's own technical spike).
-Mirroring that same spike-before-committing precedent: build a small, disposable script implementing
-just one screen's worth of this design (e.g. Drilling's left/right pane, without the full menu
-bar/tree) and try it in a real terminal before writing `plan.md`/`tasks.md`. Discard the prototype
-once its shape is validated or revised — it exists to answer "does this feel right and does
-`prompt-toolkit` make it reasonably easy to build," not to become shipped code.
+**Done: a throwaway prototype was built and tried in a real terminal before `/speckit-plan`,** per
+the recommendation this section originally made (kept below for context). Two disposable scripts
+were built — one per operation, since Milling's field count turned out to matter (see the revised
+25×80 Assumption above) — each a single Drilling or Milling left/right-pane screen, without the
+full menu bar/Machining tree, reusing `calculate()`/`calculate_end_milling()`/
+`calculate_face_milling()`, the materials/tools registries, and `forms.format_result()` unchanged so
+the numbers on screen were real. Both were discarded after validating the shape; nothing from them
+was carried into this repository as shipped code. What the exercise confirmed or changed, now folded
+into FR-005/FR-016/FR-017/FR-018 and the terminal-size Assumption above:
+- The left/right split, rendered as a centered bordered/shadowed box (matching PR #94's existing
+  dialog styling) rather than an edge-to-edge full-bleed split, reads naturally.
+- Numeric fields being instantly editable on selection (FR-016) and supporting a quick keyboard
+  nudge (FR-017) both felt right in practice, not just on paper.
+- The right pane needs to wrap text (FR-018) — `format_result`'s lines are routinely wider than a
+  proportionally-sized result pane.
+- Milling's larger field count is a real constraint on the 25×80 floor, not a hypothetical one — see
+  the revised Assumption above for the specific row math and what's still unverified (the floor with
+  the menu bar and tree actually present).
+
+*(Original recommendation, for context.)* The primary open question was UX feel and
+`prompt-toolkit`'s ergonomics for a persistent, multi-widget split-pane layout with a collapsible
+tree — not technical feasibility (the library itself was already confirmed suitable for this
+project's resource profile via 017's own technical spike). Mirroring that same
+spike-before-committing precedent, the plan was to build a small, disposable script implementing
+just one screen's worth of this design and try it in a real terminal before writing
+`plan.md`/`tasks.md` — which is what happened, per above.
