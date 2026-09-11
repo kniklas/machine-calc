@@ -70,15 +70,19 @@ list is a pointer, not a copy that can drift):
 | `pane-title` | A section heading within a pane |
 | `background` | The desktop behind the bar and any floating window |
 | `bar` | The persistent menu bar row |
-| `dialog` / `dialog.body` | Every floating window's outer margin / body |
-| `frame.border` / `frame.label` | `Frame`'s border and title, shared by all floating windows |
+| `dialog` | The outer `Box` margin around the **centered operation window only** — the bar-entry dropdowns and the Exit dialog deliberately skip `Box` for a snugger fit and don't use this class |
+| `dialog.body` / `frame.border` / `frame.label` | `Frame`'s body/border/title, shared by every floating window (dropdowns, Exit dialog, and the operation window alike) |
 | `shadow` | The drop-shadow under a floating window |
 
 For a new UI element, map it to the existing class that already owns its
-visual role (a new floating window → `dialog`/`dialog.body`/
-`frame.border`/`shadow`, not new colors). Only add a new class when no
-existing one fits the role — and when you do, add it to this same dict and
-say why in the PR description, rather than starting a second one.
+visual role: a new dropdown/panel-style float → `dialog.body`/
+`frame.border`/`shadow` only (no `Box`, so no `dialog`, matching the
+dropdowns/Exit dialog above); a new centered/boxed window like the
+operation screen → add `dialog` too. Don't apply `dialog` to a dropdown —
+that would reintroduce the `Box` margin the existing dropdowns
+deliberately skip. Only add a new class when no existing one fits the
+role — and when you do, add it to this same dict and say why in the PR
+description, rather than starting a second one.
 
 ## 3. Write a design contract before implementing a net-new region
 
@@ -99,7 +103,15 @@ covering the parts prose tends to lose:
   say so explicitly and confirm both paths are meant to coexist — #96 had
   a live requirements reversal here (FR-003/FR-005a) that a one-line
   ambiguity note up front would have caught before implementation, not
-  after.
+  after. If the region adds a new menu/tree entry or dropdown item, this
+  table also assigns its mnemonic (reusing `menu.py`'s `_assign_mnemonics`
+  logic) and confirms it's visibly hinted and pairwise-distinct within its
+  own level — every menu in this codebase MUST satisfy this
+  (`specs/017-console-text-gui/contracts/console-tui-contract.md` §2/§3,
+  `specs/018-tui-splitpane-redesign/contracts/console-tui-splitpane-contract.md`
+  §2), enforced by `tests/contract/test_console_tui_contract.py`; a design
+  that only specifies sequential-key navigation and skips this is
+  incomplete.
 
 Keep it to a table per concern, not prose — the goal is something a
 30-second read confirms or corrects, not a design document.
