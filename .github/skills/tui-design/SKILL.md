@@ -16,8 +16,12 @@ passes rejected outright, then 8 further user-reported correction rounds
 after a third rewrite was already marked "done" — see the retrospective at
 [PR #96, comment](https://github.com/kniklas/mfgparams/pull/96#issuecomment-5637032822).
 Root cause #1 there (a claimed-lost prototype never checked against the
-filesystem) and the missing manual-QA gate (root cause #6) are now covered
-by Constitution **Principle XIII**. Root cause #3 is not:
+filesystem) and the missing manual-QA gate (root cause #6) are covered by
+Constitution **Principle XIII** (added by
+[PR #98](https://github.com/kniklas/mfgparams/pull/98); check
+`.specify/memory/constitution.md` directly if that PR hasn't merged yet —
+don't assume the principle number below is already ratified). Root cause
+#3 is not:
 
 > The chrome around the prototype was never specified, only reacted to...
 > designed live, turn-by-turn, in response to a stream of small
@@ -29,9 +33,9 @@ a time (color scheme → different bar color → dropdown submenus → divider/
 highlight/shading → color unification → a focus bug from one of the
 earlier fixes), at a total cost far higher than one consolidated design
 pass. This skill is that missing pass. It doesn't replace Principle XIII's
-manual-verification task — the design contract below is what the manual
-walkthrough checks the built feature *against*; Principle XIII checks that
-someone actually looked.
+manual-verification task (PR #98) — the design contract below is what the
+manual walkthrough checks the built feature *against*; Principle XIII
+checks that someone actually looked.
 
 ## 1. Read the actual reference — don't re-derive it from memory or prose
 
