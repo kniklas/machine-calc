@@ -5,16 +5,18 @@ T033). Drives the real menu bar -> Machining tree -> Drilling (a flat
 leaf) -> a completed calculation -> back to the menu bar -> exit, through
 the real, single persistent `Application`, not a chain of dialogs.
 
-Revision note (tasks.md T045/Phase 8): Drilling's tree-level tool-
-selection shortcut is retired (FR-003) -- it now opens directly, landing
-on Unit system (like Milling). Radio fields commit via Enter (the
-highlighted option -- defaulting to the first when unset, matching
-`prompt_toolkit.widgets.RadioList`'s own behavior); Up/Down are fully
-consumed by an expanded radio's own option list (clamped at the
-boundaries, never escaping to an adjacent field, matching a real
-`RadioList`), so **Tab** is used here to move field-to-field regardless of
-type (research.md #4) -- not Up/Down/j/k, which would otherwise need one
-keystroke per *option* to walk past a multi-choice field like Material.
+Revision note (rebuilt a second time to match the pre-plan prototype
+exactly, retiring the Phase-8/Tab-and-`RadioList`-style design this file
+previously exercised -- see `split_pane.py`'s module docstring): Drilling's
+tree-level tool-selection shortcut is retired (FR-003) -- it now opens
+directly, landing on Unit system (like Milling). A radio field is always a
+single `Label: value` line, never an expanded option list, so Up/Down
+(`j`/`k`) always move field-to-field regardless of type -- there is no Tab
+binding any more. Left/Right/Space (`h`/`l`/Space) cycle a radio field's
+value with wraparound, committing it immediately; a numeric field's typed
+text lives in `field_buffer` only and commits to `session_state` when the
+user navigates away from it (Up/Down), not on every keystroke and not on
+Escape.
 """
 
 from __future__ import annotations
@@ -27,18 +29,19 @@ _OPEN_DRILLING_COMPLETE_AND_EXIT = [
     "m",  # bar mnemonic: Machining -- expands the tree, focuses it
     "j",  # tree: Milling -> Drilling
     "\r",  # opens Drilling directly, selected on Unit system
-    "\t",
-    "\t",  # Tab to Material type (unit system/mode keep their defaults)
-    "\r",  # commits the highlighted (first) material type ("metal")
-    "\t",  # Tab to Material
-    "\r",  # commits the highlighted (first) material ("Mild Steel")
-    "\t",  # Tab to Tool
-    "\r",  # commits the highlighted (first) tool ("HSS")
-    "\t",  # Tab to Diameter
-    "10",  # instant-edit (FR-016)
-    "\t",  # Tab to Depth
+    "j",
+    "j",  # Down twice: Unit system -> Mode -> Material type
+    "l",  # cycles Material type to its first option ("metal"), committing
+    # immediately (no separate confirm step for radio fields)
+    "j",  # Down to Material (now present, since Material type is set)
+    "l",  # cycles Material to its first option ("Mild Steel"), committing
+    "j",  # Down to Tool
+    "l",  # cycles Tool to its first option ("HSS"), committing
+    "j",  # Down to Diameter
+    "10",  # instant-edit buffer (FR-016) -- not yet committed
+    "j",  # Down to Depth -- commits Diameter (10) on navigating away
     "20",
-    "\t",  # Tab to Available power (optional, left blank)
+    "j",  # Down to Available power (optional) -- commits Depth (20)
     "\x1b",  # focus back to the bar; the operation stays open (FR-005a)
     "\x1b",  # closes the operation, back at the menu bar/tree
     "\x1b",  # nothing open -> exit
@@ -80,7 +83,13 @@ def test_changing_an_input_recomputes_without_leaving_the_screen(monkeypatch):
 
     run_headless(
         target,
-        _OPEN_DRILLING_COMPLETE_AND_EXIT[:-3] + ["k", "k", "5", "\x1b", "\x1b", "\x1b"],
+        # `[:-3]` stops right after landing on Available power (the last
+        # navigation step before the three closing Escapes). "k","k" moves
+        # back up to Diameter, re-syncing its buffer to the committed "10";
+        # appending "5" (buffer becomes "105") and then navigating away
+        # ("j", to Depth) commits a distinct diameter and forces a fresh
+        # `calculate()` call, without ever leaving the operation screen.
+        _OPEN_DRILLING_COMPLETE_AND_EXIT[:-3] + ["k", "k", "5", "j", "\x1b", "\x1b", "\x1b"],
         on_batch=on_batch,
     )
     # A distinct diameter must produce a distinct (freshly computed, not

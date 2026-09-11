@@ -30,6 +30,20 @@ data-model.md's `MachiningTree`, this file's Project Structure). The core calcul
 (`calculate()`/`calculate_end_milling()`/`calculate_face_milling()`), validation, unit conversion,
 session-state semantics, and i18n catalog remain reused unchanged throughout.
 
+**Second revision note (spec.md Clarifications Session 2026-09-11, tasks.md Phase 9)**: the
+`RadioList`-accordion FR-005 answer immediately above was itself wrong — it was derived from
+spec.md's own prose description of the pre-plan prototype, not the prototype's actual source, which
+the user confirmed was still available on disk after rejecting that implementation outright. Once
+read directly, the prototype turned out to use no `RadioList` at all: every radio field is a single
+`Label: value` line, cycled and committed immediately by Left/Right/Space, with Up/Down always
+moving between fields unconditionally (no Tab/Shift-Tab) and a numeric field's typed/nudged text
+committing only on navigating away from it (not on every keystroke, as both prior passes shipped).
+Every `RadioList`/Tab/Shift-Tab/accordion mention below and in this feature's Project Structure
+diagram describes that superseded design, not the corrected one — see `research.md` #4's own
+reversal note and `contracts/console-tui-splitpane-contract.md` §3/§4 for the current contract. The
+floating window and flat Machining tree from the revision above are unaffected; the prototype
+confirms both were already correct.
+
 ## Technical Context
 
 **Language/Version**: Python ≥3.9 (`pyproject.toml`'s `requires-python`, unchanged).

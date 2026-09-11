@@ -455,3 +455,83 @@ is unaffected (quickstart.md Scenarios 1, 2, 5).
 
 **Checkpoint**: The shipped implementation matches the prototype's UI per the resolved
 `/speckit-clarify` session — floating windows, a flat tree, and `RadioList`-rendered selections.
+
+## Phase 9: Correction — match the pre-plan prototype exactly (again)
+
+**Context**: Phase 8 was built by inferring the prototype's interaction model from spec.md's own
+prose description of it (`/speckit-clarify`'s Phase 8 session), without ever reading the actual
+prototype source — the prototype had been treated as no longer available. After Phase 8 shipped,
+the user rejected it outright ("I do not like the implementation, look and feel should be EXACTLY
+as the prototype") and, when asked, confirmed both prototype scripts were still present on disk
+(`prototype_drilling_splitpane.py`/`prototype_milling_splitpane.py`, paths recorded in this
+phase's commit). Reading them in full showed Phase 8's `RadioList`-accordion-on-selection,
+Tab/Shift-Tab field navigation, Up/Down radio-option-with-boundary-clamping, and
+immediate-commit-per-keystroke numeric editing were **not** what the prototype actually does. This
+phase rebuilds `split_pane.py`/`app.py` byte-for-byte against the prototype's own code instead of
+against a secondhand description of it, superseding Phase 8's interaction model (not its floating
+window / flat tree structure, which the prototype confirms Phase 8 got right).
+
+Governing behaviors, all taken directly from the prototype's own functions (`_cycle`/`cycle_field`,
+`move_selection`, `commit_current`, `adjust_numeric`, `render_left`/`render_bottom`/`render_right`):
+a radio field is always a single `Label: value` line, never an expanded option list — Left/Right/
+Space cycle it with wraparound and commit immediately, no separate confirm step. Up/Down (and j/k)
+always move between fields unconditionally, regardless of field type — there is no per-type
+dispatch. A numeric field's typed/nudged text lives in `OperationScreen.field_buffer` only;
+`session_state` is not touched until the user navigates away from the field, at which point an
+unparseable buffer is discarded (not committed) and surfaces via a new bottom status bar — not the
+right pane, and not while still typing.
+
+- [X] T054 Read both prototype scripts in full and catalog every behavioral delta from Phase 8:
+      radio rendering shape, commit timing, navigation keys, floating-window chrome (dynamic
+      `Frame` title, `Box`/`Shadow` wrapping), explicit pane-width ratio, the new bottom status
+      bar, numeric cursor suffix (`_`), and unset-value display (`--`)
+- [X] T055 Rewrite `src/mfgparams/console/tui/screens/split_pane.py`: single-line radios that
+      cycle-and-commit immediately via `nudge_selected` (retiring `radio_navigate`/`radio_commit`/
+      `_render_expanded_radio` entirely); `NumberRow.on_commit` replaces `on_edit`/`on_nudge`,
+      invoked only by a new private `_commit_current()` called at the start of `move_selection`
+      (now taking a required `locale` parameter to translate FR-006b's message); add
+      `render_bottom_bar()`; narrow `render_right_pane()` to two states (placeholder, or
+      result-or-error) with a new required `placeholder` keyword parameter, dropping its old
+      proactive FR-006b pre-check (depends on T048)
+- [X] T056 Rewrite `src/mfgparams/console/tui/app.py`: add `OperationScreen.status: str | None`;
+      build the floating window as `Box(body=Shadow(body=Frame(title=<dynamic operation name via
+      a mutated Frame.title lambda>, body=...))` per the prototype's own widget nesting; explicit
+      `D(min=30,max=36,preferred=30)`/`D(min=45,max=54,preferred=45)` left/right pane widths; add
+      the bottom-bar row beneath a horizontal divider; add `"error"`/`"pane-title"` style classes
+      that were referenced in fragments but never defined; drop the Tab/Shift-Tab and
+      `radio_navigate`/`radio_commit` key bindings, restore direct Up/Down (`pane_focused`) +
+      Left/Right/h/l/Space (`pane_radio_focused`/`pane_numeric_focused`) bindings (depends on T049,
+      T055)
+- [X] T057 [P] Update `_number_row()` in `src/mfgparams/console/tui/screens/drilling.py` and
+      `screens/milling.py` to the single `on_commit` callback (depends on T055)
+- [X] T058 [P] Update `src/mfgparams/console/locales/en.py`: add `tui.validation.unparseable_number`,
+      `tui.pane.inputs`, `tui.pane.hint`, `tui.drilling.placeholder`, `tui.milling.placeholder`;
+      remove the now-unused `tui.result.placeholder`
+- [X] T059 Fix the `wrap_lines=True` regression the existing AST guard
+      (`test_content_windows_in_app_py_set_wrap_lines_true`) caught on the new `left_control`/
+      `bottom_control` `Window(...)` call sites introduced by T056
+- [X] T060 [P] Rewrite `tests/integration/test_tui_validation.py`, `test_tui_drilling.py`,
+      `test_tui_milling.py`, `test_tui_field_editing.py`, `test_tui_results.py`,
+      `test_tui_calculation_parity.py`, `test_tui_app_run.py`,
+      `test_tui_resize_preserves_input.py`, and `tests/performance/test_tui_redraw_latency.py`
+      against the new `split_pane` API and key-sequence model (depends on T055, T056, T057)
+- [X] T061 [P] Updated `README.md`'s "Use the interactive text GUI" section and its
+      `console/tui/` architecture note, `docs/source/{drilling,milling}.rst`, and
+      `CHANGELOG.md`'s `[Unreleased]` entry — all previously described Phase 8's
+      `RadioList`-accordion/Tab-navigation shape, now corrected to the prototype-fidelity model
+- [X] T062 Updated `spec.md` (new Clarifications Session 2026-09-11, FR-005/FR-006b text),
+      `plan.md` (a second revision note flagging its own now-superseded `RadioList` mentions),
+      `research.md` (#4's reversal note, consolidated-decisions table), `data-model.md`
+      (`OperationScreen.status` field, corrected state-transitions),
+      `contracts/console-tui-splitpane-contract.md` (§3 two-state right pane, §4 keyboard
+      contract), and `quickstart.md` (Scenarios 2 and 4) to describe this phase's
+      prototype-fidelity interaction model in place of Phase 8's `RadioList`/Tab design.
+- [X] T063 Run the full suite (`pytest tests/ -q --no-cov`), `mypy src/mfgparams`,
+      `ruff check src/mfgparams tests/`, `black --check src/mfgparams tests/`, and
+      `bandit -r src/mfgparams -ll -q` — confirm green/clean before this phase is considered done
+- [ ] T064 Re-verify with the user against a real terminal (not just headless tests) that this
+      implementation now matches "EXACTLY as the prototype" — folds into T038/T053's still-
+      outstanding manual walkthrough rather than duplicating it
+
+**Checkpoint**: The shipped implementation is now a direct behavioral transcription of the actual
+prototype scripts, not a reconstruction from their prose description.

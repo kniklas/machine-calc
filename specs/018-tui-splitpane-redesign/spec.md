@@ -63,7 +63,30 @@ expected to be substantially rewritten, not preserved as-is.
 
 - Q: Should an open Drilling or Milling screen render as a floating/overlaid window on top of the menu bar and tree, rather than replacing the body inline the way the shipped implementation does today? → A: Yes — a bordered, positioned panel floats above the persistent bar+tree layout underneath it (`prompt_toolkit.layout.Float`/`FloatContainer`), superseding FR-004's "opens ... a screen" shape and this session's own now-superseded "Both" resolution above for *how* the screen is reached, though not necessarily for whether tool selection itself stays reachable from the tree (see below).
 - Q: Should the Machining tree drop Drilling's tool-selection sub-expansion entirely, so Drilling becomes a direct, flat leaf under Machining exactly like Milling, with tool selection reachable only from the floating screen's left pane? → A: Yes — the tree flattens to Machining → Milling, Drilling (both direct leaves); tool selection lives only in Drilling's left pane. This retires FR-003 and supersedes this session's earlier "Both" resolution (the second bullet above) and its "relocation, not a new categorization" framing (the first bullet above) — the tree no longer has a drilling-type step to relocate anything into.
-- Q: Should every radio-style left-pane field (unit system, mode, material type, material, tool) render as `prompt_toolkit.widgets.RadioList` (one option per line, vertically stacked, arrow-highlighted) rather than the shipped implementation's single-line `(•) label  ( ) label` inline text? → A: Yes — match the prototype's own solution exactly, which used prompt-toolkit's native `RadioList` widget rather than a hand-rolled inline-text renderer (the user's explicit direction: implement exactly as the earlier accepted prototype, not a reinterpretation of it).
+- Q: Should every radio-style left-pane field (unit system, mode, material type, material, tool) render as `prompt_toolkit.widgets.RadioList` (one option per line, vertically stacked, arrow-highlighted) rather than the shipped implementation's single-line `(•) label  ( ) label` inline text? → A: Yes — match the prototype's own solution exactly, which used prompt-toolkit's native `RadioList` widget rather than a hand-rolled inline-text renderer (the user's explicit direction: implement exactly as the earlier accepted prototype, not a reinterpretation of it). **Superseded below (Session 2026-09-11): this answer was wrong — it was based on a prose description of the prototype, not the prototype's actual code, which does not use `RadioList` at all.**
+
+### Session 2026-09-11 (correction — reopened a second time, per direct user rejection of the above session's shipped result)
+
+This feature's UI was rebuilt twice from a description of the discarded pre-plan prototype without
+ever having its actual source (first the original dialog-chain-derived guess, then the
+`RadioList`/Tab-Shift-Tab design from the session above). After the second attempt shipped, the
+user rejected it outright: "I do not like the implementation, look and feel should be EXAXCTLY as
+the prototype" [sic]. Asked directly whether the prototype was available anywhere, the user
+confirmed both scripts (`prototype_drilling_splitpane.py`/`prototype_milling_splitpane.py`) were
+still present on disk and gave their location. Reading them in full settled every remaining
+question below by direct inspection rather than inference — no multiple-choice question was put to
+the user for these, since the prototype's own code is unambiguous on each point.
+
+- Q: Does a radio field ever render as a `prompt_toolkit.widgets.RadioList` (one option per line)? → A: No. The prototype's `render_left` renders every radio field as a single `Label: value` line, always, for every field, with no expanded state at all.
+- Q: How does a radio field's value change, then? → A: Left/Right/Space (the prototype's `cycle_field`) cycle the value with wraparound and commit it to state **immediately** — no separate confirm step, no highlighted-but-uncommitted intermediate state.
+- Q: If radio fields never expand, what does Up/Down do? → A: Up/Down (and `j`/`k`) always move between left-pane fields, unconditionally, regardless of the current or next field's type (the prototype's `move_selection`) — there is no Tab/Shift-Tab binding in the prototype at all, and none in the corrected implementation either.
+- Q: When does a numeric field's typed/nudged text reach `session_state`? → A: Only when the user navigates away from the field (Up/Down), via the prototype's `commit_current` — not on every keystroke as Session 2026-09-10's shipped result did. A buffer that still doesn't parse as a number at that point is discarded (the field keeps its last-committed value), and FR-006b's message moves to a new bottom status bar (the prototype's `render_bottom`/`ui.status`) rather than the right pane, surfacing only at that commit attempt, never while the field is still being typed.
+- Q: Does the floating window have its own title, separate from the left pane's? → A: Yes — the prototype wraps the whole screen in `Box(Shadow(Frame(title=<operation name>, ...)))`; the left pane's own heading is the literal text "Inputs", not the operation name. Neither detail was in the shipped implementation.
+
+This session's answers **replace** the prior session's `RadioList`/Tab-Shift-Tab answer (the
+question immediately above) and its downstream FR-005 text below; they do not touch that session's
+other two resolutions (the floating window itself, and the flat Machining tree), which the
+prototype confirms were already correct.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -241,10 +264,12 @@ User Story 1's navigation shell rather than exited or reset.
   specific material, tool selection (radio — always present here, for both Drilling and Milling,
   with no tree-level shortcut into it for either — see FR-005a),
   and plain fields for diameter, hole depth (Drilling) or the equivalent geometry fields (Milling),
-  and available power. Every radio field in this list MUST render as a vertically-stacked,
-  arrow-highlighted list — `prompt_toolkit.widgets.RadioList` or an equivalent — not a single-line
-  inline `(•) label  ( ) label` layout, matching the pre-plan prototype's own solution exactly
-  (resolved via `/speckit-clarify`, reopened after implementation — see Clarifications).
+  and available power. Every radio field in this list MUST render as a single `Label: value` line,
+  always — never an expanded, vertically-stacked option list — with Left/Right/Space cycling its
+  value with wraparound and committing the change immediately, no separate confirm step, matching
+  the pre-plan prototype's own solution exactly (resolved via `/speckit-clarify`, reopened a second
+  time after the first correction attempt still didn't match the prototype — see Clarifications,
+  Session 2026-09-11).
 - **FR-005a**: *(Resolution revised via `/speckit-clarify`, reopened after implementation — see
   Clarifications.)* FR-005's "simultaneously visible and editable" guarantee holds trivially now:
   tool selection lives *only* in the left pane, with no tree-level shortcut into it to keep in
@@ -276,7 +301,10 @@ User Story 1's navigation shell rather than exited or reset.
   actionable, localized indication that the value is invalid, distinct from FR-006a's
   calculate()-rejected-combination message. This is the one part of 017's Acceptance Scenario 2
   guarantee FR-006a's reuse-`calculate()`'s-own-errors mechanism cannot cover, since it never
-  reaches `calculate()` in the first place.
+  reaches `calculate()` in the first place. *(Revised via `/speckit-clarify`, Session 2026-09-11:
+  this indication is not part of the right pane at all — matching the pre-plan prototype exactly,
+  it appears in a status bar beneath both panes, and only once the user tries to navigate away from
+  the offending field, not proactively while still typing.)*
 - **FR-007**: The right pane MUST refresh automatically when a left-pane input changes, without a
   separate manual "calculate" action, mirroring the same `calculate()`/`calculate_end_milling()`/
   `calculate_face_milling()` calls PR #94 already wires up.
@@ -464,9 +492,14 @@ were built — one per operation, since Milling's field count turned out to matt
 25×80 Assumption above) — each a single Drilling or Milling left/right-pane screen, without the
 full menu bar/Machining tree, reusing `calculate()`/`calculate_end_milling()`/
 `calculate_face_milling()`, the materials/tools registries, and `forms.format_result()` unchanged so
-the numbers on screen were real. Both were discarded after validating the shape; nothing from them
-was carried into this repository as shipped code. What the exercise confirmed or changed, now folded
-into FR-005/FR-016/FR-017/FR-018 and the terminal-size Assumption above:
+the numbers on screen were real. Both were believed discarded after validating the shape, with
+nothing from them carried into this repository as shipped code — this turned out to be inaccurate:
+both scripts were still present on disk in this session's scratchpad directory throughout, and once
+located (Session 2026-09-11, Clarifications) they became the direct, byte-for-byte reference for
+this feature's second correction pass, superseding several of the "folded into" bullets below that
+had actually been derived from a prose description of the prototype rather than its own code. What
+the exercise confirmed or changed, now folded into FR-005/FR-016/FR-017/FR-018 and the terminal-size
+Assumption above:
 - The left/right split, rendered as a centered bordered/shadowed box (matching PR #94's existing
   dialog styling) rather than an edge-to-edge full-bleed split, reads naturally. This finding was
   not carried into FR-004 as first written (an embedded, edge-to-edge split pane shipped instead)

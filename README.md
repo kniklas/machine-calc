@@ -190,35 +190,62 @@ mfgparams
 
 (`python -m mfgparams` and `python -m mfgparams.console` reach the same
 interface.) A persistent menu bar stays visible across the top of the
-screen: **Exit**, **Machining**, **Configuration**, **About**, **Help** —
-navigate with the arrow keys and Enter, or an item's underlined keyboard
-shortcut. Choosing **Machining** expands a tree in place, showing
-**Milling** and **Drilling** as flat leaves — selecting either opens its
-operation screen directly, with no further tree-level expansion.
+screen, in a distinct shade from the blue desktop directly beneath it (no
+divider line between them): **Exit**, **Machining**, **Configuration**,
+**About**, **Help** — navigate with the arrow keys and Enter (**Down**
+does the same as Enter: it opens the highlighted item, the natural
+"descend into" gesture for a horizontal bar), or an item's underlined
+keyboard shortcut. Choosing **Machining**, **Configuration**, **About**,
+or **Help** opens a floating dropdown, its top edge directly under the bar
+and its background matching the bar's own shade, with a Midnight
+Commander-style drop shadow — not inline content replacing the desktop.
+Machining's dropdown shows **Milling** and **Drilling** as flat leaves;
+selecting either opens its operation screen directly, with no further
+tree-level expansion. Escape closes whichever dropdown/panel is open and
+returns focus to the bar; Up does the same the instant you're at the top
+of a navigable list (Machining's tree) or in a single-block panel with
+nothing to navigate (Configuration/About/Help) — the dropdown is erased,
+not left open-but-unfocused underneath. Selecting **Exit** opens a "Are
+you sure you want to exit?" confirmation dropdown (defaulting to **No**)
+rather than exiting immediately — Left/Right toggle Yes/No, Enter/Space
+confirms the highlighted choice, and **y**/**n** answer directly.
 
-Opening Drilling or Milling shows a centered, bordered floating window over
-the menu bar and tree (which stay visible underneath, untouched): the left
-pane lists every input for that operation at once — unit system,
+Opening Drilling or Milling shows a centered, bordered floating window,
+shaded and colored the same cyan-on-black as every other floating window,
+over the menu bar and tree (which stay visible underneath, untouched): the
+left pane lists every input for that operation at once — unit system,
 calculation mode, material type/material, tool, and the operation's
 geometry fields (plus, for Milling, the end-milling/face-milling choice) —
 all simultaneously visible and editable, with no separate screen per field.
-The right pane shows the live result, refreshing automatically as you fill
-in or change an input. A numeric field becomes editable the instant you
-select it (typing a digit edits it immediately), and Left/Right nudges it
-by a small step. A radio field (unit system, mode, material type, material,
-tool, sub-operation) expands into a vertically-stacked option list when
-selected — Up/Down highlights an option and Enter or Space commits it,
-clamped at the first/last option rather than spilling over into the next
-field. **Tab**/**Shift-Tab** moves to the next/previous field regardless of
-its type — the way to move on from a field without necessarily stepping
-through every one of its options first.
+The right pane shows the live result, refreshing automatically once every
+required field has a value. **Up/Down** (or **j/k**) always moves to the
+next/previous field, regardless of its type. A radio field (unit system,
+mode, material type, material, tool, sub-operation) is always a single
+`Label: value` line — **Left/Right**/**h/l**/**Space** cycle its value with
+wraparound and commit it immediately, with no separate confirm step. A
+numeric field becomes editable the instant you select it (typing a digit or
+`.`/`-` edits its buffer immediately, Backspace removes the last character,
+Left/Right nudges it by a small step) — but that text is only written to the
+field the instant you navigate away from it (Up/Down); text that still
+doesn't parse as a number at that point is discarded (the field keeps its
+last valid value) and a message appears in the status bar beneath both
+panes, replacing the usual keyboard hint until you correct it.
 
-Escape moves focus back to the menu bar without closing the open window or
-changing the tree's expand/collapse state; Escape again, from the menu bar,
-closes the window and returns you to the menu bar/tree, so you can start
-another calculation — the same operation or a different one — without
-leaving the text GUI. Each operation remembers its own previous answers as
-defaults for the rest of the session.
+Escape closes the operation window outright (a single press, not two) and
+returns focus to the still-open Machining tree if it was expanded — not
+the bare menu bar — so you land back exactly where you opened the
+operation from; a second Escape from there closes the tree itself and
+reaches the bar. Either way, you can start another calculation — the same
+operation or a different one — without leaving the text GUI. Each
+operation remembers its own previous answers as defaults for the rest of
+the session.
+
+The whole application follows one consistent, Turbo-Vision-style color
+scheme — a cyan bar, a distinct blue desktop behind it, and the bar's own
+cyan-on-black for every floating window (the Machining/Configuration/
+About/Help dropdowns, the Exit confirmation dialog, and the Drilling/
+Milling operation window alike), each with a Midnight Commander-style
+black drop shadow — rather than the terminal's own default background.
 
 For drilling, the calculation-mode field (`standard`, `power-constrained`,
 `fixed-rpm`) sits right after unit system in the left pane;
@@ -364,12 +391,16 @@ kinds of state stay deliberately separate:
   independent of it) and which row is highlighted within it. Kept separate
   from `SessionUI` so, for example, selecting Configuration from the bar
   never touches the Machining tree's own state.
-- **`OperationScreen.field_buffer`** — the raw, not-yet-committed state of
-  whichever field is currently selected in a split-pane screen (see below):
-  mid-typed text for a numeric field, or the highlighted-but-not-yet-
-  confirmed option for an expanded radio field (Up/Down moves it; Enter or
-  Space commits it) — distinct from that field's last-committed value
-  either way.
+- **`OperationScreen.field_buffer`** — the raw, not-yet-committed text of
+  whichever numeric field is currently selected in a split-pane screen (see
+  below); empty for a radio field, which has no buffered state of its own
+  since Left/Right/Space commit it immediately. Committed only when the
+  user navigates away from the field (Up/Down) — distinct from that field's
+  last-committed value until then. `OperationScreen.status` is a sibling
+  field: `None` normally, or a transient message (e.g. "'abc' is not a
+  number") shown in the bottom status bar in place of the usual keyboard
+  hint, set only when navigating away from a field whose buffer didn't
+  parse.
 
 Four widgets render as pure functions of this state — `menu.render_menu_bar`,
 `machining_menu.render_tree`, `screens.about.render_about`,
@@ -381,16 +412,17 @@ are built the same way but share one more layer,
 row's presence or options can depend on an earlier row's committed value —
 e.g. the specific-material row only appears once a material type is chosen
 — so the list is rebuilt every render, not cached), and `split_pane.py`
-owns the shared navigation/instant-edit/nudge/radio-list logic and the right
-pane's three-state result machine (placeholder while incomplete; a result
-once
-every required field validates; an error either from `calculate()` itself
-rejecting a complete-but-invalid combination, or from text that never
-parses as a number at all). Deliberately, this module does *not*
-re-validate field ranges itself — `calculate()`/`calculate_end_milling()`/
-`calculate_face_milling()` already re-validate every field internally
-regardless of caller, so the split pane's only extra job is catching input
-that can never reach those functions in the first place (unparseable text).
+owns the shared navigation/edit/nudge/commit logic and the right pane's
+two-state result machine (a placeholder while any required field is still
+unset; a result, or an error `calculate()` itself rejects for a
+complete-but-invalid combination, once every required field has a value).
+Text that never parses as a number is not a right-pane state at all — it
+never reaches `session_state`, so it can't reach `calculate()` either;
+instead it surfaces via the bottom status bar (`render_bottom_bar`), only
+once the user tries to navigate away from the offending field, not while
+still typing. Deliberately, this module does *not* re-validate field ranges
+itself — `calculate()`/`calculate_end_milling()`/`calculate_face_milling()`
+already re-validate every field internally regardless of caller.
 
 Testing drives the real `Application` headlessly:
 `prompt_toolkit.output.DummyOutput` renders nowhere, and

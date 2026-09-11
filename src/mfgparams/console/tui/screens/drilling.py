@@ -80,24 +80,10 @@ def _convert_on_unit_change(state: DrillingSessionState, unit_system: UnitSystem
 def _number_row(
     field_id: FieldId, label: str, unit: str, value: float | None, required: bool, setter
 ) -> split_pane.NumberRow:
-    def on_edit(buffer: str) -> None:
-        text = buffer.strip()
-        if not text:
-            setter(None)
-            return
-        try:
-            setter(float(text))
-        except ValueError:
-            # FR-006b: an unparseable buffer never touches committed state --
-            # the buffer itself (still visible, still editable) carries the
-            # invalid text; `split_pane.render_right_pane` reads the buffer
-            # directly to decide whether to show FR-006b's message.
-            pass
-
-    def on_nudge(direction: int) -> None:
-        current = value if value is not None else 0.0
-        new_value = current + direction * split_pane.NUDGE_STEP
-        setter(None if new_value <= 0 else new_value)
+    """`on_commit` is called only when the user navigates away from this
+    field (`split_pane.move_selection`), with the already-parsed value --
+    matching the prototype's `commit_current`; typing/nudging only ever
+    touch `OperationScreen.field_buffer`, never call this directly."""
 
     return split_pane.NumberRow(
         field_id=field_id,
@@ -105,8 +91,7 @@ def _number_row(
         unit=unit,
         value=value,
         required=required,
-        on_edit=on_edit,
-        on_nudge=on_nudge,
+        on_commit=setter,
     )
 
 

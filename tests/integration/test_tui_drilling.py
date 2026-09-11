@@ -6,10 +6,12 @@ functions `app.py`'s key bindings call on every keystroke -- rather than
 through the full headless `Application` (`test_tui_navigation.py` covers
 that wiring layer separately, per spec's "Do not invest further in the
 soon-to-be-deleted dialog-chain tests" recommendation to write fresh
-coverage from the start). Each row's `on_select`/`on_edit`/`on_nudge`
-closure *is* what a keystroke invokes, so calling it directly is a faithful,
-non-flaky simulation without prompt_toolkit's timing-sensitive pipe-input
-harness.
+coverage from the start). Each `RadioRow`'s `on_select` and each
+`NumberRow`'s `on_commit` closure *is* what a keystroke ultimately invokes
+(`on_commit` via `split_pane.move_selection`, once the user navigates away
+from the field), so calling it directly is a faithful, non-flaky simulation
+without prompt_toolkit's timing-sensitive pipe-input harness, without
+needing to also simulate the intervening `field_buffer` typing/navigation.
 """
 
 from __future__ import annotations
@@ -44,8 +46,8 @@ def _fill_metal_mild_steel_hss(screen: OperationScreen) -> None:
     _row(_rows(screen), FieldId.MATERIAL_TYPE).on_select("metal")
     _row(_rows(screen), FieldId.MATERIAL).on_select("Mild Steel")
     _row(_rows(screen), FieldId.TOOL).on_select("HSS")
-    _row(_rows(screen), FieldId.DIAMETER).on_edit("10")
-    _row(_rows(screen), FieldId.DEPTH).on_edit("20")
+    _row(_rows(screen), FieldId.DIAMETER).on_commit(10.0)
+    _row(_rows(screen), FieldId.DEPTH).on_commit(20.0)
 
 
 def test_every_fr005_field_is_visible_simultaneously_without_a_screen_transition():
@@ -79,7 +81,7 @@ def test_unit_system_change_converts_diameter_rather_than_discarding_it():
     """Acceptance Scenario 3, mirroring PR #94's unit-carryover fix."""
 
     screen = _screen()
-    _row(_rows(screen), FieldId.DIAMETER).on_edit("10")
+    _row(_rows(screen), FieldId.DIAMETER).on_commit(10.0)
     _row(_rows(screen), FieldId.UNIT_SYSTEM).on_select("imperial")
     state = screen.session_state
     assert isinstance(state, DrillingSessionState)
@@ -124,7 +126,7 @@ def test_fixed_rpm_mode_reaches_a_result_matching_the_core_calculation():
     screen = _screen()
     _fill_metal_mild_steel_hss(screen)
     _row(_rows(screen), FieldId.MODE).on_select(CalculationMode.FIXED_RPM.value)
-    _row(_rows(screen), FieldId.TARGET_RPM).on_edit("500")
+    _row(_rows(screen), FieldId.TARGET_RPM).on_commit(500.0)
     state = screen.session_state
     assert isinstance(state, DrillingSessionState)
     assert split_pane.is_complete(_rows(screen))
@@ -151,7 +153,7 @@ def test_power_constrained_mode_requires_available_power_to_be_complete():
     _fill_metal_mild_steel_hss(screen)
     _row(_rows(screen), FieldId.MODE).on_select(CalculationMode.POWER_CONSTRAINED.value)
     assert not split_pane.is_complete(_rows(screen))
-    _row(_rows(screen), FieldId.AVAILABLE_POWER).on_edit("2")
+    _row(_rows(screen), FieldId.AVAILABLE_POWER).on_commit(2.0)
     assert split_pane.is_complete(_rows(screen))
 
 
@@ -162,7 +164,7 @@ def test_switching_mode_clears_the_previous_modes_power_or_rpm_value():
 
     screen = _screen()
     _row(_rows(screen), FieldId.MODE).on_select(CalculationMode.POWER_CONSTRAINED.value)
-    _row(_rows(screen), FieldId.AVAILABLE_POWER).on_edit("5")
+    _row(_rows(screen), FieldId.AVAILABLE_POWER).on_commit(5.0)
     state = screen.session_state
     assert isinstance(state, DrillingSessionState)
     assert state.available_power == 5.0

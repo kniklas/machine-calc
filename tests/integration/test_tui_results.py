@@ -1,11 +1,14 @@
-"""Integration test: the right pane's three-state machine and automatic
+"""Integration test: the right pane's two-state machine and automatic
 refresh (018-tui-splitpane-redesign User Story 3, tasks.md T025).
 
-FR-006/FR-006a's three states -- placeholder, result, error -- never a
-fourth (contract §3), exercised against both Drilling and Milling through
-the shared `split_pane.render_right_pane`. FR-007's automatic refresh is
-exercised by changing an input and confirming the *next* render reflects
-it, with no separate "calculate" action.
+FR-006/FR-006a's two states -- placeholder, or a result/error once complete
+-- never a third, exercised against both Drilling and Milling through the
+shared `split_pane.render_right_pane`. (Revision, matching the pre-plan
+prototype exactly: FR-006b's unparseable-text state moved entirely to the
+bottom status bar -- see `test_tui_validation.py` -- so it is no longer one
+of the right pane's own states.) FR-007's automatic refresh is exercised by
+changing an input and confirming the *next* render reflects it, with no
+separate "calculate" action.
 """
 
 from __future__ import annotations
@@ -22,6 +25,8 @@ from mfgparams.console.tui.screens.milling import calculate_result as milling_ca
 from mfgparams.console.tui.screens.milling import rows_for as milling_rows_for
 
 _LABELS = forms.UNIT_LABELS[UnitSystem.METRIC]
+_DRILLING_PLACEHOLDER = translate("en", "tui.drilling.placeholder")
+_MILLING_PLACEHOLDER = translate("en", "tui.milling.placeholder")
 
 
 def _drilling_screen() -> OperationScreen:
@@ -46,9 +51,9 @@ def _fill_drilling(screen: OperationScreen) -> None:
     rows = drilling_rows_for(screen, None, "en", "en")
     _row(rows, FieldId.TOOL).on_select("HSS")
     rows = drilling_rows_for(screen, None, "en", "en")
-    _row(rows, FieldId.DIAMETER).on_edit("10")
+    _row(rows, FieldId.DIAMETER).on_commit(10.0)
     rows = drilling_rows_for(screen, None, "en", "en")
-    _row(rows, FieldId.DEPTH).on_edit("20")
+    _row(rows, FieldId.DEPTH).on_commit(20.0)
 
 
 def _render_right(screen: OperationScreen) -> str:
@@ -56,7 +61,12 @@ def _render_right(screen: OperationScreen) -> str:
     state = screen.session_state
     assert isinstance(state, DrillingSessionState)
     fragments = split_pane.render_right_pane(
-        rows, screen, lambda: drilling_calculate(state, None, "en"), _LABELS, "en"
+        rows,
+        screen,
+        lambda: drilling_calculate(state, None, "en"),
+        _LABELS,
+        "en",
+        placeholder=_DRILLING_PLACEHOLDER,
     )
     return "".join(t for _, t in fragments)
 
@@ -66,7 +76,7 @@ def test_right_pane_shows_placeholder_while_input_is_incomplete():
 
     screen = _drilling_screen()
     text = _render_right(screen)
-    assert translate("en", "tui.result.placeholder") in text
+    assert _DRILLING_PLACEHOLDER in text
 
 
 def test_right_pane_shows_a_result_the_instant_the_last_input_completes_it():
@@ -76,7 +86,7 @@ def test_right_pane_shows_a_result_the_instant_the_last_input_completes_it():
     _fill_drilling(screen)
     text = _render_right(screen)
     assert translate("en", "tui.result.title") in text
-    assert translate("en", "tui.result.placeholder") not in text
+    assert _DRILLING_PLACEHOLDER not in text
 
 
 def test_right_pane_refreshes_automatically_when_an_input_changes():
@@ -88,12 +98,13 @@ def test_right_pane_refreshes_automatically_when_an_input_changes():
     _fill_drilling(screen)
     first_text = _render_right(screen)
 
-    # `NumberRow.on_edit` is the same commit callback a keystroke drives
-    # (`split_pane.edit_selected`/`backspace_selected`) -- calling it
+    # `NumberRow.on_commit` is the same commit callback `move_selection`
+    # drives once the user navigates away from a field -- calling it
     # directly with the new full value is equivalent to a user retyping the
-    # field, without needing to replay individual keystrokes here (that
-    # replay behavior is `test_tui_field_editing.py`'s job).
-    _row(drilling_rows_for(screen, None, "en", "en"), FieldId.DIAMETER).on_edit("5")
+    # field and then leaving it, without needing to replay individual
+    # keystrokes here (that replay behavior is `test_tui_field_editing.py`'s
+    # job).
+    _row(drilling_rows_for(screen, None, "en", "en"), FieldId.DIAMETER).on_commit(5.0)
 
     second_text = _render_right(screen)
     assert second_text != first_text
@@ -104,14 +115,14 @@ def test_right_pane_shows_an_error_for_a_complete_but_rejected_combination_not_a
 
     screen = _drilling_screen()
     _fill_drilling(screen)
-    _row(drilling_rows_for(screen, None, "en", "en"), FieldId.DIAMETER).on_edit("0")
+    _row(drilling_rows_for(screen, None, "en", "en"), FieldId.DIAMETER).on_commit(0.0)
 
     text = _render_right(screen)
     assert text.strip()
     assert translate("en", "tui.result.error.title") in text
 
 
-def test_milling_shares_the_same_three_state_contract():
+def test_milling_shares_the_same_two_state_contract():
     """FR-009: Milling follows the identical pattern."""
 
     from mfgparams.console.tui.app import MenuBar
@@ -130,9 +141,10 @@ def test_milling_shares_the_same_three_state_contract():
         lambda: milling_calculate(ui, screen.session_state, None, "en"),
         _LABELS,
         "en",
+        placeholder=_MILLING_PLACEHOLDER,
     )
     text = "".join(t for _, t in fragments)
-    assert translate("en", "tui.result.placeholder") in text
+    assert _MILLING_PLACEHOLDER in text
 
     state = screen.session_state
     assert isinstance(state, MillingSessionState)
@@ -153,6 +165,7 @@ def test_milling_shares_the_same_three_state_contract():
         lambda: milling_calculate(ui, screen.session_state, None, "en"),
         _LABELS,
         "en",
+        placeholder=_MILLING_PLACEHOLDER,
     )
     text = "".join(t for _, t in fragments)
     assert translate("en", "tui.result.title") in text

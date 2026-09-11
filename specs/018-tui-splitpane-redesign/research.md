@@ -185,6 +185,29 @@ own standard `focus_next`/`focus_previous` convention (already used by 017's own
 - **Up/Down falls through to the next/previous field at the first/last option** (the original
   decision here): rejected on implementation — see the revision note above.
 
+*(Reversed after a second implementation pass, tasks.md T054-T056/Phase 9): this entire decision —
+`RadioList` expansion on focus, Tab/Shift-Tab field navigation, Up/Down consumed by the expanded
+widget — is retired. It was derived from spec.md's own **prose description** of the pre-plan
+prototype (the prototype file itself was believed no longer available at the time this section was
+written), and after it shipped the user rejected it outright: "I do not like the implementation,
+look and feel should be EXACTLY as the prototype." Asked directly, the user confirmed both
+prototype scripts were still present on disk. Reading them in full
+(`prototype_drilling_splitpane.py`/`prototype_milling_splitpane.py`) showed they do not use
+`RadioList` at all: a radio field is **always** a single `Label: value` line, and Left/Right/Space
+cycle its value with wraparound and commit it **immediately** — no expansion, no separate
+confirm step, no Tab. Up/Down always move between fields unconditionally, with no per-type
+dispatch. The row-math argument above (the terminal floor doesn't support every option of every
+field open at once) is not wrong, but it was answering a question the prototype never actually
+raises, since it never expands a field into its full option list in the first place — the correct
+reading of "one row per field, mostly" was simply "cycle in place," not "accordion."
+
+This also means FR-016's instant-edit numeric model changed in the same pass: the shipped
+implementation (both before and during this `RadioList` revision) committed a numeric field to
+`session_state` on every keystroke; the prototype's own `commit_current` only commits when the
+user navigates away from the field, keeping typed/nudged text in a buffer until then. See
+`data-model.md`'s `OperationScreen` entity and
+`contracts/console-tui-splitpane-contract.md` §3/§4 for the corrected contract.*
+
 ## Consolidated decisions for Phase 1
 
 | Item | Decision |
@@ -196,6 +219,6 @@ own standard `focus_next`/`focus_previous` convention (already used by 017's own
 | `menu.py`'s `_assign_mnemonics` | Reusable as-is for the new menu bar's items and the tree's leaves — logic is about picking pairwise-unique accelerator characters from a label list, not tied to full-screen dialog rendering. |
 | Contract test file | Rewrite `tests/contract/test_console_tui_contract.py` in place against the new `contracts/console-tui-splitpane-contract.md` (017's contract described the now-replaced dialog-chain menu structure; no value in a second, differently-named contract test file for the same subsystem). |
 | Operation screen container | `prompt_toolkit.layout.FloatContainer` wrapping the existing bar+tree `HSplit`, with a `Float` (holding a bordered `Frame`) added/removed as `SessionUI.open_operation` is set/cleared (research.md #3). |
-| Radio field rendering | `prompt_toolkit.widgets.RadioList` for the currently-focused radio field only; every other radio field on the same screen shows a one-line `Label: value` summary (research.md #4, accordion pattern) — not every option of every field simultaneously. |
+| Radio field rendering | **Superseded, Phase 9 (research.md #4's reversal note)**: no `RadioList`, ever. Always a one-line `Label: value` summary; Left/Right/Space cycle the value with wraparound and commit it immediately. Up/Down (`j`/`k`) always move between fields unconditionally — no Tab/Shift-Tab. |
 | Radio field keyboard contract | Up/Down navigates an open `RadioList`'s options (its own native binding), clamped at the boundaries; Left/Right continues to nudge a focused numeric field only (FR-017, unchanged); **Tab/Shift-Tab** moves between fields unconditionally, regardless of type — this revises contract §4's earlier "radio fields cycle on Left/Right" line, which described the now-superseded inline-summary renderer, and supersedes this feature's own first "Up/Down falls through at the boundary" draft (research.md #4). |
 | Machining tree | Flattens: `MachiningTree` loses its `drilling_expanded` field entirely (Drilling has no tree-level sub-expansion any more, FR-003 retired) — `expanded` is now its only field. |

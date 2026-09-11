@@ -29,15 +29,19 @@ choice switches which set of remembered answers the rest of the screen
 shows, without closing and reopening it. Selecting **Drilling** from the
 tree instead leads to the flow described in :doc:`drilling`.
 
-Numeric fields become editable the instant you select them — start typing
-a digit and it edits immediately, no separate "start editing" step.
-Left/Right also nudges a selected numeric field up or down by a small
-step. A radio field (sub-operation, unit system, mode, material type,
-material, tool) expands into a vertically-stacked option list when
-selected — Up/Down highlights an option and Enter or Space commits it,
-clamped at the first/last option rather than spilling over into the next
-field. **Tab**/**Shift-Tab** moves to the next/previous field regardless of
-its type.
+**Up/Down** (or **j/k**) always moves to the next/previous field, regardless
+of its type. A radio field (sub-operation, unit system, mode, material
+type, material, tool) is always a single ``Label: value`` line —
+**Left/Right**/**h/l**/**Space** cycle its value with wraparound and commit
+it immediately, with no separate confirm step. Numeric fields become
+editable the instant you select them — start typing a digit (or ``.``/
+``-``) and it edits the field's buffer immediately, no separate "start
+editing" step; Left/Right nudges the buffer up or down by a small step;
+Backspace removes the last character. That text is only written to the
+field once you navigate away from it (Up/Down) — text that still doesn't
+parse as a number at that point is discarded (the field keeps its last
+valid value) and a message appears in the status bar beneath both panes
+until you correct it.
 
 Pressing Escape moves focus back to the menu bar without closing the open
 screen; pressing Escape again, from the menu bar, closes it and returns to

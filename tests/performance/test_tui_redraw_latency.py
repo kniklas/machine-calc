@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import time
 
+from mfgparams.console.i18n import translate
 from mfgparams.console.tui import forms
 from mfgparams.console.tui.app import FieldId, OperationScreen
 from mfgparams.console.tui.screens import split_pane
@@ -49,9 +50,9 @@ def _completed_drilling_screen() -> OperationScreen:
     rows = rows_for(screen, None, "en", "en")
     next(r for r in rows if r.field_id is FieldId.TOOL).on_select("HSS")
     rows = rows_for(screen, None, "en", "en")
-    next(r for r in rows if r.field_id is FieldId.DIAMETER).on_edit("10")
+    next(r for r in rows if r.field_id is FieldId.DIAMETER).on_commit(10.0)
     rows = rows_for(screen, None, "en", "en")
-    next(r for r in rows if r.field_id is FieldId.DEPTH).on_edit("20")
+    next(r for r in rows if r.field_id is FieldId.DEPTH).on_commit(20.0)
     return screen
 
 
@@ -69,7 +70,12 @@ def _time_right_pane_redraw(screen: OperationScreen) -> float:
 
     start = time.perf_counter()
     fragments = split_pane.render_right_pane(
-        rows, screen, lambda: calculate_result(state, None, "en"), labels, "en"
+        rows,
+        screen,
+        lambda: calculate_result(state, None, "en"),
+        labels,
+        "en",
+        placeholder=translate("en", "tui.drilling.placeholder"),
     )
     elapsed = time.perf_counter() - start
 

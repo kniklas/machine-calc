@@ -122,12 +122,19 @@ class OperationScreen:
     result computed from a different, no-longer-current set of inputs" as
     a cache keyed on the exact input tuple that produced it (mirroring the
     pre-plan prototype's own `_last_result_key` pattern), not a bare flag.
+
+    `status` mirrors the prototype's own `UI.status`: a transient
+    bottom-status-bar message (FR-006b's unparseable-number indication),
+    set only when the user tries to navigate away from a field whose typed
+    text doesn't parse (`split_pane._commit_current`) -- `None` means show
+    the ordinary keyboard hint instead.
     """
 
     operation: Literal["drilling", "milling"]
     session_state: DrillingSessionState | MillingSessionState
     selected_field: FieldId
     field_buffer: str = ""
+    status: str | None = None
     last_result: CalculationResult | None = None
     last_result_key: tuple[object, ...] | None = None
 
@@ -212,40 +219,32 @@ class _ViewState:
 
     Revised via `/speckit-clarify` (reopened after implementation): an open
     operation screen is no longer a `body_mode` value. It renders as a
-    floating window (FR-004, research.md #3) layered *above* whatever the
-    background body currently shows -- entirely independent of
-    `body_mode`, which keeps showing the tree/About/Help/Configuration (or
-    nothing) underneath exactly as if no operation were open. Whether the
-    floating window itself is open is `SessionUI.open_operation is not
-    None`, unchanged.
+    floating window (FR-004, research.md #3) layered *above* the bar/
+    background -- entirely independent of `body_mode`.
+
+    Revised again (per direct user feedback on this feature's shipped
+    color scheme and bar interaction): `body_mode` no longer selects
+    content rendered *inline* below the bar either. Each non-`None` value
+    now selects which bar entry's own **floating dropdown/panel** is shown
+    -- Machining's tree, Configuration, About, or Help -- positioned just
+    under that entry (`build_app`'s per-entry `Float`s), matching a
+    typical menu-bar TUI's dropdown behavior, rather than replacing a
+    shared inline body area. `None` means no dropdown is open; the bar and
+    the blue desktop behind it are all that's shown.
     """
 
     body_mode: Literal["tree", "configuration", "about", "help"] | None = None
     bar_selected: int = 0
     tree_selected: int = 0
-
-
-def _render_body(ui: SessionUI, view: _ViewState, display_locale: str) -> StyleAndTextTuples:
-    """Dispatch on ``view.body_mode`` -- the *background* body, always
-    rendered whether or not an operation screen happens to also be open
-    (FR-005a, revision): that one is a floating window layered above this,
-    not a `body_mode` value (``build_app``'s ``operation_window``/``Float``,
-    research.md #3)."""
-
-    from mfgparams.console.tui import machining_menu
-    from mfgparams.console.tui.screens.about import render_about
-    from mfgparams.console.tui.screens.configuration import render_configuration
-    from mfgparams.console.tui.screens.help import render_help
-
-    if view.body_mode == "tree":
-        return machining_menu.render_tree(ui.tree, view.tree_selected, ui.locale, focused=True)
-    if view.body_mode == "about":
-        return render_about(ui.locale)
-    if view.body_mode == "help":
-        return render_help(ui.locale)
-    if view.body_mode == "configuration":
-        return render_configuration(ui.materials_config_path, ui.locale, display_locale)
-    return [("class:hint", "Select Machining, Configuration, About, or Help.")]
+    #: Whether the Exit confirmation dialog ("Are you sure you want to
+    #: exit? Yes/No", per direct user feedback) is currently shown --
+    #: independent of `body_mode` since it's triggered by the bar's own
+    #: Exit entry, not a dropdown/panel entry.
+    confirming_exit: bool = False
+    #: Which option is currently highlighted in that dialog; defaults to
+    #: "no" so a reflexive Enter/Down press right after selecting Exit
+    #: does not itself exit.
+    confirm_selected: Literal["yes", "no"] = "no"
 
 
 def _open_milling(ui: SessionUI, materials_config_path: str | None, display_locale: str) -> None:
@@ -292,6 +291,23 @@ def _open_drilling(
     return screen
 
 
+def _bar_entry_offsets(entries: list[MenuEntry]) -> list[int]:
+    """The column each bar entry starts at, once rendered by
+    `menu.render_menu_bar` -- that function joins entries with a two-space
+    separator before every entry but the first, so this mirrors that exact
+    spacing. Used to position a bar entry's own dropdown `Float` directly
+    under it (`build_app`), the way a typical menu-bar TUI does."""
+
+    offsets: list[int] = []
+    x = 0
+    for index, entry in enumerate(entries):
+        if index > 0:
+            x += 2
+        offsets.append(x)
+        x += len(entry.label)
+    return offsets
+
+
 def build_app(  # noqa: C901
     materials_config_path: str | None, locale: str, display_locale: str
 ) -> tuple[Application[None], SessionUI, _ViewState]:
@@ -302,35 +318,70 @@ def build_app(  # noqa: C901
     returned `ui`/`view` objects via pure inspection, not by trying to
     capture rendered terminal output.
 
-    Focus model (018-tui-splitpane-redesign; no direct 017 precedent -- see
-    the design note recorded when this was decided): the bar and the body
-    are two focus regions in one persistent `Layout`, not separate
-    `Application`s. Escape from the body moves focus to the bar without
-    touching any `SessionUI` state (`tree`/`open_operation` untouched) --
-    this is how a user reaches the bar's Machining item to collapse the
-    tree without losing an open operation's field values (FR-005a,
-    quickstart.md Scenario 5). Escape from the bar itself closes the
-    current operation and returns to a blank top level if one was open, or
-    exits the app if nothing was open (mirroring 017's own
-    Escape-at-the-root-exits precedent). The bar's own Exit entry always
-    exits unconditionally.
+    Focus model (018-tui-splitpane-redesign; no direct 017 precedent, and
+    iterated several times since on direct user feedback -- see the
+    current shape below, not the individual revision history in git blame):
+    the bar, each bar entry's own floating dropdown/panel (Machining's
+    tree, Configuration, About, Help, each its own `Float`, not a shared
+    inline body), the Drilling/Milling operation window, and the Exit
+    confirmation dialog are all separate focus regions in one persistent
+    `Layout`, not separate `Application`s. Escape closes whichever
+    floating window currently has focus and steps focus back exactly one
+    level:
+    - From a dropdown/panel (or the Exit dialog) -> the bar.
+    - From the operation window -> the Machining tree, *focused*, if it is
+      still expanded (FR-005a: closing the operation must not touch
+      `tree.expanded`) -- "going back" from the operation means going back
+      *to* the dropdown it was opened from, not past it to the bare bar,
+      per direct user feedback. A second Escape from there closes the
+      tree itself and *then* reaches the bar. If the tree was not
+      expanded, this step goes straight to the bar instead.
+    Up does the same as Escape the instant it would otherwise move within
+    a dropdown but there is nowhere left to move to (the top row of
+    Machining's tree, or anywhere in a single-block panel like
+    Configuration/About/Help, which has no rows to navigate at all) --
+    an additional, more direct path back than Escape alone, per user
+    feedback. Escape from the bar itself is a defensive fallback for state
+    that should no longer be reachable by the time focus gets there (see
+    `_escape_bar`'s own comment) and otherwise exits the app (mirroring
+    017's own Escape-at-the-root-exits precedent). The bar's own Exit
+    entry opens a confirmation dialog rather than exiting directly, per
+    user feedback ("ask user... Yes/No").
+
+    Color scheme (revised twice on direct user feedback comparing this
+    feature's shipped look to standard/typical blue TUI tools, most
+    recently Midnight Commander specifically): the persistent bar
+    (`"class:bar"`, cyan) and the desktop behind it (`"class:background"`,
+    a distinct, darker blue) are the only two colors that differ from each
+    other. Every floating window -- the four dropdowns, the Exit dialog,
+    and the Drilling/Milling operation window alike -- shares one
+    identical cyan-on-black scheme matching the bar
+    (`"class:dialog"`/`"class:dialog.body"`/`"frame.border"`/
+    `"frame.label"`, all explicitly redefined below, deliberately
+    overriding prompt-toolkit's own built-in defaults), with a solid black
+    drop shadow (`"class:shadow"`) under each one. This is a deliberate,
+    explicit color-scheme preference for the whole application shell, not
+    a prototype-fidelity question -- the pre-plan prototype this feature
+    otherwise matches exactly never had a persistent bar/background to be
+    consistent with in the first place.
     """
 
     # noqa: C901 justification -- this is a composition root, not deep
-    # logic: it wires ~25 independently-trivial key-binding handlers (each
+    # logic: it wires ~30 independently-trivial key-binding handlers (each
     # a few lines, no nested branching of its own) around one persistent
     # `Application`'s `ui`/`view`/`app`/`bar_control`/`left_control`/
     # `right_control` closures. Every self-contained decision block that
     # *was* extractable without fragmenting that shared closure state
     # already has been (`split_pane.power_and_rpm_rows`,
     # `milling._tool_registry_for`, the top-level
-    # `_render_body`/`_open_milling`/`_open_drilling` helpers). Extracting
-    # the key-binding registrations themselves would require threading 6+
-    # shared mutable references through new top-level functions (or a
-    # mutable-`Application`-ref indirection, since `app` does not exist
-    # until after the bindings that close over it are defined) -- net less
-    # readable than the current flat, docstring-annotated registration, not
-    # more.
+    # `_open_milling`/`_open_drilling`/`_bar_entry_offsets` helpers, and the
+    # per-dropdown render closures declared next to their own controls).
+    # Extracting the key-binding registrations themselves would require
+    # threading 6+ shared mutable references through new top-level
+    # functions (or a mutable-`Application`-ref indirection, since `app`
+    # does not exist until after the bindings that close over it are
+    # defined) -- net less readable than the current flat,
+    # docstring-annotated registration, not more.
     from prompt_toolkit.application import Application
     from prompt_toolkit.filters import Condition
     from prompt_toolkit.key_binding import KeyBindings
@@ -345,16 +396,26 @@ def build_app(  # noqa: C901
         Window,
     )
     from prompt_toolkit.layout.controls import FormattedTextControl
+    from prompt_toolkit.layout.dimension import AnyDimension, D
     from prompt_toolkit.styles import Style
-    from prompt_toolkit.widgets import Frame, Shadow
+    from prompt_toolkit.widgets import Box, Frame, Shadow
 
     from mfgparams.console.i18n import translate
     from mfgparams.console.tui import forms, machining_menu
     from mfgparams.console.tui.menu import _assign_mnemonics, default_entries, render_menu_bar
     from mfgparams.console.tui.screens import drilling, milling, split_pane
+    from mfgparams.console.tui.screens.about import render_about
+    from mfgparams.console.tui.screens.configuration import render_configuration
+    from mfgparams.console.tui.screens.help import render_help
 
     bar_entries = default_entries(locale)
     bar_mnemonics = _assign_mnemonics(bar_entries)
+    # Static for the whole session (labels/order are fixed once `locale` is
+    # resolved at startup, unaffected by anything the user does at
+    # runtime): used below to position each dropdown-opening entry's own
+    # `Float` directly under it, the way a typical menu-bar TUI does.
+    bar_offsets = _bar_entry_offsets(bar_entries)
+    bar_entry_index = {entry.value: index for index, entry in enumerate(bar_entries)}
     ui = SessionUI(
         menu_bar=MenuBar(entries=tuple(bar_entries)),
         locale=locale,
@@ -362,14 +423,103 @@ def build_app(  # noqa: C901
     )
     view = _ViewState()
 
-    style = Style.from_dict({"mnemonic": "underline bold", "selected": "reverse", "hint": "italic"})
+    # "error"/"pane-title" match the prototype's own `_STYLE` exactly
+    # (`prototype_drilling_splitpane.py`/`prototype_milling_splitpane.py`).
+    # Everything else here is this feature's own color scheme, revised per
+    # direct user feedback to match a typical blue-scheme TUI. Every
+    # floating window -- the four bar-entry dropdowns, the Exit
+    # confirmation dialog, and the Drilling/Milling operation window alike
+    # -- now shares one identical cyan-on-black scheme, matching the bar's
+    # own shade (per user feedback: "milling and drilling floating windows
+    # ... should follow the same colour scheme as sub-menu drop downs");
+    # only the blue desktop behind the bar stays a distinct, darker shade.
+    style = Style.from_dict(
+        {
+            "mnemonic": "fg:#ffff00 underline bold",
+            "selected": "reverse",
+            "hint": "italic",
+            "error": "fg:ansired bold",
+            "pane-title": "bold underline",
+            # The desktop behind the bar -- everything not covered by the
+            # bar itself or a floating window.
+            "background": "bg:#0000aa fg:#ffffff",
+            # The persistent bar row, and (below) every floating window --
+            # one shared shade, per direct user feedback.
+            "bar": "bg:#00aaaa fg:#000000",
+            # Every floating window (the four bar-entry dropdowns, the Exit
+            # confirmation dialog, and the Drilling/Milling operation
+            # window): "dialog" is the thin outer margin `Box` draws around
+            # the operation window when centered (only it uses `Box`; the
+            # rest skip it for a snugger fit); "dialog.body"/
+            # "frame.border"/"frame.label" are `Frame`'s own
+            # body/border/title classes, shared by all of them.
+            "dialog": "bg:#00aaaa",
+            "dialog.body": "bg:#00aaaa fg:#000000",
+            "frame.border": "fg:#000000 bg:#00aaaa",
+            "frame.label": "fg:#ffff00 bg:#00aaaa bold",
+            # A crisp, dark drop-shadow beneath every floating window --
+            # Midnight-Commander-style, per direct user feedback -- rather
+            # than a shade too close to the surrounding blue/cyan to read
+            # clearly as a shadow.
+            "shadow": "bg:#000000",
+        }
+    )
 
+    # `show_cursor=False` on every focusable control below: without it, a
+    # focusable `FormattedTextControl` parks the real terminal cursor at
+    # (0, 0) of its own text by default -- landing on each one's first
+    # character and rendering as a stray highlighted cell (the same
+    # artifact already fixed for `left_control`, and per user feedback:
+    # "first character is highlighted -- remove it").
     bar_control = FormattedTextControl(
         lambda: render_menu_bar(bar_entries, bar_mnemonics, view.bar_selected, focused=on_bar()),
         focusable=True,
+        show_cursor=False,
     )
-    body_control = FormattedTextControl(
-        lambda: _render_body(ui, view, display_locale), focusable=True
+
+    def _render_tree() -> StyleAndTextTuples:
+        return machining_menu.render_tree(
+            ui.tree, view.tree_selected, ui.locale, focused=app.layout.has_focus(tree_control)
+        )
+
+    def _render_configuration() -> StyleAndTextTuples:
+        return render_configuration(ui.materials_config_path, ui.locale, display_locale)
+
+    def _render_about() -> StyleAndTextTuples:
+        return render_about(ui.locale)
+
+    def _render_help() -> StyleAndTextTuples:
+        return render_help(ui.locale)
+
+    def _render_exit_confirm() -> StyleAndTextTuples:
+        message = translate(ui.locale, "tui.exit_confirm.message")
+        yes_label = translate(ui.locale, "tui.exit_confirm.yes")
+        no_label = translate(ui.locale, "tui.exit_confirm.no")
+        yes_style = "class:selected" if view.confirm_selected == "yes" else ""
+        no_style = "class:selected" if view.confirm_selected == "no" else ""
+        return [
+            ("", f"{message}\n\n"),
+            (yes_style, f" {yes_label} "),
+            ("", "   "),
+            (no_style, f" {no_label} "),
+        ]
+
+    # Each bar entry that opens a dropdown/panel (Machining, Configuration,
+    # About, Help) gets its own focusable control and, below, its own
+    # `Float` positioned just under that entry (revision: these used to
+    # share one inline `body_control` below the bar; now each is a
+    # standalone floating window, matching a typical menu-bar TUI's
+    # dropdown behavior per direct user feedback). Exit's own confirmation
+    # dialog (per direct user feedback: "are you sure? Yes/No") is built
+    # the same way, positioned under the Exit entry itself.
+    tree_control = FormattedTextControl(_render_tree, focusable=True, show_cursor=False)
+    configuration_control = FormattedTextControl(
+        _render_configuration, focusable=True, show_cursor=False
+    )
+    about_control = FormattedTextControl(_render_about, focusable=True, show_cursor=False)
+    help_control = FormattedTextControl(_render_help, focusable=True, show_cursor=False)
+    exit_confirm_control = FormattedTextControl(
+        _render_exit_confirm, focusable=True, show_cursor=False
     )
 
     def on_bar() -> bool:
@@ -405,14 +555,19 @@ def build_app(  # noqa: C901
     def _render_left_pane() -> StyleAndTextTuples:
         op = ui.open_operation
         assert op is not None
-        title_key = "tui.drilling.title" if op.operation == "drilling" else "tui.milling.title"
+        operation_window.title = _operation_title()
         return split_pane.render_left_pane(
             _current_pane_rows(),
             op,
-            translate(ui.locale, title_key),
+            translate(ui.locale, "tui.pane.inputs"),
             ui.locale,
             focused=on_pane(),
         )
+
+    def _render_bottom_bar() -> StyleAndTextTuples:
+        op = ui.open_operation
+        assert op is not None
+        return split_pane.render_bottom_bar(op, ui.locale)
 
     def _calculate_current_operation() -> CalculationResult:
         op = ui.open_operation
@@ -429,75 +584,200 @@ def build_app(  # noqa: C901
         op = ui.open_operation
         assert op is not None
         labels = forms.UNIT_LABELS[op.session_state.unit_system]
+        placeholder_key = (
+            "tui.drilling.placeholder" if op.operation == "drilling" else "tui.milling.placeholder"
+        )
         return split_pane.render_right_pane(
-            _current_pane_rows(), op, _calculate_current_operation, labels, ui.locale
+            _current_pane_rows(),
+            op,
+            _calculate_current_operation,
+            labels,
+            ui.locale,
+            placeholder=translate(ui.locale, placeholder_key),
         )
 
-    left_control = FormattedTextControl(_render_left_pane, focusable=True)
+    # `show_cursor=False`: a focusable `FormattedTextControl` otherwise parks
+    # the real terminal cursor at (0,0) of its own text by default, landing
+    # on the first letter of "Inputs" and rendering as a stray highlighted
+    # character -- selection is already shown via the reverse-video row
+    # style, and a typed number's cursor via `render_left_pane`'s own
+    # trailing "_" (matching the prototype's `main()` exactly).
+    left_control = FormattedTextControl(_render_left_pane, focusable=True, show_cursor=False)
     right_control = FormattedTextControl(_render_right_pane, focusable=False)
+    bottom_control = FormattedTextControl(_render_bottom_bar)
 
-    #: FR-004 (revised via `/speckit-clarify`, reopened after implementation):
-    #: the operation screen renders as a centered, bordered, shadowed
-    #: floating window (research.md #3's `FloatContainer`/`Float`
-    #: construction, matching PR #94's existing dialog styling) -- not an
-    #: embedded pane replacing the background body. `ConditionalContainer`
-    #: keeps a single `Float` permanently registered (no runtime mutation of
-    #: `FloatContainer.floats`, consistent with every other widget here
-    #: being a pure function of state recomputed each render) and hides it
-    #: -- occupying no screen space -- whenever nothing is open.
-    operation_window = Frame(
-        body=VSplit(
-            [
-                Window(content=left_control, wrap_lines=True),
-                Window(width=1, char="│"),
-                # FR-018: prompt-toolkit's own `Window` default is
-                # `wrap_lines=False` -- without this, a result line longer
-                # than the pane's width would overflow/truncate instead of
-                # wrapping.
-                Window(content=right_control, wrap_lines=True),
-            ]
+    def _operation_title() -> str:
+        op = ui.open_operation
+        assert op is not None
+        key = "tui.drilling.title" if op.operation == "drilling" else "tui.milling.title"
+        return translate(ui.locale, key)
+
+    # FR-004 (revised via `/speckit-clarify`, reopened after implementation,
+    # rebuilt to match the pre-plan prototype's `main()` exactly): a
+    # centered, bordered, shadowed floating window over the persistent bar
+    # and background body (research.md #3's `FloatContainer`/`Float`
+    # construction) -- not an embedded pane replacing them.
+    #
+    # Combined width floored at 75 chars (30 + divider + 45 at minimum),
+    # split 40/60 between the two panes throughout the whole min-max range
+    # -- the prototype's own `left_width`/`right_width` `Dimension`s.
+    # Milling's taller field list needs a taller panes row than Drilling's,
+    # so this doesn't fix a `height` here the way the prototype's two
+    # separate scripts each did with their own single `D(...)` -- the height
+    # is left to each pane's own preferred size instead.
+    panes = VSplit(
+        [
+            Window(content=left_control, width=D(min=30, max=36, preferred=30), wrap_lines=True),
+            Window(width=1, char="│"),
+            # FR-018: prompt-toolkit's own `Window` default is
+            # `wrap_lines=False` -- without this, a result line longer than
+            # the pane's width would overflow/truncate instead of wrapping.
+            Window(content=right_control, width=D(min=45, max=54, preferred=45), wrap_lines=True),
+        ]
+    )
+    # The status/hint row: its own full-width row below a horizontal
+    # divider, spanning both columns -- a merged cell under the two-column
+    # table, not part of either pane (matching the prototype's `render_bottom`
+    # placement exactly). Capped at 2 lines so it can't stretch to soak up
+    # leftover vertical space; it only ever needs 1.
+    operation_body = HSplit(
+        [
+            panes,
+            Window(height=1, char="─"),
+            Window(content=bottom_control, height=D(min=1, max=2, preferred=1), wrap_lines=True),
+        ]
+    )
+    # `title` re-reads `operation_window.title` on every render (a `Frame`
+    # attribute meant to be reassigned at runtime, per its own docstring);
+    # `_render_left_pane` sets it fresh each time it runs, immediately
+    # before this `Frame` is drawn.
+    operation_window = Frame(body=operation_body, style="class:dialog.body")
+
+    def _dropdown_float(
+        control: FormattedTextControl,
+        mode: str,
+        bar_value: str,
+        *,
+        width: AnyDimension = None,
+    ) -> Float:
+        """One bar entry's own floating dropdown/panel -- positioned just
+        under that entry (`bar_offsets[bar_entry_index[bar_value]]`), shown
+        only while `body_mode` equals `mode` (`bar_value` and `mode` differ
+        for Machining: the bar entry is `"machining"`, but `body_mode`'s
+        value for its tree is `"tree"`, unchanged from before this
+        revision). Deliberately skips the operation window's outer `Box`
+        margin (below) for a snugger, more typical dropdown fit;
+        `FloatContainer` clamps the rendered width to whatever space
+        remains near the screen edge on its own (verified against
+        prompt-toolkit's own `_draw_float` positioning code), so an
+        unbounded or generously-sized `width` here never overflows even on
+        an 80-column terminal."""
+
+        window = Window(content=control, wrap_lines=True, width=width)
+        return Float(
+            left=bar_offsets[bar_entry_index[bar_value]],
+            # Row 1 -- directly below the bar (row 0), per direct user
+            # feedback: "top horizontal line of floating sub-menu window
+            # should be just below menu". There is no divider row between
+            # them any more (the one that used to occupy row 1 is removed
+            # below, also per feedback), so row 1 is the first free row.
+            top=1,
+            content=ConditionalContainer(
+                content=Shadow(Frame(body=window, style="class:dialog.body")),
+                filter=Condition(lambda: view.body_mode == mode),
+            ),
+        )
+
+    # Exit's own confirmation dialog -- "are you sure you want to exit?
+    # Yes/No", per direct user feedback, shown instead of exiting
+    # immediately. Positioned under the Exit entry itself, the same way
+    # every other bar entry's own floating window is.
+    exit_confirm_float = Float(
+        left=bar_offsets[bar_entry_index["exit"]],
+        top=1,
+        content=ConditionalContainer(
+            content=Shadow(
+                Frame(
+                    body=Window(
+                        content=exit_confirm_control, width=D(min=30, max=40), wrap_lines=True
+                    ),
+                    style="class:dialog.body",
+                )
+            ),
+            filter=Condition(lambda: view.confirming_exit),
         ),
     )
 
     root = FloatContainer(
         content=HSplit(
             [
-                Window(content=bar_control, height=1),
-                Window(height=1, char="─"),
-                Window(content=body_control, wrap_lines=True),
-            ]
+                Window(content=bar_control, height=1, style="class:bar"),
+                # No divider row here (removed per direct user feedback:
+                # "remove horizontal line below the menu") -- the blue
+                # desktop below starts immediately under the bar. Every
+                # bar-entry dropdown/panel is a `Float` layered above this
+                # desktop Window, not inline content here, so it carries no
+                # content control of its own, only the background
+                # fill/style.
+                Window(style="class:background", char=" "),
+            ],
+            style="class:background",
         ),
         floats=[
+            # Machining's tree is the one dropdown with its own navigable
+            # rows, so it stays narrow/compact (`Milling`/`Drilling`).
+            # About/Help/Configuration are each one block of prose/listing
+            # text with no pre-wrapped line breaks of their own (Help in
+            # particular is a single ~220-character paragraph) -- an
+            # explicit width bound here gives each a readable, book-page-ish
+            # wrap rather than stretching edge-to-edge to whatever's left of
+            # the screen, which unbounded auto-sizing would otherwise do.
+            _dropdown_float(
+                tree_control, "tree", "machining", width=D(min=14, max=22, preferred=18)
+            ),
+            _dropdown_float(
+                configuration_control,
+                "configuration",
+                "configuration",
+                width=D(min=44, max=70, preferred=60),
+            ),
+            _dropdown_float(about_control, "about", "about", width=D(min=40, max=64, preferred=58)),
+            _dropdown_float(help_control, "help", "help", width=D(min=40, max=64, preferred=56)),
+            exit_confirm_float,
             Float(
                 content=ConditionalContainer(
-                    content=Shadow(operation_window),
+                    content=Box(body=Shadow(operation_window), style="class:dialog"),
                     filter=Condition(lambda: ui.open_operation is not None),
                 )
-            )
+            ),
         ],
     )
 
     def _activate_bar_entry() -> None:
         entry = bar_entries[view.bar_selected]
         if entry.value == "exit":
-            app.exit()
+            # Per direct user feedback: confirm before exiting, rather than
+            # exiting immediately.
+            view.confirming_exit = True
+            view.confirm_selected = "no"
+            app.layout.focus(exit_confirm_control)
         elif entry.value == "machining":
             ui.tree.toggle_machining()
             if ui.tree.expanded:
                 view.body_mode = "tree"
                 view.tree_selected = 0
-                app.layout.focus(body_control)
+                app.layout.focus(tree_control)
             elif view.body_mode == "tree":
                 view.body_mode = None
         elif entry.value == "configuration":
             view.body_mode = "configuration"
-            app.layout.focus(body_control)
+            app.layout.focus(configuration_control)
         elif entry.value == "about":
             view.body_mode = "about"
-            app.layout.focus(body_control)
+            app.layout.focus(about_control)
         elif entry.value == "help":
             view.body_mode = "help"
-            app.layout.focus(body_control)
+            app.layout.focus(help_control)
 
     def _activate_tree_row() -> None:
         """Both tree leaves open their floating window directly (FR-002/
@@ -515,19 +795,95 @@ def build_app(  # noqa: C901
 
     @bindings.add("escape", filter=Condition(on_bar))
     def _escape_bar(event) -> None:
+        # By the time any escape reaches the bar, `_escape_body` below has
+        # already closed whatever floating window (operation or dropdown)
+        # was open on the way here, and -- since closing the operation now
+        # returns focus to the tree rather than the bar when the tree is
+        # still expanded (see `_escape_body`) -- `body_mode` can no longer
+        # be `"tree"` while focus is already on the bar either. This `if`
+        # is now a defensive fallback for that invariant, not a normally-
+        # reached path; kept rather than deleted since it is still correct
+        # if ever reached.
         if ui.open_operation is not None:
             ui.open_operation = None
-            # Acceptance Scenario 5: "land back at the menu bar/tree", not a
-            # blank body -- if the tree is still expanded (it isn't touched
-            # by closing an operation, FR-005a), show it rather than the
-            # generic hint.
             view.body_mode = "tree" if ui.tree.expanded else None
         else:
             event.app.exit()
 
-    @bindings.add("escape", filter=Condition(lambda: not on_bar()))
+    # Excludes the Exit confirmation dialog: it gets its own dedicated
+    # Escape binding below (`_exit_confirm_cancel`), distinct from every
+    # other floating window since it has no `body_mode`/`on_pane()` state
+    # of its own to fall back on -- just `view.confirming_exit`.
+    @bindings.add("escape", filter=Condition(lambda: not on_bar() and not view.confirming_exit))
     def _escape_body(event) -> None:
+        # Escaping any open floating window -- the Drilling/Milling
+        # operation window, or a bar entry's own dropdown/panel (Machining's
+        # tree, Configuration, About, Help) -- closes/erases it outright,
+        # per direct user feedback ("each time user exits floating window
+        # it should be erased/removed"): a single Escape now closes it, not
+        # just moves focus off it while it lingers, unfocused, underneath.
+        if on_pane():
+            ui.open_operation = None
+            # Acceptance Scenario 5: "land back at the menu bar/tree", not a
+            # blank body -- if the tree is still expanded (FR-005a: closing
+            # the operation must not touch that), "going back" from the
+            # operation means going back *to* the still-open Machining
+            # dropdown, focused and ready to navigate again -- not past it
+            # to the bare bar (per direct user feedback: "when escaping
+            # from machining/drilling cursor should be back to sub-menu").
+            # A second Escape from there (now `tree_focused`, handled
+            # below) closes the dropdown itself and *then* reaches the bar.
+            if ui.tree.expanded:
+                view.body_mode = "tree"
+                event.app.layout.focus(tree_control)
+                return
+            view.body_mode = None
+        else:
+            # Closing a bar entry's own dropdown/panel outright. For the
+            # Machining tree specifically, this also collapses
+            # `tree.expanded` back to its default -- keeping it in lockstep
+            # with whether the dropdown is actually visible, so a later
+            # "m"/Down on the bar reopens it in one press rather than
+            # silently toggling an already-invisible "expanded" flag closed
+            # first (the reported "press Down twice to expand Machining"
+            # bug: `toggle_machining()` flipped `tree.expanded` True->False
+            # on the first press, since it had been left `True` here even
+            # though the dropdown was no longer shown, so nothing visibly
+            # happened until a second press flipped it back to `True`).
+            if view.body_mode == "tree":
+                ui.tree.expanded = False
+            view.body_mode = None
         event.app.layout.focus(bar_control)
+
+    exit_confirm_focused = Condition(
+        lambda: view.confirming_exit and app.layout.has_focus(exit_confirm_control)
+    )
+
+    @bindings.add("escape", filter=exit_confirm_focused)
+    @bindings.add("n", filter=exit_confirm_focused)
+    def _exit_confirm_cancel(event) -> None:
+        view.confirming_exit = False
+        event.app.layout.focus(bar_control)
+
+    @bindings.add("y", filter=exit_confirm_focused)
+    def _exit_confirm_yes(event) -> None:
+        event.app.exit()
+
+    @bindings.add("left", filter=exit_confirm_focused)
+    @bindings.add("h", filter=exit_confirm_focused)
+    @bindings.add("right", filter=exit_confirm_focused)
+    @bindings.add("l", filter=exit_confirm_focused)
+    def _exit_confirm_toggle(event) -> None:
+        view.confirm_selected = "no" if view.confirm_selected == "yes" else "yes"
+
+    @bindings.add("enter", filter=exit_confirm_focused)
+    @bindings.add(" ", filter=exit_confirm_focused)
+    def _exit_confirm_activate(event) -> None:
+        if view.confirm_selected == "yes":
+            event.app.exit()
+        else:
+            view.confirming_exit = False
+            event.app.layout.focus(bar_control)
 
     @bindings.add("left", filter=Condition(on_bar))
     @bindings.add("h", filter=Condition(on_bar))
@@ -540,7 +896,13 @@ def build_app(  # noqa: C901
         view.bar_selected = (view.bar_selected + 1) % len(bar_entries)
 
     @bindings.add("enter", filter=Condition(on_bar))
+    @bindings.add("down", filter=Condition(on_bar))
+    @bindings.add("j", filter=Condition(on_bar))
     def _bar_enter(event) -> None:
+        # Down/j activates the highlighted bar entry exactly like Enter --
+        # per user feedback, the natural "descend into" gesture for a
+        # horizontal menu bar (matching typical menu-bar TUIs/GUIs, where
+        # Down opens the highlighted top-level item's own dropdown).
         _activate_bar_entry()
 
     for index, mnemonic in enumerate(bar_mnemonics):
@@ -554,13 +916,27 @@ def build_app(  # noqa: C901
         bindings.add(mnemonic, filter=Condition(on_bar))(_bar_jump)
 
     tree_focused = Condition(
-        lambda: view.body_mode == "tree" and app.layout.has_focus(body_control)
+        lambda: view.body_mode == "tree" and app.layout.has_focus(tree_control)
     )
 
     @bindings.add("up", filter=tree_focused)
     @bindings.add("k", filter=tree_focused)
     def _tree_up(event) -> None:
-        view.tree_selected = (view.tree_selected - 1) % _current_tree_row_count()
+        # Up at the first row returns focus to the bar (per user feedback)
+        # rather than wrapping to the last row -- the same convention a
+        # typical dropdown menu uses; Down at the last row still wraps
+        # (unchanged, below), so wraparound isn't lost entirely, only the
+        # "escape upward" direction gets this more direct path back out.
+        # Also closes the dropdown (matching `_escape_body` above) so it
+        # disappears rather than lingering unfocused-but-visible, and
+        # collapses `tree.expanded` in step with it (same "press Down
+        # twice to reopen" bug `_escape_body`'s comment explains).
+        if view.tree_selected == 0:
+            ui.tree.expanded = False
+            view.body_mode = None
+            app.layout.focus(bar_control)
+            return
+        view.tree_selected -= 1
 
     @bindings.add("down", filter=tree_focused)
     @bindings.add("j", filter=tree_focused)
@@ -590,80 +966,102 @@ def build_app(  # noqa: C901
                 _activate_tree_row()
                 return
 
-    pane_focused = Condition(lambda: ui.open_operation is not None and on_pane())
+    # Configuration/About/Help have no navigable rows of their own -- each
+    # is a single static block -- so Up always returns focus to the bar
+    # directly (the same "get back to the menu bar" request the tree's own
+    # top-row Up above satisfies, applied to a panel with nothing to
+    # navigate past in the first place), closing the panel on the way out
+    # (matching `_escape_body`/`_tree_up`).
+    configuration_focused = Condition(
+        lambda: view.body_mode == "configuration" and app.layout.has_focus(configuration_control)
+    )
+    about_focused = Condition(
+        lambda: view.body_mode == "about" and app.layout.has_focus(about_control)
+    )
+    help_focused = Condition(
+        lambda: view.body_mode == "help" and app.layout.has_focus(help_control)
+    )
 
-    def _up_down(direction: int) -> None:
-        """Up/Down: fully consumed by an expanded `RadioRow`'s own option
-        navigation (`radio_navigate`, research.md #4 -- clamped at the
-        first/last option, never escaping to an adjacent field, matching a
-        real `RadioList`'s own behavior); otherwise (a `NumberRow`, or
-        nothing selected) moves between fields instead, exactly as before
-        this revision. Tab/Shift-Tab (below) is the unconditional way to
-        move between fields regardless of the current row's type."""
+    @bindings.add("up", filter=configuration_focused)
+    @bindings.add("up", filter=about_focused)
+    @bindings.add("up", filter=help_focused)
+    def _dropdown_up_to_bar(event) -> None:
+        view.body_mode = None
+        event.app.layout.focus(bar_control)
 
-        assert ui.open_operation is not None
-        rows = _current_pane_rows()
-        row = split_pane.selected_row(rows, ui.open_operation)
-        if isinstance(row, split_pane.RadioRow):
-            split_pane.radio_navigate(rows, ui.open_operation, direction)
-        else:
-            split_pane.move_selection(rows, ui.open_operation, direction)
+    def _pane_is_focused() -> bool:
+        return ui.open_operation is not None and on_pane()
 
+    pane_focused = Condition(_pane_is_focused)
+
+    def _current_pane_row() -> split_pane.Row | None:
+        if ui.open_operation is None:
+            return None
+        return split_pane.selected_row(_current_pane_rows(), ui.open_operation)
+
+    pane_radio_focused = Condition(
+        lambda: _pane_is_focused() and isinstance(_current_pane_row(), split_pane.RadioRow)
+    )
+    pane_numeric_focused = Condition(
+        lambda: _pane_is_focused() and isinstance(_current_pane_row(), split_pane.NumberRow)
+    )
+
+    # Up/Down (and j/k) always move between fields, unconditionally,
+    # regardless of the current field's type -- matching the prototype's
+    # `move_selection` exactly. There is no "expanded radio" state to
+    # navigate within any more (radio fields are always a single line,
+    # cycled with Left/Right/Space below), so no per-type dispatch is
+    # needed here at all.
     @bindings.add("up", filter=pane_focused)
     @bindings.add("k", filter=pane_focused)
     def _pane_up(event) -> None:
-        _up_down(-1)
+        assert ui.open_operation is not None
+        split_pane.move_selection(_current_pane_rows(), ui.open_operation, -1, ui.locale)
 
     @bindings.add("down", filter=pane_focused)
     @bindings.add("j", filter=pane_focused)
     def _pane_down(event) -> None:
-        _up_down(1)
-
-    @bindings.add("tab", filter=pane_focused)
-    def _pane_tab(event) -> None:
-        """Unconditionally moves to the next field, regardless of the
-        current row's type -- the only way to leave an expanded `RadioRow`
-        once Up/Down alone can't (contract §4)."""
-
         assert ui.open_operation is not None
-        split_pane.move_selection(_current_pane_rows(), ui.open_operation, 1)
+        split_pane.move_selection(_current_pane_rows(), ui.open_operation, 1, ui.locale)
 
-    @bindings.add("s-tab", filter=pane_focused)
-    def _pane_shift_tab(event) -> None:
-        assert ui.open_operation is not None
-        split_pane.move_selection(_current_pane_rows(), ui.open_operation, -1)
-
-    @bindings.add("enter", filter=pane_focused)
-    @bindings.add(" ", filter=pane_focused)
-    def _pane_commit(event) -> None:
-        """Enter/Space commits the highlighted option of an expanded
-        `RadioRow` (research.md #4, `RadioList`'s own binding) -- a no-op
-        on a `NumberRow` (`radio_commit`'s own guard)."""
-
-        assert ui.open_operation is not None
-        split_pane.radio_commit(_current_pane_rows(), ui.open_operation)
-
-    @bindings.add("left", filter=pane_focused)
-    def _pane_left(event) -> None:
+    # Left/Right (bare arrow keys) act on whichever field is selected --
+    # cycling a radio field's value, or nudging a numeric one -- matching
+    # the prototype's two separately-filtered bindings for the same keys.
+    # h/l/Space are radio-only (the prototype's own comment: "Space has no
+    # numeric-field meaning").
+    @bindings.add("left", filter=pane_radio_focused)
+    @bindings.add("h", filter=pane_radio_focused)
+    def _pane_cycle_left(event) -> None:
         assert ui.open_operation is not None
         split_pane.nudge_selected(_current_pane_rows(), ui.open_operation, -1)
 
-    @bindings.add("right", filter=pane_focused)
-    def _pane_right(event) -> None:
+    @bindings.add("right", filter=pane_radio_focused)
+    @bindings.add("l", filter=pane_radio_focused)
+    @bindings.add(" ", filter=pane_radio_focused)
+    def _pane_cycle_right(event) -> None:
         assert ui.open_operation is not None
         split_pane.nudge_selected(_current_pane_rows(), ui.open_operation, 1)
 
-    @bindings.add("backspace", filter=pane_focused)
+    @bindings.add("left", filter=pane_numeric_focused)
+    def _pane_nudge_down(event) -> None:
+        assert ui.open_operation is not None
+        split_pane.nudge_selected(_current_pane_rows(), ui.open_operation, -1)
+
+    @bindings.add("right", filter=pane_numeric_focused)
+    def _pane_nudge_up(event) -> None:
+        assert ui.open_operation is not None
+        split_pane.nudge_selected(_current_pane_rows(), ui.open_operation, 1)
+
+    @bindings.add("backspace", filter=pane_numeric_focused)
     def _pane_backspace(event) -> None:
         assert ui.open_operation is not None
         split_pane.backspace_selected(_current_pane_rows(), ui.open_operation)
 
-    @bindings.add(Keys.Any, filter=pane_focused)
+    @bindings.add(Keys.Any, filter=pane_numeric_focused)
     def _pane_char(event) -> None:
         """FR-016: typing a digit (or `.`/`-`) immediately edits the
-        selected numeric field -- a no-op on a `RadioRow` (`edit_selected`'s
-        own guard) and on any other character (radios never take free
-        text; contract §4 has no mnemonic requirement for pane rows)."""
+        selected numeric field's buffer -- matching the prototype's own
+        per-digit-character bindings."""
 
         assert ui.open_operation is not None
         data = event.data

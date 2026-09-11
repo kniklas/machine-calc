@@ -34,16 +34,17 @@ _OPEN_DRILLING_AND_SELECT_DIAMETER = [
     "j",  # tree: Milling -> Drilling
     "\r",  # opens Drilling directly, selected on Unit system (revision:
     # FR-003's tree-level tool-selection shortcut is retired)
-    "\t",
-    "\t",  # Tab to Material type -- Up/Down/j/k are fully consumed by an
-    # expanded radio's own options (research.md #4), so Tab moves
-    # field-to-field regardless of type instead.
-    "\r",  # commits the highlighted (first) material type
-    "\t",
-    "\r",  # commits the highlighted (first) material
-    "\t",
-    "\r",  # commits the highlighted (first) tool
-    "\t",  # Tab to Diameter
+    "j",
+    "j",  # Down twice: Unit system -> Mode -> Material type (Up/Down always
+    # moves field-to-field regardless of type, matching the prototype's
+    # `move_selection` -- there is no "expanded radio" state to navigate
+    # within any more; a radio field is always a single line).
+    "l",  # cycles Material type to its first option, committing immediately
+    "j",  # Down to Material (now present, since Material type is set)
+    "l",  # cycles Material to its first option, committing immediately
+    "j",  # Down to Tool
+    "l",  # cycles Tool to its first option, committing immediately
+    "j",  # Down to Diameter
 ]
 
 
@@ -68,7 +69,13 @@ def test_resize_mid_entry_does_not_discard_already_typed_text():
 
     run_headless(
         target,
-        _OPEN_DRILLING_AND_SELECT_DIAMETER + ["1", "0", "\x1b", "\x1b", "\x1b"],
+        # The trailing "j" navigates away from Diameter to Depth, which is
+        # what actually commits the typed buffer to `session_state`
+        # (`move_selection`/`_commit_current`) -- unlike the retired
+        # immediate-commit-per-keystroke model, Escape alone does not commit
+        # a pending numeric edit (matching the prototype: only navigating
+        # away does).
+        _OPEN_DRILLING_AND_SELECT_DIAMETER + ["1", "0", "j", "\x1b", "\x1b", "\x1b"],
         on_batch=on_batch,
     )
 

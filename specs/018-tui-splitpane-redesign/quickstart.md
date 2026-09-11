@@ -37,10 +37,11 @@ From Scenario 1's tree, select Drilling's leaf. Expected: a floating window open
 power — all editable without a screen transition (Acceptance Scenario 1). Change unit system after
 entering a diameter; confirm the diameter value survives, converted, not discarded (Acceptance
 Scenario 3, mirroring PR #94's unit-carryover fix). Type a numeric field directly, with no prior
-"start editing" keystroke (FR-016); nudge it with Left/Right (FR-017). Navigate onto a radio field
-(e.g. material type); confirm it expands into a full `RadioList` of options, navigable with
-Up/Down, while every other radio field stays collapsed to its one-line summary (FR-005, research.md
-#4).
+"start editing" keystroke (FR-016); nudge it with Left/Right (FR-017); confirm the typed value only
+lands in `session_state` once you navigate away from the field (Up/Down), not on every keystroke.
+Navigate onto a radio field (e.g. material type); confirm it is always a single `Label: value` line
+(never an expanded option list) and that Left/Right/Space cycles its value with wraparound,
+committing it immediately (FR-005, research.md #4).
 Compare the eventual right-pane result against calling
 `mfgparams.processes.machining.drilling.calculate(...)` directly with the same arguments in a
 Python shell — they must match (SC-004).
@@ -59,9 +60,11 @@ confirm you land back at the menu bar/tree, not a relaunched process (Acceptance
 - Enter a complete set of inputs where one value is out of `calculate()`'s valid range (e.g. an
   engagement value invalid relative to diameter). Expected: the right pane shows the same clear,
   actionable, localized error `calculate()` already returns for it — not a blank pane (FR-006a).
-- Type non-numeric text into a numeric field. Expected: the field stays immediately editable, a
-  clear localized message indicates the value is invalid, and no traceback/crash occurs — the text
-  is never passed to `calculate()` (FR-006b).
+- Type non-numeric text into a numeric field, then navigate away from it (Up/Down). Expected: the
+  field keeps editable text while you're still typing, with no message shown yet; once you navigate
+  away, the field reverts to its last valid value and a clear, localized message appears in the
+  status bar beneath both panes (not the right pane) — the text is never passed to `calculate()`
+  (FR-006b).
 
 ## Scenario 5 — Tree-collapse never hides a required field (FR-005a, resolved via `/speckit-clarify`)
 

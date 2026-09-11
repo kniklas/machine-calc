@@ -40,8 +40,8 @@ def test_drilling_result_text_is_byte_identical_to_the_core_calculation():
     _row(drilling_rows_for(screen, None, "en", "en"), FieldId.MATERIAL_TYPE).on_select("metal")
     _row(drilling_rows_for(screen, None, "en", "en"), FieldId.MATERIAL).on_select("Mild Steel")
     _row(drilling_rows_for(screen, None, "en", "en"), FieldId.TOOL).on_select("HSS")
-    _row(drilling_rows_for(screen, None, "en", "en"), FieldId.DIAMETER).on_edit("10")
-    _row(drilling_rows_for(screen, None, "en", "en"), FieldId.DEPTH).on_edit("20")
+    _row(drilling_rows_for(screen, None, "en", "en"), FieldId.DIAMETER).on_commit(10.0)
+    _row(drilling_rows_for(screen, None, "en", "en"), FieldId.DEPTH).on_commit(20.0)
 
     state = screen.session_state
     assert isinstance(state, DrillingSessionState)
@@ -89,7 +89,7 @@ def test_end_milling_result_text_is_byte_identical_to_the_core_calculation():
         (FieldId.NUMBER_OF_TEETH, "4"),
         (FieldId.LENGTH_OF_CUT, "50"),
     ]:
-        _row(milling_rows_for(ui, screen, None, "en", "en"), field_id).on_edit(text)
+        _row(milling_rows_for(ui, screen, None, "en", "en"), field_id).on_commit(float(text))
 
     state = screen.session_state
     assert isinstance(state, MillingSessionState)
@@ -141,7 +141,7 @@ def test_face_milling_result_text_is_byte_identical_to_the_core_calculation():
         (FieldId.NUMBER_OF_TEETH, "6"),
         (FieldId.LENGTH_OF_CUT, "100"),
     ]:
-        _row(milling_rows_for(ui, screen, None, "en", "en"), field_id).on_edit(text)
+        _row(milling_rows_for(ui, screen, None, "en", "en"), field_id).on_commit(float(text))
 
     state = screen.session_state
     assert isinstance(state, MillingSessionState)

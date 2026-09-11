@@ -26,6 +26,12 @@ MESSAGES: dict[str, str] = {
     # 018-tui-splitpane-redesign FR-001: new to the persistent bar -- 017 had
     # no labeled Exit item, only an unlabeled Escape/Ctrl-Q handler.
     "tui.menu.exit": "Exit",
+    # Exit confirmation dialog (revision, per direct user feedback): shown
+    # as a floating Yes/No prompt when Exit is selected from the bar,
+    # rather than exiting immediately.
+    "tui.exit_confirm.message": "Are you sure you want to exit?",
+    "tui.exit_confirm.yes": "Yes",
+    "tui.exit_confirm.no": "No",
     "tui.machining_menu.title": "Machining",
     "tui.machining_menu.milling": "Milling",
     "tui.machining_menu.drilling": "Drilling",
@@ -62,8 +68,15 @@ MESSAGES: dict[str, str] = {
     "tui.drilling.title": "Drilling",
     "tui.label.diameter": "Drill diameter",
     "tui.label.depth": "Hole depth",
+    # 018-tui-splitpane-redesign FR-006 (revision): the right pane's
+    # placeholder while required inputs are incomplete -- operation-specific
+    # wording, matching the prototype's own `_last_result_text` default.
+    "tui.drilling.placeholder": "Enter a diameter and a hole depth to see a result.",
     # --- Milling form (FR-002) ---
     "tui.milling.title": "Milling",
+    "tui.milling.placeholder": (
+        "Enter diameter, depth of cut, engagement, feed, teeth, and length of cut to see a result."
+    ),
     "tui.label.milling_sub_operation": "Milling operation",
     "tui.milling_sub_operation.end_milling": "end milling",
     "tui.milling_sub_operation.face_milling": "face milling",
@@ -94,14 +107,27 @@ MESSAGES: dict[str, str] = {
     # wording change needed for the new inline context.
     "tui.prompt.number.invalid": "Please enter a numeric value.",
     "tui.prompt.power.optional_hint": "Leave blank if unknown.",
+    # 018-tui-splitpane-redesign, revision (matching the pre-plan prototype
+    # exactly): FR-006b's unparseable-number message now surfaces in the
+    # bottom status bar, only once the user tries to navigate away from the
+    # offending field -- not proactively while still typing (split_pane.py's
+    # `_commit_current`).
+    "tui.validation.unparseable_number": "'{text}' is not a number -- kept previous value.",
+    # The left pane's own title, distinct from the floating window's own
+    # title (the operation name -- FR-004, revision) -- matches the
+    # prototype's `render_left`.
+    "tui.pane.inputs": "Inputs",
+    # The bottom status/hint row shown whenever no `OperationScreen.status`
+    # message is pending (revision, matching the prototype's
+    # `render_bottom`) -- adapted from its literal "Esc/^Q quit" for this
+    # app's real semantics: Escape here returns focus to the persistent
+    # menu bar, not necessarily exiting the whole application.
+    "tui.pane.hint": "↑↓ move   ←→/Space change   Esc back",
     # --- Result display ---
     # Reused unchanged as the right pane's title (018-tui-splitpane-redesign
     # FR-006/FR-006a) -- "Result" reads correctly whether it labels a modal
     # dialog (017) or a persistent pane (018).
     "tui.result.title": "Result",
-    # 018-tui-splitpane-redesign FR-006: the right pane's placeholder state
-    # while required left-pane inputs are still incomplete.
-    "tui.result.placeholder": "Enter every input to see a result.",
     "tui.result.spindle_speed": "Spindle speed:     {value} RPM{mode_suffix}",
     "tui.result.spindle_speed.mode_suffix": " ({label})",
     "tui.result.spindle_speed.mode.standard": "recommended",

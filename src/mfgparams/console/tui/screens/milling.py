@@ -117,20 +117,9 @@ def current_sub_operation(ui: SessionUI, state: MillingSessionState) -> MillingS
 def _number_row(
     field_id: FieldId, label: str, unit: str, value: float | None, required: bool, setter
 ) -> split_pane.NumberRow:
-    def on_edit(buffer: str) -> None:
-        text = buffer.strip()
-        if not text:
-            setter(None)
-            return
-        try:
-            setter(float(text))
-        except ValueError:
-            pass  # FR-006b: see drilling.py's identically-shaped helper.
-
-    def on_nudge(direction: int) -> None:
-        current = value if value is not None else 0.0
-        new_value = current + direction * split_pane.NUDGE_STEP
-        setter(None if new_value <= 0 else new_value)
+    """See drilling.py's identically-shaped helper: `on_commit` is called
+    only on navigating away from this field, with the already-parsed
+    value."""
 
     return split_pane.NumberRow(
         field_id=field_id,
@@ -138,8 +127,7 @@ def _number_row(
         unit=unit,
         value=value,
         required=required,
-        on_edit=on_edit,
-        on_nudge=on_nudge,
+        on_commit=setter,
     )
 
 

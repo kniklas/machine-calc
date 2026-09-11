@@ -70,17 +70,21 @@ The FR-004 left/right split-pane screen for whichever operation (Drilling, or Mi
 identical pattern) is currently open, rendered inside the floating window described in research.md
 #3. One shared shape; Drilling and Milling supply different field sets (FR-005) and a different
 `SessionState` instance (`DrillingSessionState`/`MillingSessionState`, reused unchanged above).
-`selected_field` doubles as the accordion state for radio rendering (research.md #4): the row
-matching `selected_field` renders as a full `RadioList` if it's a radio field, every other radio
-row renders as a one-line summary — no separate "which radio is expanded" field is needed, since
-that's always exactly whichever field is currently selected.
+
+Revision note (matching the pre-plan prototype exactly, per user feedback that the shipped
+implementation's look and feel needed to match it, not a secondhand description of it): a prior
+revision of this entity had `selected_field` double as an "accordion" state for radio rendering
+(a `RadioList` widget expanding on focus). The prototype has no such state — a radio field is
+always a single `Label: value` line, cycled and committed immediately by Left/Right/Space — so
+that behavior, and the paragraph describing it, is retired here along with it.
 
 | Field | Type | Notes |
 |---|---|---|
 | `operation` | `Literal["drilling", "milling"]` | Which operation this instance presents. |
 | `session_state` | `DrillingSessionState \| MillingSessionState` | The reused, unchanged state object (FR-012) — one instance per operation, owned by `app.py`, exactly as today. |
 | `selected_field` | `FieldId` | Which left-pane field currently has focus (FR-016/FR-017's "the moment it is selected/highlighted"). |
-| `field_buffer` | `str` | Raw, possibly-not-yet-valid text for a numeric field currently being typed (FR-016) — distinct from `session_state`'s own committed value; only meaningful while `selected_field` names a numeric field. Never passed to `calculate()` while unparseable (FR-006b). |
+| `field_buffer` | `str` | Raw, possibly-not-yet-valid text for a numeric field currently being typed (FR-016) — distinct from `session_state`'s own committed value; only meaningful while `selected_field` names a numeric field (always `""` for a radio field, which has no buffered state of its own). Committed to `session_state` only when the user navigates away from the field, never passed to `calculate()` while still unparseable (FR-006b). |
+| `status` | `str \| None` | A transient bottom-status-bar message (mirrors the prototype's own `UI.status`) — `None` shows the ordinary keyboard hint instead; set to FR-006b's unparseable-text message only when the user tries to navigate away from a numeric field whose buffer doesn't parse, cleared on the next successful commit or on leaving any other field type. |
 | `last_result` | `CalculationResult \| None` | The right pane's currently-displayed result (or `None` while inputs are incomplete — FR-006), cached against the exact input tuple that produced it so an input change that doesn't affect the result (or hasn't yet completed) doesn't trigger a spurious recompute. |
 
 **`FieldId`**: an enum/literal naming every field FR-005 lists for the operation (e.g. for
@@ -90,15 +94,18 @@ includes `sub_operation`, `axial_depth_of_cut`, `radial_engagement`, `feed_per_t
 `number_of_teeth`, `length_of_cut` in place of Drilling's `diameter`/`depth`. Mirrors the
 prototype's own field-ordering approach (spec's Recommended Next Steps).
 
-**State transitions** (FR-016/FR-017, validated in the prototype):
-- Navigating to a new field commits `field_buffer` into `session_state` if the previous
-  `selected_field` was numeric and `field_buffer` parses (FR-016); an unparseable buffer is
-  discarded with a status message, not written to `session_state` (FR-006b), and navigation still
-  proceeds.
-- Left/Right on a numeric field adjusts `field_buffer` by a small step (FR-017). On a radio field,
-  Up/Down navigates the expanded `RadioList`'s options and Enter/Space commits the highlighted one
-  into `session_state`'s corresponding value (research.md #4 — `RadioList`'s own native bindings,
-  not Left/Right cycling).
+**State transitions** (FR-016/FR-017, matching the prototype's own `move_selection`/
+`commit_current`/`cycle_field`/`adjust_numeric` exactly):
+- Up/Down (and `j`/`k`) always move `selected_field` to the next/previous field, unconditionally,
+  regardless of the current or next field's type. Moving away from a field first attempts to commit
+  it: if the previous `selected_field` was numeric and `field_buffer` parses (including blank, which
+  commits `None`), it is written to `session_state` and `status` is cleared; if it doesn't parse,
+  `session_state` is left untouched and `status` is set to FR-006b's message instead — navigation
+  still proceeds either way.
+- Left/Right (and `h`/`l`/Space) act on whichever field is currently selected: on a numeric field,
+  they adjust `field_buffer` by a small step without touching `session_state` (FR-017); on a radio
+  field, they cycle `session_state`'s corresponding value with wraparound and commit it immediately
+  (no buffering, no separate confirm step).
 - Any committed change recomputes `last_result` (FR-007) against the current, complete input tuple;
   an incomplete or `calculate()`-rejected tuple sets `last_result` to `None` or to the returned
   `ErrorInfo`-bearing result respectively (FR-006/FR-006a) — never a stale result from a
@@ -154,6 +161,7 @@ SessionUI
 │   ├── session_state: DrillingSessionState | MillingSessionState  (reused unchanged, FR-012)
 │   ├── selected_field: FieldId
 │   ├── field_buffer: str
+│   ├── status: str | None
 │   └── last_result: CalculationResult | None
 ├── drilling_state: DrillingSessionState        (persists regardless of open_operation)
 └── milling_states: dict[MillingSubOperation, MillingSessionState]  (persists regardless of open_operation)

@@ -57,13 +57,18 @@ the same contract test.
   #3, not an embedded pane replacing them — with a left pane (every FR-005 input, simultaneously
   visible and editable) and a right pane (the live result), without a full-screen transition
   (FR-004).
-- The right pane holds exactly one of three states at any time (FR-006/FR-006a/FR-006b), never a
-  fourth: **(a)** empty/placeholder, while required inputs are incomplete; **(b)** a valid result,
-  once every required input holds a valid, calculate()-accepted value; **(c)** a clear, actionable,
-  localized error, either from `calculate()` rejecting a complete-but-invalid combination (FR-006a)
-  or from a numeric field holding unparseable text (FR-006b, which never reaches `calculate()` at
-  all). The right pane MUST NOT show a stale result computed from a different, no-longer-current
-  input set (FR-006).
+- The right pane holds exactly one of two states at any time (FR-006/FR-006a), never a third:
+  **(a)** empty/placeholder (operation-specific wording), while required inputs are incomplete;
+  **(b)** a valid result, once every required input holds a valid, `calculate()`-accepted value, or
+  a clear, actionable, localized error from `calculate()` rejecting a complete-but-invalid
+  combination (FR-006a). The right pane MUST NOT show a stale result computed from a different,
+  no-longer-current input set (FR-006).
+- FR-006b's unparseable-text case (revision, matching the pre-plan prototype exactly, per
+  user feedback that the shipped implementation's look and feel needed to match it exactly) is
+  **not** one of the right pane's states at all: an unparseable buffer never reaches
+  `session_state`, so it can never reach `calculate()` either. It surfaces instead in a status bar
+  beneath both panes (§4), only once the user tries to navigate away from the offending field —
+  never while still typing, and never in the right pane.
 - The right pane refreshes automatically on every committed left-pane input change, with no
   separate manual "calculate" action (FR-007).
 - After a result is shown, the user can change inputs and see an updated result, or return to the
@@ -75,23 +80,32 @@ the same contract test.
 
 ## 4. Keyboard contract (FR-010, FR-016, FR-017)
 
-- Every action MUST be reachable by sequential navigation (arrow keys and/or Tab) alone; no mouse/
-  pointer interaction is ever required (FR-010, unchanged from 017).
+Revision note (matching the pre-plan prototype exactly, per user feedback that the shipped
+implementation's look and feel needed to match it, not a secondhand description of it): this
+section replaces the `RadioList`-expansion/Tab-Shift-Tab design a prior revision of this contract
+described. The keyboard model below is taken directly from the prototype's own key bindings
+(`prototype_drilling_splitpane.py`/`prototype_milling_splitpane.py`), not reconstructed from
+spec.md's prose.
+
+- Every action MUST be reachable by sequential navigation (arrow keys, or their `h`/`j`/`k`/`l`
+  equivalents) alone; no mouse/pointer interaction is ever required (FR-010, unchanged from 017).
 - Every menu bar entry and tree leaf additionally has a direct mnemonic/accelerator key, visibly
   hinted on-screen (§2).
+- **Up/Down (and `j`/`k`) always move between left-pane fields, unconditionally**, regardless of
+  the current or next field's type — there is no per-field-type dispatch, and no "expanded" state
+  for a radio field to consume Up/Down instead.
+- A radio left-pane field (unit system, mode, material type, material, tool, milling sub-operation)
+  is **always** a single `Label: value` line — it never expands into an option list (FR-005).
+  **Left/Right (and `h`/`l`/Space) cycle its value with wraparound and commit it immediately**, with
+  no separate confirm step.
 - A numeric left-pane field becomes editable the instant it is selected/highlighted — no separate
-  "start editing" keystroke (FR-016). Left/Right on a selected numeric field nudges its value by a
-  small step; a nudge that would land at or below zero clears the field to unset rather than
-  producing a non-positive value (implementation detail, not a spec-level requirement, but
-  consistent across both operations per the shared component in Project Structure).
-- A radio left-pane field renders as a `RadioList` (FR-005, research.md #4) when it has focus, and
-  a one-line summary otherwise — only one radio field is ever expanded at a time. While expanded,
-  Up/Down navigates its options and Enter/Space commits the highlighted one (the widget's own
-  native bindings), clamped at the first/last option — a real `RadioList` fully consumes Up/Down
-  for its own navigation and never escapes to a sibling widget on it. **Tab/Shift-Tab moves to the
-  next/previous left-pane field unconditionally**, regardless of the current field's type,
-  collapsing an expanded radio back to its summary line — the only way to leave one once Up/Down
-  alone can't.
+  "start editing" keystroke (FR-016): typing a digit (or `.`/`-`) or Backspace edits
+  `OperationScreen.field_buffer` immediately, and Left/Right on a selected numeric field nudges the
+  buffer's value by a small step (a nudge that would land at or below zero clears the buffer to
+  unset rather than producing a non-positive value). **None of this touches `session_state`.** The
+  buffer commits to `session_state` only when the user navigates away from the field (Up/Down); a
+  buffer that still doesn't parse as a number at that point is discarded (the field keeps its
+  last-committed value) and the status bar (§3) shows the unparseable-text message until corrected.
 - A "return to the main menu" action is available from any open operation screen (FR-008), and does
   not require the tree to be collapsed first (FR-005a).
 

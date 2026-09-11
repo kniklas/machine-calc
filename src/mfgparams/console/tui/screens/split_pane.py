@@ -2,14 +2,13 @@
 screens (018-tui-splitpane-redesign FR-004/FR-005/FR-009).
 
 Instant-edit numeric fields (FR-016), Left/Right nudge (FR-017), and the
-right pane's three-state result machine (FR-006/FR-006a/FR-006b) all live
-here once; `screens/drilling.py`/`screens/milling.py` (T022/T023) each
-supply only their own field list (`rows_for`, mirroring
-`machining_menu.tree_rows`' "recompute every render" approach, since a
-later row's visibility can depend on an earlier row's value -- e.g.
-`material` only appears once `material_type` is chosen, `target_rpm` only
-in Fixed RPM mode) and their own `calculate()` call, per FR-009's
-identical-pattern requirement.
+right pane's result state (FR-006/FR-006a) live here once;
+`screens/drilling.py`/`screens/milling.py` (T022/T023) each supply only
+their own field list (`rows_for`, mirroring `machining_menu.tree_rows`'
+"recompute every render" approach, since a later row's visibility can
+depend on an earlier row's value -- e.g. `material` only appears once
+`material_type` is chosen, `target_rpm` only in Fixed RPM mode) and their
+own `calculate()` call, per FR-009's identical-pattern requirement.
 
 FR-006a's design collapses cleanly here: unlike the old dialog chain (which
 pre-validated each field with e.g. `validate_diameter_mm` before ever
@@ -18,29 +17,28 @@ calling `calculate()`), this module does no range validation of its own --
 re-validate every field internally regardless of caller (confirmed in
 spec.md's FR-006a rationale), so once a field parses as a number this
 module's only job is to call `calculate()` and display whatever `ErrorInfo`
-it returns. The one case `calculate()` cannot cover is FR-006b: text that
-never parses as a number at all, so it can never reach `calculate()` in the
-first place.
+it returns.
 
-**Revision (tasks.md T048/Phase 8)**: radio fields render as a
-`prompt_toolkit.widgets.RadioList`-alike -- vertically-stacked, one option
-per line, using that widget's own default markers (`(*)`/`( )`) -- for
-whichever field is currently selected; every other radio field collapses to
-a one-line summary (research.md #4's accordion pattern). This module does
-not embed an actual live `RadioList` widget instance: this codebase's whole
-`tui/` architecture (mirroring `machining_menu.py`/`menu.py`) renders every
-screen as a pure function of plain-dataclass state recomputed fresh each
-render, not a tree of stateful, incrementally-updated widget objects: a
-real `RadioList` manages its own internal selected-index state across
-renders, which doesn't fit that model without introducing long-lived
-per-field widget instances this module has nowhere consistent to cache
-between the `rows_for()` calls that rebuild the row list from scratch every
-time. `field_buffer` -- already the "not-yet-committed state of the
-selected field" for numeric fields -- is reused for radio fields' own
-highlighted-but-not-yet-committed option, matching `RadioList`'s real
-two-step Up/Down-then-Enter/Space interaction (navigating away without
-confirming leaves the field's last-committed value untouched, unlike
-`NumberRow`'s commit-on-every-keystroke).
+**Rebuilt to match the pre-plan prototype exactly** (`prototype_drilling_
+splitpane.py`/`prototype_milling_splitpane.py`, both still present at the
+paths named in spec.md's Carried-Over Items table -- consulted directly
+after the shipped implementation's earlier interaction models turned out
+not to match user expectations set by that prototype). The governing
+behaviors, all taken from the prototype's own code, not reinvented:
+
+- A radio field is always a single `Label: value` line -- never an
+  expanded option list. Left/Right/Space cycle it and commit immediately
+  (`_cycle`/`cycle_field` in the prototype).
+- Up/Down (and j/k) always move between fields, unconditionally, regardless
+  of a field's type -- there is no per-field-type dispatch to reason about.
+- A numeric field's typed/nudged text lives in `field_buffer` only;
+  `session_state` is **not** touched until the user navigates away from the
+  field (`commit_current`/`move_selection` in the prototype) -- typing and
+  nudging never commit immediately. An unparseable buffer, discovered only
+  at that commit attempt, is discarded (not written to `session_state`) and
+  surfaces via `OperationScreen.status`, a transient bottom-status-bar
+  message (`ui.status` in the prototype) -- not a right-pane state, and not
+  shown while still actively editing the field.
 """
 
 from __future__ import annotations
@@ -57,8 +55,7 @@ from mfgparams.models import CalculationResult
 
 #: FR-017: "a small fixed step" -- 1 display unit (already in the field's
 #: current unit system, e.g. 1 mm or 1 in for a length field), matching the
-#: pre-plan prototype's own validated step size (spec's Recommended Next
-#: Steps).
+#: prototype's own validated step size (spec's Recommended Next Steps).
 NUDGE_STEP = 1.0
 
 
@@ -69,8 +66,9 @@ class RadioRow:
     ``(value, display_label)`` set currently available -- callers rebuild it
     every render since a later row's options can depend on an earlier row's
     value (e.g. `material`'s options depend on `material_type`).
-    `on_select` commits the chosen value immediately (FR-016's "no separate
-    confirm step" applies here too, not just to numeric fields)."""
+    `on_select` commits the chosen value immediately -- matching the
+    prototype's `cycle_field`, which calls `setattr` synchronously on every
+    Left/Right/Space, with no separate confirm step."""
 
     field_id: FieldId
     label: str
@@ -85,15 +83,20 @@ class NumberRow:
     field that gates FR-006's readiness (diameter, depth, ...) from one
     that's present but optional (available power outside Power-Constrained
     mode) -- both are simultaneously visible/editable per FR-005, but only
-    the former blocks the right pane's result state."""
+    the former blocks the right pane's result state.
+
+    `on_commit` is called only when the user navigates away from this field
+    (`move_selection`), with the fully-parsed value (`None` for a blank
+    buffer) -- matching the prototype's `commit_current`. Typing
+    (`edit_selected`) and nudging (`nudge_selected`) only ever touch
+    `OperationScreen.field_buffer`, never call this directly."""
 
     field_id: FieldId
     label: str
     unit: str
     value: float | None
     required: bool
-    on_edit: Callable[[str], None]
-    on_nudge: Callable[[int], None]
+    on_commit: Callable[[float | None], None]
 
 
 Row = Union[RadioRow, NumberRow]
@@ -145,43 +148,65 @@ def selected_row(rows: list[Row], screen: OperationScreen) -> Row | None:
 
 
 def _format(value: float | None) -> str:
+    """Matches the prototype's `_format_number`: `.4g`, not a bare `g` --
+    e.g. `10` stays `10`, `0.05` stays `0.05`, but a longer float rounds to
+    4 significant digits rather than however many `repr` would show."""
+
     if value is None:
         return ""
-    return f"{value:g}"
+    return f"{value:.4g}"
 
 
 def sync_buffer(rows: list[Row], screen: OperationScreen) -> None:
-    """Re-syncs `field_buffer` to the currently-selected row's own current
-    state -- called whenever selection changes (including when a screen is
-    first opened), so editing/navigating always starts from what's
-    actually on screen, not a buffer left over from a previously-selected
-    field.
-
-    For a `NumberRow`, that's the formatted committed value (FR-016). For
-    a `RadioRow`, `field_buffer` becomes the *highlighted* option --
-    starting on the committed value if one exists, or the first option
-    otherwise (matching `RadioList`'s own default-to-index-0 behavior) --
-    not yet committed to `session_state` until `radio_commit`."""
+    """Re-syncs `field_buffer` to the currently-selected row's own
+    committed value -- called whenever selection changes (including when a
+    screen is first opened), so a numeric field is immediately typable
+    from what's actually on screen (FR-016), not a buffer left over from a
+    previously-selected field. Matches the prototype's `_load_buffer`:
+    radio fields don't use `field_buffer` at all (they have no editable
+    "raw text" state -- Left/Right/Space act on `row.value` directly)."""
 
     row = selected_row(rows, screen)
-    if isinstance(row, NumberRow):
-        screen.field_buffer = _format(row.value)
-    elif isinstance(row, RadioRow):
-        if row.value is not None:
-            screen.field_buffer = row.value
-        elif row.options:
-            screen.field_buffer = row.options[0][0]
-        else:
-            screen.field_buffer = ""
-    else:
-        screen.field_buffer = ""
+    screen.field_buffer = _format(row.value) if isinstance(row, NumberRow) else ""
 
 
-def move_selection(rows: list[Row], screen: OperationScreen, delta: int) -> None:
-    """Moves `screen.selected_field` to the next/previous row (wrapping)."""
+def _commit_current(rows: list[Row], screen: OperationScreen, locale: str) -> None:
+    """The prototype's `commit_current`: parses `field_buffer` into the
+    currently-selected `NumberRow`'s value, called automatically whenever
+    selection is about to move off it (`move_selection`) -- there is no
+    other trigger. A blank buffer commits `None` (unset). An unparseable,
+    non-blank buffer commits nothing (the field's last-committed value is
+    left untouched) and records `OperationScreen.status` instead -- FR-006b,
+    surfaced as a transient bottom-status-bar message, not a right-pane
+    state, and only once the user actually tries to leave the field, not
+    while still typing on it. A no-op (clearing any stale status) on
+    anything but a `NumberRow`."""
+
+    row = selected_row(rows, screen)
+    if not isinstance(row, NumberRow):
+        screen.status = None
+        return
+    text = screen.field_buffer.strip()
+    if not text:
+        row.on_commit(None)
+        screen.status = None
+        return
+    try:
+        row.on_commit(float(text))
+        screen.status = None
+    except ValueError:
+        screen.status = translate(locale, "tui.validation.unparseable_number", text=text)
+
+
+def move_selection(rows: list[Row], screen: OperationScreen, delta: int, locale: str) -> None:
+    """Moves `screen.selected_field` to the next/previous row (wrapping),
+    committing the field being left first (`_commit_current`) -- matching
+    the prototype's `move_selection` exactly: Up/Down always does this,
+    unconditionally, regardless of the current or next row's type."""
 
     if not rows:
         return
+    _commit_current(rows, screen, locale)
     ids = [row.field_id for row in rows]
     try:
         index = ids.index(screen.selected_field)
@@ -192,17 +217,17 @@ def move_selection(rows: list[Row], screen: OperationScreen, delta: int) -> None
 
 
 def edit_selected(rows: list[Row], screen: OperationScreen, char: str) -> None:
-    """FR-016: typing immediately edits the selected numeric field -- no
-    separate "start editing" action. Appends to whatever's already in
-    `field_buffer` (pre-filled with the field's current value when
-    selection last moved here, `sync_buffer`); a no-op on a `RadioRow`
-    (radios only ever change via `nudge_selected`, never free text)."""
+    """FR-016: typing immediately edits the selected numeric field's
+    buffer -- no separate "start editing" action, and no commit to
+    `session_state` either (that only happens on navigating away,
+    `move_selection`) -- matching the prototype's digit key handlers,
+    which only ever append to `ui.buffer`. A no-op on a `RadioRow` (radios
+    only ever change via `nudge_selected`, never free text)."""
 
     row = selected_row(rows, screen)
     if not isinstance(row, NumberRow):
         return
     screen.field_buffer += char
-    row.on_edit(screen.field_buffer)
 
 
 def backspace_selected(rows: list[Row], screen: OperationScreen) -> None:
@@ -210,108 +235,79 @@ def backspace_selected(rows: list[Row], screen: OperationScreen) -> None:
     if not isinstance(row, NumberRow):
         return
     screen.field_buffer = screen.field_buffer[:-1]
-    row.on_edit(screen.field_buffer)
 
 
 def nudge_selected(rows: list[Row], screen: OperationScreen, direction: int) -> None:
-    """FR-017: numeric fields only -- +/-`NUDGE_STEP`, floor-at-zero clears
-    to unset (contract §4's implementation detail). Radio fields no longer
-    respond to Left/Right (research.md #4, revision) -- a no-op here for
-    anything but a `NumberRow`; use `radio_navigate`/`radio_commit`
-    instead."""
+    """FR-017 on a `NumberRow`: adjusts `field_buffer` by `NUDGE_STEP`,
+    falling back to the row's last-committed value (or 0) if the buffer
+    doesn't currently parse -- matching the prototype's `adjust_numeric`
+    exactly, including that this only ever touches the buffer, never
+    committing to `session_state` directly (`move_selection` still does
+    that). A nudge that would land at or below zero clears the buffer to
+    unset rather than going negative (contract §4's implementation detail).
+
+    On a `RadioRow`, cycles `value` with wraparound and commits
+    immediately via `on_select` -- matching the prototype's `cycle_field`
+    (no buffering, no separate confirm step for radios)."""
 
     row = selected_row(rows, screen)
-    if not isinstance(row, NumberRow):
+    if row is None:
         return
-    row.on_nudge(direction)
-    screen.field_buffer = _format(row.value)
-
-
-def radio_navigate(rows: list[Row], screen: OperationScreen, direction: int) -> None:
-    """Up/Down on an expanded `RadioRow`: moves the *highlighted* option
-    (`field_buffer`) by one step, without committing it (research.md #4 --
-    `RadioList`'s own Up/Down behavior). Clamps at the first/last option
-    rather than continuing on to an adjacent field -- a real `RadioList`
-    fully consumes Up/Down for its own navigation and never escapes to a
-    sibling widget on it; moving to a different field is Tab/Shift-Tab's
-    job instead (contract §4), unconditionally, regardless of the current
-    row's type. A no-op if the selected row isn't a `RadioRow` with
-    options at all."""
-
-    row = selected_row(rows, screen)
-    if not isinstance(row, RadioRow) or not row.options:
+    if isinstance(row, NumberRow):
+        text = screen.field_buffer.strip()
+        try:
+            current = float(text) if text else 0.0
+        except ValueError:
+            current = row.value if row.value is not None else 0.0
+        new_value = current + direction * NUDGE_STEP
+        screen.field_buffer = "" if new_value <= 0 else _format(new_value)
+        return
+    if not row.options:
         return
     values = [value for value, _ in row.options]
-    current = screen.field_buffer if screen.field_buffer in values else values[0]
-    new_index = values.index(current) + direction
-    screen.field_buffer = values[max(0, min(len(values) - 1, new_index))]
-
-
-def radio_commit(rows: list[Row], screen: OperationScreen) -> None:
-    """Enter/Space on an expanded `RadioRow`: commits the currently-
-    highlighted option (`field_buffer`) into `session_state`, matching
-    `RadioList`'s own Enter/Space binding. A no-op on anything but a
-    `RadioRow`."""
-
-    row = selected_row(rows, screen)
-    if not isinstance(row, RadioRow):
-        return
-    if screen.field_buffer:
-        row.on_select(screen.field_buffer)
-
-
-def parses_as_number(buffer: str) -> bool:
-    """Empty is "unset" (FR-006's incomplete-input case), not FR-006b's
-    "unparseable text" case -- the two are distinct right-pane states."""
-
-    if not buffer.strip():
-        return True
-    try:
-        float(buffer)
-    except ValueError:
-        return False
-    return True
-
-
-def _render_expanded_radio(row: RadioRow, highlighted: str, *, focused: bool) -> StyleAndTextTuples:
-    """The selected `RadioRow`'s full option list, one per line, using
-    `RadioList`'s own default markers -- `(*)` for the committed
-    (`row.value`) option, `( )` otherwise -- with the *highlighted*
-    (`field_buffer`) option reverse-video only while the pane has focus."""
-
-    label_style = "class:selected" if focused else ""
-    fragments: StyleAndTextTuples = [(label_style, f"{row.label}:\n")]
-    for value, label in row.options:
-        marker = "(*)" if value == row.value else "( )"
-        style = "class:selected" if focused and value == highlighted else ""
-        fragments.append((style, f"  {marker} {label}\n"))
-    return fragments
+    index = values.index(row.value) if row.value in values else -1
+    row.on_select(values[(index + direction) % len(values)])
 
 
 def render_left_pane(
     rows: list[Row], screen: OperationScreen, title: str, locale: str, *, focused: bool
 ) -> StyleAndTextTuples:
-    """FR-005's simultaneously-visible-and-editable left pane. The
-    currently-selected `NumberRow` shows the live, possibly-mid-edit
-    `field_buffer` (FR-016) rather than its last-committed value; the
-    currently-selected `RadioRow` expands into its full option list
-    (research.md #4); every other row shows a one-line summary of its
-    committed value."""
+    """FR-005's simultaneously-visible-and-editable left pane -- one
+    compact `Label: value` line per field, every field always a single
+    line (matching the prototype's `render_left`: no radio field ever
+    expands into an option list). The selected `NumberRow` shows the live,
+    possibly-mid-edit `field_buffer` with a trailing `_` cursor (FR-016);
+    an unselected, unset `NumberRow` shows `--`, not a blank string."""
 
-    fragments: StyleAndTextTuples = [("class:pane-title", f"{title}\n")]
+    fragments: StyleAndTextTuples = [("class:pane-title", f"{title}\n\n")]
     for row in rows:
         is_selected = row.field_id is screen.selected_field
         style = "class:selected" if focused and is_selected else ""
-        if isinstance(row, RadioRow) and is_selected:
-            fragments.extend(_render_expanded_radio(row, screen.field_buffer, focused=focused))
-        elif isinstance(row, RadioRow):
-            checked_label = next((label for value, label in row.options if value == row.value), "-")
+        if isinstance(row, RadioRow):
+            checked_label = next(
+                (label for value, label in row.options if value == row.value), "--"
+            )
             fragments.append((style, f"{row.label}: {checked_label}\n"))
         else:
-            shown = screen.field_buffer if is_selected else _format(row.value)
             unit_suffix = f" {row.unit}" if row.unit else ""
-            fragments.append((style, f"{row.label}: {shown}{unit_suffix}\n"))
+            if is_selected:
+                value_text = f"{screen.field_buffer}_{unit_suffix}"
+            else:
+                value_text = f"{_format(row.value)}{unit_suffix}" if row.value is not None else "--"
+            fragments.append((style, f"{row.label}: {value_text}\n"))
     return fragments
+
+
+def render_bottom_bar(screen: OperationScreen, locale: str) -> StyleAndTextTuples:
+    """The status/hint row spanning the full floating window beneath both
+    panes -- matches the prototype's `render_bottom` exactly: an ordinary
+    keyboard hint by default, replaced by `OperationScreen.status` (FR-006b's
+    unparseable-number message, set only by `_commit_current`) when one is
+    pending."""
+
+    if screen.status:
+        return [("class:error", screen.status)]
+    return [("class:hint", translate(locale, "tui.pane.hint"))]
 
 
 def render_right_pane(
@@ -320,24 +316,24 @@ def render_right_pane(
     calculate: Callable[[], CalculationResult],
     labels: dict[str, str],
     locale: str,
+    *,
+    placeholder: str,
 ) -> StyleAndTextTuples:
-    """FR-006/FR-006a/FR-006b's three-state machine, in the one place both
-    operations share it: (a) FR-006b's unparseable-text state, checked
-    first since it pre-empts even asking whether the input set is
-    "complete"; (b) FR-006's placeholder, while incomplete; (c) a result or
-    FR-006a's `calculate()`-rejected error, memoized against the exact
-    input tuple that produced it (`OperationScreen.last_result_key`) so an
-    unrelated re-render doesn't recompute (SC-006)."""
-
-    row = selected_row(rows, screen)
-    if isinstance(row, NumberRow) and not parses_as_number(screen.field_buffer):
-        return [
-            ("class:pane-title", f"{translate(locale, 'tui.result.title')}\n\n"),
-            ("class:error", translate(locale, "tui.prompt.number.invalid")),
-        ]
+    """FR-006/FR-006a's two-state machine (placeholder while incomplete;
+    a result or `calculate()`-rejected error once complete), memoized
+    against the exact input tuple that produced it
+    (`OperationScreen.last_result_key`) so an unrelated re-render doesn't
+    recompute (SC-006). FR-006b's unparseable-text state is *not* one of
+    these -- it surfaces via `render_bottom_bar` instead, only once the
+    user tries to navigate away from the offending field (matching the
+    prototype, which never second-guesses the right pane over what's still
+    being typed). `placeholder` is the already-translated, operation-
+    specific message (`tui.drilling.placeholder`/`tui.milling.placeholder`)
+    -- matching the prototype's own per-screen default text, not a single
+    generic one."""
 
     if not is_complete(rows):
-        return [("class:hint", translate(locale, "tui.result.placeholder"))]
+        return [("class:hint", placeholder)]
 
     calculation_key = tuple(row.value for row in rows)
     if screen.last_result is None or screen.last_result_key != calculation_key:
