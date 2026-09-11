@@ -1,9 +1,20 @@
 """Integration test: `tui/app.py`'s `run()` end-to-end -- the actual entry
 point every other test in this suite exercises one layer below, by calling
 `build_app`/screen functions directly (018-tui-splitpane-redesign, tasks.md
-T033). Drives the real menu bar -> Machining tree -> Drilling's tool
-shortcut -> a completed calculation -> back to the menu bar -> exit,
-through the real, single persistent `Application`, not a chain of dialogs.
+T033). Drives the real menu bar -> Machining tree -> Drilling (a flat
+leaf) -> a completed calculation -> back to the menu bar -> exit, through
+the real, single persistent `Application`, not a chain of dialogs.
+
+Revision note (tasks.md T045/Phase 8): Drilling's tree-level tool-
+selection shortcut is retired (FR-003) -- it now opens directly, landing
+on Unit system (like Milling). Radio fields commit via Enter (the
+highlighted option -- defaulting to the first when unset, matching
+`prompt_toolkit.widgets.RadioList`'s own behavior); Up/Down are fully
+consumed by an expanded radio's own option list (clamped at the
+boundaries, never escaping to an adjacent field, matching a real
+`RadioList`), so **Tab** is used here to move field-to-field regardless of
+type (research.md #4) -- not Up/Down/j/k, which would otherwise need one
+keystroke per *option* to walk past a multi-choice field like Material.
 """
 
 from __future__ import annotations
@@ -15,20 +26,19 @@ from mfgparams.console.tui.app import run
 _OPEN_DRILLING_COMPLETE_AND_EXIT = [
     "m",  # bar mnemonic: Machining -- expands the tree, focuses it
     "j",  # tree: Milling -> Drilling
-    "\r",  # toggle Drilling's tool-selection shortcut open
-    "j",  # tree: Drilling -> Tool
-    "\r",  # opens Drilling, selected on the Tool field
-    "k",  # up to Material type (unit system/mode keep their defaults)
-    "\x1b[C",  # Right: selects the first material type ("metal")
-    "j",  # down to Material
-    "\x1b[C",  # Right: selects the first material ("Mild Steel")
-    "j",  # down to Tool
-    "\x1b[C",  # Right: selects the first tool ("HSS")
-    "j",  # down to Diameter
+    "\r",  # opens Drilling directly, selected on Unit system
+    "\t",
+    "\t",  # Tab to Material type (unit system/mode keep their defaults)
+    "\r",  # commits the highlighted (first) material type ("metal")
+    "\t",  # Tab to Material
+    "\r",  # commits the highlighted (first) material ("Mild Steel")
+    "\t",  # Tab to Tool
+    "\r",  # commits the highlighted (first) tool ("HSS")
+    "\t",  # Tab to Diameter
     "10",  # instant-edit (FR-016)
-    "j",  # down to Depth
+    "\t",  # Tab to Depth
     "20",
-    "j",  # down to Available power (optional, left blank)
+    "\t",  # Tab to Available power (optional, left blank)
     "\x1b",  # focus back to the bar; the operation stays open (FR-005a)
     "\x1b",  # closes the operation, back at the menu bar/tree
     "\x1b",  # nothing open -> exit

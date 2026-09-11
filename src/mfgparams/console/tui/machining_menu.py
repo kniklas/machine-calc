@@ -1,10 +1,17 @@
-"""The collapsible Machining tree (018-tui-splitpane-redesign FR-002/FR-003),
+"""The collapsible Machining tree (018-tui-splitpane-redesign FR-002),
 replacing the old full-screen Machining submenu.
 
 Rendering + row-model only, mirroring `menu.py`: `app.py` owns the actual
 `Layout`/key-binding wiring and decides what each row's selection *does*
-(toggle expansion, or open an operation screen) -- this module only knows
-how to lay the tree out and which rows currently exist.
+(opens an operation's floating window) -- this module only knows how to
+lay the tree out and which rows currently exist.
+
+Revised via `/speckit-clarify` (reopened after implementation, per user
+feedback on PR #96 preferring the pre-plan prototype's UI): Drilling's
+tree-level tool-selection sub-expansion is retired (FR-003). Both Milling
+and Drilling are now flat leaves that open their floating window directly
+-- the tree's row list no longer depends on anything beyond the fact that
+it's being shown at all.
 """
 
 from __future__ import annotations
@@ -19,12 +26,10 @@ from mfgparams.console.tui.app import MachiningTree
 from mfgparams.console.tui.menu import MenuEntry, _assign_mnemonics
 
 #: A row's `action` names what selecting it does (app.py dispatches on
-#: this): "open_milling" and "open_drilling_tool" open an operation screen
-#: (FR-004); "toggle_drilling" only expands/collapses Drilling's own
-#: tool-selection shortcut (FR-003's "further expand/collapse to present a
-#: choice" -- selecting "Drilling" itself never opens a screen directly,
-#: only its shortcut leaf does, per FR-005a's placement resolution).
-RowAction = Literal["open_milling", "toggle_drilling", "open_drilling_tool"]
+#: this): both actions open an operation's floating window directly
+#: (FR-004) -- there is no longer a toggle/shortcut action, since
+#: Drilling's tree-level tool-selection sub-expansion is retired (FR-003).
+RowAction = Literal["open_milling", "open_drilling"]
 
 
 @dataclass(frozen=True)
@@ -35,18 +40,17 @@ class TreeRow:
 
 
 def tree_rows(tree: MachiningTree) -> list[TreeRow]:
-    """The tree's currently-visible rows, in display order. Only defined
-    while the caller already knows ``tree.expanded`` -- the tree widget
-    itself is not shown at all when collapsed (app.py's body-selection
-    logic), so there is no "collapsed" row list to represent here."""
+    """The tree's rows, in display order -- always exactly Milling and
+    Drilling, both flat leaves (FR-002/FR-003). ``tree`` is accepted for
+    interface symmetry with the tree-state-dependent shape this had before
+    the revision, and in case a future operation's own presence ever needs
+    to depend on `SessionUI` state; today it's unused."""
 
-    rows = [
+    del tree
+    return [
         TreeRow("tui.machining_menu.milling", "open_milling", indent=0),
-        TreeRow("tui.machining_menu.drilling", "toggle_drilling", indent=0),
+        TreeRow("tui.machining_menu.drilling", "open_drilling", indent=0),
     ]
-    if tree.drilling_expanded:
-        rows.append(TreeRow("tui.machining_menu.drilling_tool", "open_drilling_tool", indent=1))
-    return rows
 
 
 def tree_mnemonics(rows: list[TreeRow], locale: str) -> list[str | None]:

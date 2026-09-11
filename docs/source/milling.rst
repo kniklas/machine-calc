@@ -16,8 +16,10 @@ Launch the text GUI with::
 A persistent menu bar stays visible at the top of the screen: **Exit**,
 **Machining**, **Configuration**, **About**, **Help**. Selecting
 **Machining** expands a tree in place, showing **Milling** and
-**Drilling**; selecting **Milling** opens a two-pane screen. The left pane
-lists every milling input at once — the sub-operation choice (**end
+**Drilling** as flat leaves; selecting **Milling** opens its operation
+screen directly. It appears as a centered, bordered floating window over
+the menu bar and tree (which stay visible underneath, untouched): the left
+pane lists every milling input at once — the sub-operation choice (**end
 milling** or **face milling**), unit system, calculation mode, material
 type, material, and the appropriate tool (end-mill or face-mill), plus the
 geometry fields below — all simultaneously visible and editable, with no
@@ -30,8 +32,12 @@ tree instead leads to the flow described in :doc:`drilling`.
 Numeric fields become editable the instant you select them — start typing
 a digit and it edits immediately, no separate "start editing" step.
 Left/Right also nudges a selected numeric field up or down by a small
-step. Radio fields (sub-operation, unit system, mode, material type,
-material, tool) cycle through their options on Left/Right.
+step. A radio field (sub-operation, unit system, mode, material type,
+material, tool) expands into a vertically-stacked option list when
+selected — Up/Down highlights an option and Enter or Space commits it,
+clamped at the first/last option rather than spilling over into the next
+field. **Tab**/**Shift-Tab** moves to the next/previous field regardless of
+its type.
 
 Pressing Escape moves focus back to the menu bar without closing the open
 screen; pressing Escape again, from the menu bar, closes it and returns to

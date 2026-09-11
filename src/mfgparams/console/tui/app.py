@@ -94,35 +94,23 @@ class MenuBar:
 
 @dataclass
 class MachiningTree:
-    """FR-002/FR-003's collapsible Milling/Drilling navigation, replacing
-    `machining_menu.py`'s full-screen submenu. `drilling_expanded` is only
-    meaningful while `expanded` is `True`; collapsing Machining implicitly
-    collapses it too (data-model.md's validation rule) -- there is no
-    independent sub-state to preserve across a Machining collapse/expand.
+    """FR-002's collapsible Milling/Drilling navigation, replacing
+    `machining_menu.py`'s full-screen submenu.
 
-    Milling has no equivalent sub-expansion: FR-002/FR-003 define
-    tree-level expansion for Drilling only (/speckit-analyze finding I1),
-    so there is no `milling_expanded` field here.
+    Revised via `/speckit-clarify` (reopened after implementation, per user
+    feedback on PR #96 preferring the pre-plan prototype's UI): Drilling's
+    tree-level tool-selection sub-expansion is retired (FR-003). Both
+    Milling and Drilling are flat leaves -- `expanded` (whether Machining's
+    own children are shown at all) is this entity's only field now.
     """
 
     expanded: bool = False
-    drilling_expanded: bool = False
 
     def toggle_machining(self) -> None:
-        """Acceptance Scenarios 2/4: expand if collapsed; collapse (and
-        implicitly collapse the Drilling sub-node too) if expanded."""
+        """Acceptance Scenarios 2/4: expand if collapsed; collapse if
+        expanded."""
 
         self.expanded = not self.expanded
-        if not self.expanded:
-            self.drilling_expanded = False
-
-    def toggle_drilling(self) -> None:
-        """Acceptance Scenario 3: only meaningful while `expanded`; a no-op
-        otherwise (there is nothing to expand into if Machining itself is
-        collapsed)."""
-
-        if self.expanded:
-            self.drilling_expanded = not self.drilling_expanded
 
 
 @dataclass
@@ -213,27 +201,36 @@ def _resolve_materials_config(materials_config_path: str | None, locale: str) ->
 
 @dataclass
 class _ViewState:
-    """Which body is currently shown and which row is highlighted within
-    it -- pure UI-presentation state, deliberately *not* part of
-    :class:`SessionUI` (which holds session/business state that survives a
-    body change, per FR-012). ``body_mode`` names what the body currently
-    renders; it is independent of ``SessionUI.tree.expanded``/
-    ``open_operation`` (FR-005a) -- e.g. selecting Configuration from the
-    bar sets ``body_mode="configuration"`` without touching either.
+    """Which background body is currently shown and which row is
+    highlighted within it -- pure UI-presentation state, deliberately
+    *not* part of :class:`SessionUI` (which holds session/business state
+    that survives a body change, per FR-012). ``body_mode`` names what the
+    background body currently renders; it is independent of
+    ``SessionUI.tree.expanded``/``open_operation`` (FR-005a) -- e.g.
+    selecting Configuration from the bar sets ``body_mode="configuration"``
+    without touching either.
+
+    Revised via `/speckit-clarify` (reopened after implementation): an open
+    operation screen is no longer a `body_mode` value. It renders as a
+    floating window (FR-004, research.md #3) layered *above* whatever the
+    background body currently shows -- entirely independent of
+    `body_mode`, which keeps showing the tree/About/Help/Configuration (or
+    nothing) underneath exactly as if no operation were open. Whether the
+    floating window itself is open is `SessionUI.open_operation is not
+    None`, unchanged.
     """
 
-    body_mode: Literal["tree", "drilling", "milling", "configuration", "about", "help"] | None = (
-        None
-    )
+    body_mode: Literal["tree", "configuration", "about", "help"] | None = None
     bar_selected: int = 0
     tree_selected: int = 0
 
 
 def _render_body(ui: SessionUI, view: _ViewState, display_locale: str) -> StyleAndTextTuples:
-    """Dispatch on ``view.body_mode`` for every body *except* an open
-    operation screen -- that one is a split-pane (left+right), not a
-    single-pane body, and is rendered separately by ``build_app``'s
-    ``DynamicContainer`` (see its own docstring)."""
+    """Dispatch on ``view.body_mode`` -- the *background* body, always
+    rendered whether or not an operation screen happens to also be open
+    (FR-005a, revision): that one is a floating window layered above this,
+    not a `body_mode` value (``build_app``'s ``operation_window``/``Float``,
+    research.md #3)."""
 
     from mfgparams.console.tui import machining_menu
     from mfgparams.console.tui.screens.about import render_about
@@ -251,11 +248,11 @@ def _render_body(ui: SessionUI, view: _ViewState, display_locale: str) -> StyleA
     return [("class:hint", "Select Machining, Configuration, About, or Help.")]
 
 
-def _open_milling(
-    ui: SessionUI, view: _ViewState, materials_config_path: str | None, display_locale: str
-) -> None:
+def _open_milling(ui: SessionUI, materials_config_path: str | None, display_locale: str) -> None:
     """Opens with whichever sub-operation's state was last active
-    (defaulting to End Milling, FR-009a)."""
+    (defaulting to End Milling, FR-009a). No longer touches `_ViewState`
+    (revision): the floating window's presence is `SessionUI.open_operation`
+    alone, independent of what the background body shows (FR-005a)."""
 
     from mfgparams.console.tui.screens import milling, split_pane
 
@@ -264,33 +261,30 @@ def _open_milling(
         operation="milling", session_state=state, selected_field=FieldId.UNIT_SYSTEM
     )
     ui.open_operation = screen
-    view.body_mode = "milling"
     rows = milling.rows_for(ui, screen, materials_config_path, ui.locale, display_locale)
     split_pane.sync_buffer(rows, screen)
 
 
 def _open_drilling(
-    ui: SessionUI,
-    *,
-    selected_field: FieldId,
-    materials_config_path: str | None,
-    display_locale: str,
+    ui: SessionUI, materials_config_path: str | None, display_locale: str
 ) -> OperationScreen:
     """Reuses the existing ``OperationScreen`` if Drilling is already open
-    (FR-012 carryover -- re-entering must not discard it), only replacing
-    ``selected_field`` so the tree's tool-selection shortcut (FR-005a)
-    actually lands focus on that field rather than always resetting to the
-    first one."""
+    (FR-012 carryover -- re-entering must not discard it). Opens on Unit
+    system by default, exactly like Milling (FR-009's identical-pattern
+    requirement) -- revised via `/speckit-clarify`: the tree no longer has
+    a tool-selection shortcut to land a *different* default field on
+    (FR-003 retired)."""
 
     from mfgparams.console.tui.screens import drilling, split_pane
 
     existing = ui.open_operation
     if existing is not None and existing.operation == "drilling":
         screen = existing
-        screen.selected_field = selected_field
     else:
         screen = OperationScreen(
-            operation="drilling", session_state=ui.drilling_state, selected_field=selected_field
+            operation="drilling",
+            session_state=ui.drilling_state,
+            selected_field=FieldId.UNIT_SYSTEM,
         )
         ui.open_operation = screen
     rows = drilling.rows_for(screen, materials_config_path, ui.locale, display_locale)
@@ -341,9 +335,18 @@ def build_app(  # noqa: C901
     from prompt_toolkit.filters import Condition
     from prompt_toolkit.key_binding import KeyBindings
     from prompt_toolkit.keys import Keys
-    from prompt_toolkit.layout import DynamicContainer, HSplit, Layout, VSplit, Window
+    from prompt_toolkit.layout import (
+        ConditionalContainer,
+        Float,
+        FloatContainer,
+        HSplit,
+        Layout,
+        VSplit,
+        Window,
+    )
     from prompt_toolkit.layout.controls import FormattedTextControl
     from prompt_toolkit.styles import Style
+    from prompt_toolkit.widgets import Frame, Shadow
 
     from mfgparams.console.i18n import translate
     from mfgparams.console.tui import forms, machining_menu
@@ -372,6 +375,17 @@ def build_app(  # noqa: C901
     def on_bar() -> bool:
         return app.layout.has_focus(bar_control)
 
+    def on_pane() -> bool:
+        """Whether the floating operation window's left pane specifically
+        has focus -- distinct from `on_bar()`'s negation, since
+        `_ViewState.body_mode` can independently be `"tree"` *while* an
+        operation is open (the float doesn't touch it, revision), so
+        `not on_bar()` alone can no longer tell the tree and the float
+        apart the way it could when they were mutually exclusive
+        `body_mode` values."""
+
+        return app.layout.has_focus(left_control)
+
     def _current_tree_row_count() -> int:
         return len(machining_menu.tree_rows(ui.tree))
 
@@ -397,7 +411,7 @@ def build_app(  # noqa: C901
             op,
             translate(ui.locale, title_key),
             ui.locale,
-            focused=not on_bar(),
+            focused=on_pane(),
         )
 
     def _calculate_current_operation() -> CalculationResult:
@@ -422,20 +436,46 @@ def build_app(  # noqa: C901
     left_control = FormattedTextControl(_render_left_pane, focusable=True)
     right_control = FormattedTextControl(_render_right_pane, focusable=False)
 
-    def _current_body():
-        if view.body_mode in ("drilling", "milling") and ui.open_operation is not None:
-            return VSplit(
-                [
-                    Window(content=left_control, wrap_lines=True),
-                    Window(width=1, char="│"),
-                    # FR-018: prompt-toolkit's own `Window` default is
-                    # `wrap_lines=False` -- without this, a result line
-                    # longer than the pane's width would overflow/truncate
-                    # instead of wrapping.
-                    Window(content=right_control, wrap_lines=True),
-                ]
+    #: FR-004 (revised via `/speckit-clarify`, reopened after implementation):
+    #: the operation screen renders as a centered, bordered, shadowed
+    #: floating window (research.md #3's `FloatContainer`/`Float`
+    #: construction, matching PR #94's existing dialog styling) -- not an
+    #: embedded pane replacing the background body. `ConditionalContainer`
+    #: keeps a single `Float` permanently registered (no runtime mutation of
+    #: `FloatContainer.floats`, consistent with every other widget here
+    #: being a pure function of state recomputed each render) and hides it
+    #: -- occupying no screen space -- whenever nothing is open.
+    operation_window = Frame(
+        body=VSplit(
+            [
+                Window(content=left_control, wrap_lines=True),
+                Window(width=1, char="│"),
+                # FR-018: prompt-toolkit's own `Window` default is
+                # `wrap_lines=False` -- without this, a result line longer
+                # than the pane's width would overflow/truncate instead of
+                # wrapping.
+                Window(content=right_control, wrap_lines=True),
+            ]
+        ),
+    )
+
+    root = FloatContainer(
+        content=HSplit(
+            [
+                Window(content=bar_control, height=1),
+                Window(height=1, char="─"),
+                Window(content=body_control, wrap_lines=True),
+            ]
+        ),
+        floats=[
+            Float(
+                content=ConditionalContainer(
+                    content=Shadow(operation_window),
+                    filter=Condition(lambda: ui.open_operation is not None),
+                )
             )
-        return Window(content=body_control, wrap_lines=True)
+        ],
+    )
 
     def _activate_bar_entry() -> None:
         entry = bar_entries[view.bar_selected]
@@ -460,23 +500,16 @@ def build_app(  # noqa: C901
             app.layout.focus(body_control)
 
     def _activate_tree_row() -> None:
+        """Both tree leaves open their floating window directly (FR-002/
+        FR-003 retired) -- no more toggle/shortcut action to dispatch on."""
+
         rows = machining_menu.tree_rows(ui.tree)
         row = rows[view.tree_selected]
         if row.action == "open_milling":
-            _open_milling(ui, view, materials_config_path, display_locale)
-            app.layout.focus(left_control)
-        elif row.action == "toggle_drilling":
-            ui.tree.drilling_expanded = not ui.tree.drilling_expanded
-            view.tree_selected = min(view.tree_selected, _current_tree_row_count() - 1)
-        elif row.action == "open_drilling_tool":
-            _open_drilling(
-                ui,
-                selected_field=FieldId.TOOL,
-                materials_config_path=materials_config_path,
-                display_locale=display_locale,
-            )
-            view.body_mode = "drilling"
-            app.layout.focus(left_control)
+            _open_milling(ui, materials_config_path, display_locale)
+        else:
+            _open_drilling(ui, materials_config_path, display_locale)
+        app.layout.focus(left_control)
 
     bindings = KeyBindings()
 
@@ -520,7 +553,9 @@ def build_app(  # noqa: C901
 
         bindings.add(mnemonic, filter=Condition(on_bar))(_bar_jump)
 
-    tree_focused = Condition(lambda: not on_bar() and view.body_mode == "tree")
+    tree_focused = Condition(
+        lambda: view.body_mode == "tree" and app.layout.has_focus(body_control)
+    )
 
     @bindings.add("up", filter=tree_focused)
     @bindings.add("k", filter=tree_focused)
@@ -539,11 +574,12 @@ def build_app(  # noqa: C901
     @bindings.add(Keys.Any, filter=tree_focused)
     def _tree_mnemonic(event) -> None:
         """Contract §4: tree leaves get mnemonics too, same as the bar's
-        own entries -- but unlike the bar's fixed entry set, the tree's row
-        set changes at runtime (`drilling_expanded`), so this can't be a
-        fixed per-character binding assigned once at startup the way the
-        bar's are; it re-derives the current rows'/mnemonics' mapping on
-        every keypress and only acts if the pressed key matches one."""
+        own entries -- but unlike the bar's fixed entry set, this can't be
+        a fixed per-character binding assigned once at startup the way the
+        bar's are (the tree's own rows are recomputed fresh every render,
+        matching every other row-based widget in this module); it
+        re-derives the current rows'/mnemonics' mapping on every keypress
+        and only acts if the pressed key matches one."""
 
         rows = machining_menu.tree_rows(ui.tree)
         mnemonics = machining_menu.tree_mnemonics(rows, ui.locale)
@@ -554,23 +590,58 @@ def build_app(  # noqa: C901
                 _activate_tree_row()
                 return
 
-    pane_focused = Condition(
-        lambda: not on_bar()
-        and view.body_mode in ("drilling", "milling")
-        and ui.open_operation is not None
-    )
+    pane_focused = Condition(lambda: ui.open_operation is not None and on_pane())
+
+    def _up_down(direction: int) -> None:
+        """Up/Down: fully consumed by an expanded `RadioRow`'s own option
+        navigation (`radio_navigate`, research.md #4 -- clamped at the
+        first/last option, never escaping to an adjacent field, matching a
+        real `RadioList`'s own behavior); otherwise (a `NumberRow`, or
+        nothing selected) moves between fields instead, exactly as before
+        this revision. Tab/Shift-Tab (below) is the unconditional way to
+        move between fields regardless of the current row's type."""
+
+        assert ui.open_operation is not None
+        rows = _current_pane_rows()
+        row = split_pane.selected_row(rows, ui.open_operation)
+        if isinstance(row, split_pane.RadioRow):
+            split_pane.radio_navigate(rows, ui.open_operation, direction)
+        else:
+            split_pane.move_selection(rows, ui.open_operation, direction)
 
     @bindings.add("up", filter=pane_focused)
     @bindings.add("k", filter=pane_focused)
     def _pane_up(event) -> None:
-        assert ui.open_operation is not None
-        split_pane.move_selection(_current_pane_rows(), ui.open_operation, -1)
+        _up_down(-1)
 
     @bindings.add("down", filter=pane_focused)
     @bindings.add("j", filter=pane_focused)
     def _pane_down(event) -> None:
+        _up_down(1)
+
+    @bindings.add("tab", filter=pane_focused)
+    def _pane_tab(event) -> None:
+        """Unconditionally moves to the next field, regardless of the
+        current row's type -- the only way to leave an expanded `RadioRow`
+        once Up/Down alone can't (contract §4)."""
+
         assert ui.open_operation is not None
         split_pane.move_selection(_current_pane_rows(), ui.open_operation, 1)
+
+    @bindings.add("s-tab", filter=pane_focused)
+    def _pane_shift_tab(event) -> None:
+        assert ui.open_operation is not None
+        split_pane.move_selection(_current_pane_rows(), ui.open_operation, -1)
+
+    @bindings.add("enter", filter=pane_focused)
+    @bindings.add(" ", filter=pane_focused)
+    def _pane_commit(event) -> None:
+        """Enter/Space commits the highlighted option of an expanded
+        `RadioRow` (research.md #4, `RadioList`'s own binding) -- a no-op
+        on a `NumberRow` (`radio_commit`'s own guard)."""
+
+        assert ui.open_operation is not None
+        split_pane.radio_commit(_current_pane_rows(), ui.open_operation)
 
     @bindings.add("left", filter=pane_focused)
     def _pane_left(event) -> None:
@@ -599,13 +670,6 @@ def build_app(  # noqa: C901
         if data and (data.isdigit() or data in ".-"):
             split_pane.edit_selected(_current_pane_rows(), ui.open_operation, data)
 
-    root = HSplit(
-        [
-            Window(content=bar_control, height=1),
-            Window(height=1, char="─"),
-            DynamicContainer(_current_body),
-        ]
-    )
     app: Application[None] = Application(
         layout=Layout(root, focused_element=bar_control),
         key_bindings=bindings,

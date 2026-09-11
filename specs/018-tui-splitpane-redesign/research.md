@@ -157,12 +157,21 @@ changing on selection is expected, native behavior for this feature, not new.
 **Consequence for the keyboard contract (§4)**: `RadioList`'s own native bindings are Up/Down to
 move the highlighted option and Enter/Space to select it — not Left/Right cycling. While a radio
 field is focused and expanded, Up/Down navigates its options (replacing the shipped
-implementation's Left/Right-cycles-the-value behavior for radio fields specifically); Left/Right
-continue to nudge a focused *numeric* field by a step (FR-017, unchanged). Moving to a different
-left-pane field (collapsing the current one back to its summary line) uses the same Up/Down or
-Tab navigation already used to move between fields today — at the first/last option of an open
-`RadioList`, Up/Down continues past it to the previous/next field rather than stopping, so a
-single consistent key still moves both within and between fields.
+implementation's Left/Right-cycles-the-value behavior for radio fields specifically), **clamped**
+at the first/last option — a real `RadioList` fully consumes Up/Down for its own navigation and
+never escapes to a sibling widget on it. Left/Right continue to nudge a focused *numeric* field by
+a step (FR-017, unchanged). Moving to a different left-pane field is **Tab/Shift-Tab**'s job
+instead, unconditionally, regardless of the current row's type — not an Up/Down boundary
+fall-through.
+
+*(Revised during implementation, tasks.md T049/Phase 8): an earlier draft of this decision had
+Up/Down "continue past the first/last option to the previous/next field," reasoning that a single
+key should move both within and between fields. Building against it exposed the real cost: moving
+past a multi-option field the user doesn't want to change (Material's 6-7 bundled entries) would
+take one keystroke per option just to skip it, which is not how a real `RadioList`-based form
+behaves and is not credible as a match for the prototype's own UX. Tab/Shift-Tab is prompt-toolkit's
+own standard `focus_next`/`focus_previous` convention (already used by 017's own dialogs via
+`load_key_bindings()`), so reusing it here needs no new interaction concept, just a new binding.*
 
 **Alternatives considered**:
 - **Show every option of every radio field simultaneously, all the time**: rejected — blows the
@@ -173,6 +182,8 @@ single consistent key still moves both within and between fields.
   because it already has correct, tested Up/Down/Enter/Space handling; re-wiring it to ignore that
   and respond to Left/Right instead reintroduces custom key-binding code for behavior the widget
   already provides, undermining the point of adopting it.
+- **Up/Down falls through to the next/previous field at the first/last option** (the original
+  decision here): rejected on implementation — see the revision note above.
 
 ## Consolidated decisions for Phase 1
 
@@ -186,5 +197,5 @@ single consistent key still moves both within and between fields.
 | Contract test file | Rewrite `tests/contract/test_console_tui_contract.py` in place against the new `contracts/console-tui-splitpane-contract.md` (017's contract described the now-replaced dialog-chain menu structure; no value in a second, differently-named contract test file for the same subsystem). |
 | Operation screen container | `prompt_toolkit.layout.FloatContainer` wrapping the existing bar+tree `HSplit`, with a `Float` (holding a bordered `Frame`) added/removed as `SessionUI.open_operation` is set/cleared (research.md #3). |
 | Radio field rendering | `prompt_toolkit.widgets.RadioList` for the currently-focused radio field only; every other radio field on the same screen shows a one-line `Label: value` summary (research.md #4, accordion pattern) — not every option of every field simultaneously. |
-| Radio field keyboard contract | Up/Down navigates an open `RadioList`'s options (its own native binding); Left/Right continues to nudge a focused numeric field only (FR-017, unchanged) — this revises contract §4's earlier "radio fields cycle on Left/Right" line, which described the now-superseded inline-summary renderer (research.md #4). |
+| Radio field keyboard contract | Up/Down navigates an open `RadioList`'s options (its own native binding), clamped at the boundaries; Left/Right continues to nudge a focused numeric field only (FR-017, unchanged); **Tab/Shift-Tab** moves between fields unconditionally, regardless of type — this revises contract §4's earlier "radio fields cycle on Left/Right" line, which described the now-superseded inline-summary renderer, and supersedes this feature's own first "Up/Down falls through at the boundary" draft (research.md #4). |
 | Machining tree | Flattens: `MachiningTree` loses its `drilling_expanded` field entirely (Drilling has no tree-level sub-expansion any more, FR-003 retired) — `expanded` is now its only field. |

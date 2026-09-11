@@ -24,30 +24,27 @@ from mfgparams.console.tui.screens.configuration import render_configuration
 from mfgparams.console.tui.screens.help import render_help
 
 
-def test_tree_rows_are_milling_then_drilling_when_collapsed():
+def test_tree_rows_are_milling_then_drilling_both_flat_leaves():
+    """Revised (tasks.md Phase 8): Drilling's tree-level tool-selection
+    shortcut is retired (FR-003) -- both rows open their floating window
+    directly, and the row list no longer depends on any tree sub-state."""
+
     rows = machining_menu.tree_rows(MachiningTree())
-    assert [row.action for row in rows] == ["open_milling", "toggle_drilling"]
-
-
-def test_tree_rows_include_the_tool_shortcut_when_drilling_expanded():
-    tree = MachiningTree(expanded=True, drilling_expanded=True)
-    rows = machining_menu.tree_rows(tree)
-    assert [row.action for row in rows] == ["open_milling", "toggle_drilling", "open_drilling_tool"]
+    assert [row.action for row in rows] == ["open_milling", "open_drilling"]
 
 
 def test_tree_mnemonics_are_pairwise_unique():
-    rows = machining_menu.tree_rows(MachiningTree(expanded=True, drilling_expanded=True))
+    rows = machining_menu.tree_rows(MachiningTree(expanded=True))
     mnemonics = machining_menu.tree_mnemonics(rows, "en")
     present = [m for m in mnemonics if m is not None]
     assert len(present) == len(set(present))
 
 
 def test_tree_render_includes_every_row_label():
-    tree = MachiningTree(expanded=True, drilling_expanded=True)
+    tree = MachiningTree(expanded=True)
     text = "".join(t for _, t in machining_menu.render_tree(tree, 0, "en", focused=True))
     assert "Milling" in text
     assert "Drilling" in text
-    assert "Tool" in text
 
 
 def test_about_screen_text_includes_the_real_version():

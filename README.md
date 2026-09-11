@@ -193,23 +193,29 @@ interface.) A persistent menu bar stays visible across the top of the
 screen: **Exit**, **Machining**, **Configuration**, **About**, **Help** —
 navigate with the arrow keys and Enter, or an item's underlined keyboard
 shortcut. Choosing **Machining** expands a tree in place, showing
-**Milling** and **Drilling**; selecting **Drilling** further expands a
-tool-selection shortcut into the same field its own screen shows.
+**Milling** and **Drilling** as flat leaves — selecting either opens its
+operation screen directly, with no further tree-level expansion.
 
-Opening Drilling or Milling shows a split-pane screen: the left pane lists
-every input for that operation at once — unit system, calculation mode,
-material type/material, tool, and the operation's geometry fields (plus,
-for Milling, the end-milling/face-milling choice) — all simultaneously
-visible and editable, with no separate screen per field. The right pane
-shows the live result, refreshing automatically as you fill in or change an
-input. A numeric field becomes editable the instant you select it (typing a
-digit edits it immediately), and Left/Right nudges it by a small step;
-radio fields (unit system, mode, material type, material, tool,
-sub-operation) cycle their options on Left/Right.
+Opening Drilling or Milling shows a centered, bordered floating window over
+the menu bar and tree (which stay visible underneath, untouched): the left
+pane lists every input for that operation at once — unit system,
+calculation mode, material type/material, tool, and the operation's
+geometry fields (plus, for Milling, the end-milling/face-milling choice) —
+all simultaneously visible and editable, with no separate screen per field.
+The right pane shows the live result, refreshing automatically as you fill
+in or change an input. A numeric field becomes editable the instant you
+select it (typing a digit edits it immediately), and Left/Right nudges it
+by a small step. A radio field (unit system, mode, material type, material,
+tool, sub-operation) expands into a vertically-stacked option list when
+selected — Up/Down highlights an option and Enter or Space commits it,
+clamped at the first/last option rather than spilling over into the next
+field. **Tab**/**Shift-Tab** moves to the next/previous field regardless of
+its type — the way to move on from a field without necessarily stepping
+through every one of its options first.
 
-Escape moves focus back to the menu bar without closing the open screen or
+Escape moves focus back to the menu bar without closing the open window or
 changing the tree's expand/collapse state; Escape again, from the menu bar,
-closes the screen and returns you to the menu bar/tree, so you can start
+closes the window and returns you to the menu bar/tree, so you can start
 another calculation — the same operation or a different one — without
 leaving the text GUI. Each operation remembers its own previous answers as
 defaults for the rest of the session.
@@ -338,22 +344,32 @@ chain worked (prompt-toolkit does not support a second, nested
 kinds of state stay deliberately separate:
 
 - **`SessionUI`** (`app.py`) — the session-lifetime, business-relevant state:
-  the menu bar's fixed entries, the Machining tree's expand/collapse flags
-  (`MachiningTree`), which operation screen (if any) is open
+  the menu bar's fixed entries, the Machining tree's expand/collapse flag
+  (`MachiningTree` — Milling and Drilling are flat leaves, so this is a
+  single `bool`), which operation screen (if any) is open
   (`OperationScreen`), and each operation's own remembered inputs
   (`DrillingSessionState`/`MillingSessionState`, one instance per operation —
   two for Milling, one per sub-operation — so revisiting a screen offers the
   previous answers as defaults). `tree` and `open_operation` are independent
   fields with no code path writing both from the same handler: collapsing the
-  tree never closes an open operation, and vice versa.
+  tree never closes an open operation, and vice versa — trivially so, since
+  the operation screen renders as a floating window (a
+  `prompt_toolkit.layout.FloatContainer`/`Float` layered above the
+  bar+tree, not embedded inside their own container) that isn't part of the
+  tree's container at all.
 - **`_ViewState`** (`app.py`, module-private) — pure UI-presentation state
-  that does *not* survive a body change on purpose: which body is currently
-  shown (`body_mode`) and which row is highlighted within it. Kept separate
+  that does *not* survive a body change on purpose: which *background* body
+  is currently shown (`body_mode` — the tree, About, Help, or Configuration;
+  an open operation is not one of its values, since the floating window is
+  independent of it) and which row is highlighted within it. Kept separate
   from `SessionUI` so, for example, selecting Configuration from the bar
   never touches the Machining tree's own state.
-- **`OperationScreen.field_buffer`** — the raw, possibly mid-typed text of
-  whichever numeric field is currently selected in a split-pane screen (see
-  below), distinct from that field's last-committed value.
+- **`OperationScreen.field_buffer`** — the raw, not-yet-committed state of
+  whichever field is currently selected in a split-pane screen (see below):
+  mid-typed text for a numeric field, or the highlighted-but-not-yet-
+  confirmed option for an expanded radio field (Up/Down moves it; Enter or
+  Space commits it) — distinct from that field's last-committed value
+  either way.
 
 Four widgets render as pure functions of this state — `menu.render_menu_bar`,
 `machining_menu.render_tree`, `screens.about.render_about`,
@@ -365,8 +381,9 @@ are built the same way but share one more layer,
 row's presence or options can depend on an earlier row's committed value —
 e.g. the specific-material row only appears once a material type is chosen
 — so the list is rebuilt every render, not cached), and `split_pane.py`
-owns the shared navigation/instant-edit/nudge logic and the right pane's
-three-state result machine (placeholder while incomplete; a result once
+owns the shared navigation/instant-edit/nudge/radio-list logic and the right
+pane's three-state result machine (placeholder while incomplete; a result
+once
 every required field validates; an error either from `calculate()` itself
 rejecting a complete-but-invalid combination, or from text that never
 parses as a number at all). Deliberately, this module does *not*

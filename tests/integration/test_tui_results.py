@@ -158,29 +158,45 @@ def test_milling_shares_the_same_three_state_contract():
     assert translate("en", "tui.result.title") in text
 
 
-def test_the_left_and_right_pane_windows_wrap_long_lines():
+def test_content_windows_in_app_py_set_wrap_lines_true():
     """FR-018: prompt-toolkit's own `Window` defaults to `wrap_lines=False`
     -- without explicitly overriding it, a result line wider than the pane
-    would overflow/truncate instead of wrapping. Checked against the real,
-    built `Layout` (not just re-reading the source), since this is exactly
-    the kind of default that's easy to silently lose in a future refactor."""
+    would overflow/truncate instead of wrapping.
+
+    Checked via source inspection rather than a live
+    `Layout.find_all_windows()` count (revision, tasks.md T049): the
+    floating operation window (research.md #3) makes the *count* of
+    wrapping windows in the tree sensitive to incidental structural detail
+    unrelated to this guarantee -- `Frame`'s own title `Label` wraps by
+    its own default, and the background body window now stays permanently
+    present (and wrapping) alongside the float rather than being swapped
+    out while one is open. An AST check of `Window(content=..., ...)`
+    call sites stays precise regardless of how many *other* windows the
+    layout happens to contain."""
+
+    import ast
+    import inspect
 
     from mfgparams.console.tui import app as app_mod
 
-    application, ui, view = app_mod.build_app(None, "en", "en")
-    ui.open_operation = OperationScreen(
-        operation="drilling",
-        session_state=DrillingSessionState(),
-        selected_field=FieldId.UNIT_SYSTEM,
-    )
-    view.body_mode = "drilling"
+    source = inspect.getsource(app_mod)
+    tree = ast.parse(source)
+    missing = []
+    for node in ast.walk(tree):
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "Window"
+        ):
+            continue
+        kwargs = {kw.arg: kw.value for kw in node.keywords}
+        if "content" not in kwargs:
+            continue
+        content_repr = ast.dump(kwargs["content"])
+        if "bar_control" in content_repr:
+            continue  # the bar is intentionally single-line; it never wraps.
+        wrap = kwargs.get("wrap_lines")
+        if not (isinstance(wrap, ast.Constant) and wrap.value is True):
+            missing.append(content_repr)
 
-    def _wraps(window) -> bool:
-        wrap = window.wrap_lines
-        return bool(wrap()) if callable(wrap) else bool(wrap)
-
-    wrapping_windows = [w for w in application.layout.find_all_windows() if _wraps(w)]
-    # Exactly the left and right pane content windows -- not the bar or the
-    # bar/body separator, which render fixed decorative content that never
-    # needs wrapping.
-    assert len(wrapping_windows) == 2
+    assert not missing, f"Window(content=...) missing wrap_lines=True: {missing}"

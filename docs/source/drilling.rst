@@ -17,9 +17,10 @@ all three reach the same interface.) A persistent menu bar stays visible at
 the top of the screen: **Exit**, **Machining**, **Configuration**, **About**,
 **Help** — each reachable with the arrow keys and Enter, or its underlined
 keyboard shortcut. Selecting **Machining** expands a tree in place, showing
-**Milling** and **Drilling**; selecting **Drilling** further expands a
-tool-selection shortcut. Opening Drilling — either that shortcut, or the
-Drilling leaf itself — shows a two-pane screen: the left pane lists every
+**Milling** and **Drilling** as flat leaves; selecting **Drilling** opens
+its operation screen directly, with no further tree-level expansion. It
+appears as a centered, bordered floating window over the menu bar and tree
+(which stay visible underneath, untouched): the left pane lists every
 drilling input at once (unit system, calculation mode, material type,
 material, drilling tool, drill diameter, hole depth, available power), all
 simultaneously visible and editable, with no separate screen per field; the
@@ -30,12 +31,16 @@ in :doc:`milling`.
 Numeric fields (drill diameter, hole depth, available power) become
 editable the instant you select them — start typing a digit and it edits
 immediately, no separate "start editing" step. Left/Right also nudges a
-selected numeric field up or down by a small step. Radio fields (unit
-system, mode, material type, material, tool) cycle through their options on
-Left/Right.
+selected numeric field up or down by a small step. A radio field (unit
+system, mode, material type, material, tool) expands into a vertically-
+stacked option list when selected — Up/Down highlights an option and Enter
+or Space commits it, clamped at the first/last option rather than spilling
+over into the next field. **Tab**/**Shift-Tab** moves to the next/previous
+field regardless of its type — the way to move on from a field without
+necessarily stepping through every one of its options first.
 
 Pressing Escape moves focus back to the menu bar without closing the open
-operation screen or changing the tree's expand/collapse state — so you can
+operation window or changing the tree's expand/collapse state — so you can
 collapse the Machining tree to see more of the screen without losing your
 place. Pressing Escape again, from the menu bar, closes the operation and
 returns to the menu bar/tree, letting you start another calculation — the

@@ -1,8 +1,21 @@
-"""Integration test: numeric-field instant-edit and Left/Right nudge
-(018-tui-splitpane-redesign FR-016/FR-017, tasks.md T016).
+"""Integration test: numeric-field instant-edit/nudge and RadioList
+navigation (018-tui-splitpane-redesign FR-016/FR-017/FR-005, tasks.md
+T016, rewritten again for the revision at tasks.md T044/Phase 8).
 
-Drives `screens.split_pane`'s edit/nudge functions directly against a real
-Drilling screen's rows -- the same functions `app.py`'s key bindings call.
+Drives `screens.split_pane`'s edit/nudge/radio functions directly against a
+real Drilling screen's rows -- the same functions `app.py`'s key bindings
+call.
+
+Revision note: radio fields no longer cycle their value on Left/Right
+(that behavior is retired, research.md #4). They now match
+`prompt_toolkit.widgets.RadioList`'s own two-step interaction: Up/Down
+(`radio_navigate`) moves a *highlighted* option without committing it --
+mirrored in `field_buffer`, reusing the same "not-yet-committed state of
+the selected field" role it already plays for numeric fields -- and
+Enter/Space (`radio_commit`) commits the highlighted option into
+`session_state`. Navigating away without committing leaves the field's
+previously-committed value untouched, unlike `NumberRow`'s
+commit-on-every-keystroke.
 """
 
 from __future__ import annotations
@@ -92,16 +105,73 @@ def test_nudging_at_or_below_zero_clears_the_field_rather_than_going_negative():
     assert state.diameter is None
 
 
-def test_left_right_cycles_a_radio_field_rather_than_nudging():
+def test_left_right_does_not_touch_a_radio_field():
+    """research.md #4: Left/Right no longer cycles a radio field's value
+    -- that's now Up/Down's job (`radio_navigate`), and only once
+    committed (`radio_commit`)."""
+
     screen = _screen()
     _goto(screen, FieldId.UNIT_SYSTEM)
     split_pane.nudge_selected(_rows(screen), screen, 1)
     state = screen.session_state
     assert isinstance(state, DrillingSessionState)
+    assert state.unit_system.value == "metric"  # unchanged -- Left/Right is a no-op here
+
+
+def test_up_down_highlights_a_radio_option_without_committing_it():
+    """`radio_navigate` moves the highlighted option (mirrored in
+    `field_buffer`) but does not touch `session_state` until
+    `radio_commit`."""
+
+    screen = _screen()
+    _goto(screen, FieldId.UNIT_SYSTEM)
+    assert screen.field_buffer == "metric"  # starts highlighted on the current value
+
+    split_pane.radio_navigate(_rows(screen), screen, 1)
+    assert screen.field_buffer == "imperial"
+    state = screen.session_state
+    assert isinstance(state, DrillingSessionState)
+    assert state.unit_system.value == "metric"  # still uncommitted
+
+
+def test_radio_navigate_clamps_at_the_boundary_rather_than_escaping_the_field():
+    """Up/Down past the first/last option clamps, matching a real
+    `RadioList`'s own behavior -- it never escapes to an adjacent field on
+    further Up/Down (that's Tab/Shift-Tab's job instead, research.md #4)."""
+
+    screen = _screen()
+    _goto(screen, FieldId.UNIT_SYSTEM)
+    # unit_system has exactly two options (metric, imperial); starting on
+    # "metric" (index 0), moving backward is already at the boundary.
+    split_pane.radio_navigate(_rows(screen), screen, -1)
+    assert screen.field_buffer == "metric"  # clamped, unchanged
+
+    split_pane.radio_navigate(_rows(screen), screen, 1)
+    assert screen.field_buffer == "imperial"
+    split_pane.radio_navigate(_rows(screen), screen, 1)  # past the last option
+    assert screen.field_buffer == "imperial"  # clamped, not wrapped back to "metric"
+
+
+def test_enter_or_space_commits_the_highlighted_radio_option():
+    screen = _screen()
+    _goto(screen, FieldId.UNIT_SYSTEM)
+    split_pane.radio_navigate(_rows(screen), screen, 1)
+    split_pane.radio_commit(_rows(screen), screen)
+
+    state = screen.session_state
+    assert isinstance(state, DrillingSessionState)
     assert state.unit_system.value == "imperial"
 
-    split_pane.nudge_selected(_rows(screen), screen, 1)
-    assert state.unit_system.value == "metric"  # wraps
+
+def test_navigating_away_without_committing_leaves_the_radio_field_unchanged():
+    screen = _screen()
+    _goto(screen, FieldId.UNIT_SYSTEM)
+    split_pane.radio_navigate(_rows(screen), screen, 1)  # highlight "imperial", don't commit
+    _goto(screen, FieldId.MODE)  # move away without pressing Enter/Space
+
+    state = screen.session_state
+    assert isinstance(state, DrillingSessionState)
+    assert state.unit_system.value == "metric"  # untouched
 
 
 def test_selecting_a_field_syncs_the_buffer_to_its_current_value():

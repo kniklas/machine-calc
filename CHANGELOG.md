@@ -21,9 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and support a Left/Right nudge in addition to typing a value outright;
   radio fields (unit system, mode, material type, material, tool) render as
   a vertically-stacked, arrow-highlighted list when focused, navigated with
-  Up/Down and committed with Enter/Space. The Configuration screen now
-  covers all three tool registries (drilling, end-mill, face-mill), not
-  just drilling's.
+  Up/Down and committed with Enter/Space; Tab/Shift-Tab moves to the
+  next/previous left-pane field regardless of type. The Configuration
+  screen now covers all three tool registries (drilling, end-mill,
+  face-mill), not just drilling's.
 - The minimum supported terminal size is raised from 25×80 to **30×80** —
   the persistent menu bar and tree, shown alongside an operation screen's two
   panes, no longer reliably fit the previous floor.

@@ -87,9 +87,11 @@ the same contract test.
 - A radio left-pane field renders as a `RadioList` (FR-005, research.md #4) when it has focus, and
   a one-line summary otherwise — only one radio field is ever expanded at a time. While expanded,
   Up/Down navigates its options and Enter/Space commits the highlighted one (the widget's own
-  native bindings); Up/Down past the first/last option continues on to the previous/next left-pane
-  field, collapsing the current one back to its summary line, so the same keys move both within
-  and between fields.
+  native bindings), clamped at the first/last option — a real `RadioList` fully consumes Up/Down
+  for its own navigation and never escapes to a sibling widget on it. **Tab/Shift-Tab moves to the
+  next/previous left-pane field unconditionally**, regardless of the current field's type,
+  collapsing an expanded radio back to its summary line — the only way to leave one once Up/Down
+  alone can't.
 - A "return to the main menu" action is available from any open operation screen (FR-008), and does
   not require the tree to be collapsed first (FR-005a).
 
@@ -98,13 +100,17 @@ the same contract test.
 - Every new message key introduced by this feature is namespaced `tui.*`, the same namespace 017
   already established — no new namespace needed, and no `tui.*` key from 017 is retired solely by
   this feature (menu bar/tree/pane labels reuse or extend that catalog; only the widgets rendering
-  them change). **Named exception**: `tui.configuration.select_material_type` ("View materials for
-  type:") is retired — it labeled 017's Configuration dialog's per-type selection prompt, and
-  FR-014's view-only resolution replaced that whole interactive flow with a single static listing
-  covering all three registries (FR-015), so the prompt it labeled no longer exists anywhere for it
-  to label. This is the one case in this feature where the widget rendering a key is removed
-  entirely, not just changed — the key's *continued existence with no consumer* would itself be
-  Principle VIII drift (an orphaned catalog entry), not a way of honoring this rule.
+  them change). **Named exceptions** (each a case where the widget rendering a key is removed
+  entirely, not just changed, so the key's *continued existence with no consumer* would itself be
+  Principle VIII drift — an orphaned catalog entry — not a way of honoring this rule):
+  - `tui.configuration.select_material_type` ("View materials for type:") is retired — it labeled
+    017's Configuration dialog's per-type selection prompt, and FR-014's view-only resolution
+    replaced that whole interactive flow with a single static listing covering all three registries
+    (FR-015), so the prompt it labeled no longer exists anywhere for it to label.
+  - `tui.machining_menu.drilling_tool` ("Tool") is retired — it labeled the Machining tree's
+    Drilling tool-selection shortcut row, and FR-003's retirement (this feature's own
+    `/speckit-clarify` revision, reopened after implementation) removes that row entirely; Drilling
+    is now a flat leaf like Milling, with no further tree-level expansion for the key to label.
 - `tests/static/test_console_catalogue_ownership.py` already scans every non-`locales` file under
   `mfgparams/console/` (017's generalization) — no further generalization needed; new files this
   feature adds under `tui/` are covered automatically.

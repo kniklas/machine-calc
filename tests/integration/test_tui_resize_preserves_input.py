@@ -32,16 +32,18 @@ from mfgparams.i18n import get_raw_locale
 _OPEN_DRILLING_AND_SELECT_DIAMETER = [
     "m",  # bar mnemonic: Machining
     "j",  # tree: Milling -> Drilling
-    "\r",  # toggle Drilling's tool-selection shortcut open
-    "j",  # tree: Drilling -> Tool
-    "\r",  # opens Drilling, selected on the Tool field
-    "k",  # up to Material type
-    "\x1b[C",  # first material type
-    "j",
-    "\x1b[C",  # first material
-    "j",
-    "\x1b[C",  # first tool
-    "j",  # down to Diameter
+    "\r",  # opens Drilling directly, selected on Unit system (revision:
+    # FR-003's tree-level tool-selection shortcut is retired)
+    "\t",
+    "\t",  # Tab to Material type -- Up/Down/j/k are fully consumed by an
+    # expanded radio's own options (research.md #4), so Tab moves
+    # field-to-field regardless of type instead.
+    "\r",  # commits the highlighted (first) material type
+    "\t",
+    "\r",  # commits the highlighted (first) material
+    "\t",
+    "\r",  # commits the highlighted (first) tool
+    "\t",  # Tab to Diameter
 ]
 
 

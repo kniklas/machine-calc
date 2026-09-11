@@ -41,7 +41,6 @@ def test_expanding_the_tree_does_not_touch_an_open_operation():
     ui.open_operation = screen
 
     ui.tree.toggle_machining()
-    ui.tree.toggle_drilling()
 
     assert ui.open_operation is screen
     assert ui.open_operation.selected_field is FieldId.UNIT_SYSTEM
@@ -49,7 +48,10 @@ def test_expanding_the_tree_does_not_touch_an_open_operation():
 
 def test_collapsing_the_tree_does_not_close_an_open_operation():
     """The specific regression FR-005a exists to guard against: a tree
-    collapse must never be the thing that closes an operation screen."""
+    collapse must never be the thing that closes an operation screen. Now
+    trivially true (research.md #3) -- the floating window isn't part of
+    the tree's own container at all -- but still exercised at the data
+    level here."""
 
     ui = SessionUI(menu_bar=_menu_bar())
     screen = OperationScreen(
@@ -58,7 +60,6 @@ def test_collapsing_the_tree_does_not_close_an_open_operation():
         selected_field=FieldId.TOOL,
     )
     ui.tree.toggle_machining()
-    ui.tree.toggle_drilling()
     ui.open_operation = screen
 
     ui.tree.toggle_machining()  # collapses the whole tree
@@ -74,7 +75,6 @@ def test_returning_to_the_menu_does_not_touch_the_tree_state():
 
     ui = SessionUI(menu_bar=_menu_bar())
     ui.tree.toggle_machining()
-    ui.tree.toggle_drilling()
     ui.open_operation = OperationScreen(
         operation="drilling",
         session_state=ui.drilling_state,
@@ -85,7 +85,6 @@ def test_returning_to_the_menu_does_not_touch_the_tree_state():
 
     assert ui.open_operation is None
     assert ui.tree.expanded is True
-    assert ui.tree.drilling_expanded is True
 
 
 def test_drilling_state_and_milling_states_persist_independently_of_open_operation():

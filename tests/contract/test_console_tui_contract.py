@@ -7,6 +7,11 @@ new contract (research.md's consolidated decisions table) -- 017's version
 tested a 4-item top-level menu and a separate full-screen Machining
 submenu, both replaced by the persistent bar (5 items, Exit added) and the
 collapsible tree respectively.
+
+Rewritten again (revision, tasks.md T042/Phase 8): Drilling's tree-level
+tool-selection shortcut is retired (FR-003) -- the tree is now exactly two
+flat leaves, Milling and Drilling, with no further sub-expansion under
+either.
 """
 
 from __future__ import annotations
@@ -36,32 +41,25 @@ def test_menu_bar_mnemonics_are_pairwise_unique_and_complete():
     assert None not in mnemonics, "every bar entry should get a mnemonic (E/M/C/A/H)"
 
 
-def test_machining_tree_structure_when_collapsed_matches_the_contract():
-    """§2's invariant: Milling and Drilling are Machining's only children."""
+def test_machining_tree_structure_matches_the_contract():
+    """§2's invariant: Milling and Drilling are Machining's only children,
+    both flat leaves -- there is no further sub-expansion under either
+    (FR-003 retired via `/speckit-clarify`, reopened after implementation),
+    so the tree's content no longer depends on any state beyond whether
+    it's shown at all."""
 
     rows = machining_menu.tree_rows(MachiningTree())
     labels = [translate("en", row.label_key) for row in rows]
     assert labels == ["Milling", "Drilling"]
 
 
-def test_machining_tree_structure_when_drilling_expanded_matches_the_contract():
-    """§2's invariant: Drilling's tool-selection shortcut is its only
-    further expansion -- Milling has no equivalent sub-expansion
-    (/speckit-analyze finding I1)."""
-
-    tree = MachiningTree(expanded=True, drilling_expanded=True)
-    rows = machining_menu.tree_rows(tree)
-    labels = [translate("en", row.label_key) for row in rows]
-    assert labels == ["Milling", "Drilling", "Tool"]
-
-
 def test_machining_tree_mnemonics_are_pairwise_unique():
-    tree = MachiningTree(expanded=True, drilling_expanded=True)
+    tree = MachiningTree(expanded=True)
     rows = machining_menu.tree_rows(tree)
     mnemonics = machining_menu.tree_mnemonics(rows, "en")
     non_none = [m for m in mnemonics if m is not None]
     assert len(non_none) == len(set(non_none)), f"mnemonic collision in {mnemonics}"
-    assert None not in mnemonics, "every tree row should get a mnemonic (M/D/T)"
+    assert None not in mnemonics, "every tree row should get a mnemonic (M/D)"
 
 
 def test_bar_and_tree_mnemonics_are_separate_namespaces():

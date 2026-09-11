@@ -21,6 +21,26 @@ module's only job is to call `calculate()` and display whatever `ErrorInfo`
 it returns. The one case `calculate()` cannot cover is FR-006b: text that
 never parses as a number at all, so it can never reach `calculate()` in the
 first place.
+
+**Revision (tasks.md T048/Phase 8)**: radio fields render as a
+`prompt_toolkit.widgets.RadioList`-alike -- vertically-stacked, one option
+per line, using that widget's own default markers (`(*)`/`( )`) -- for
+whichever field is currently selected; every other radio field collapses to
+a one-line summary (research.md #4's accordion pattern). This module does
+not embed an actual live `RadioList` widget instance: this codebase's whole
+`tui/` architecture (mirroring `machining_menu.py`/`menu.py`) renders every
+screen as a pure function of plain-dataclass state recomputed fresh each
+render, not a tree of stateful, incrementally-updated widget objects: a
+real `RadioList` manages its own internal selected-index state across
+renders, which doesn't fit that model without introducing long-lived
+per-field widget instances this module has nowhere consistent to cache
+between the `rows_for()` calls that rebuild the row list from scratch every
+time. `field_buffer` -- already the "not-yet-committed state of the
+selected field" for numeric fields -- is reused for radio fields' own
+highlighted-but-not-yet-committed option, matching `RadioList`'s real
+two-step Up/Down-then-Enter/Space interaction (navigating away without
+confirming leaves the field's last-committed value untouched, unlike
+`NumberRow`'s commit-on-every-keystroke).
 """
 
 from __future__ import annotations
@@ -132,12 +152,29 @@ def _format(value: float | None) -> str:
 
 def sync_buffer(rows: list[Row], screen: OperationScreen) -> None:
     """Re-syncs `field_buffer` to the currently-selected row's own current
-    text -- called whenever selection changes (including when a screen is
-    first opened), so editing always starts from what's actually on screen,
-    not a buffer left over from a previously-selected field."""
+    state -- called whenever selection changes (including when a screen is
+    first opened), so editing/navigating always starts from what's
+    actually on screen, not a buffer left over from a previously-selected
+    field.
+
+    For a `NumberRow`, that's the formatted committed value (FR-016). For
+    a `RadioRow`, `field_buffer` becomes the *highlighted* option --
+    starting on the committed value if one exists, or the first option
+    otherwise (matching `RadioList`'s own default-to-index-0 behavior) --
+    not yet committed to `session_state` until `radio_commit`."""
 
     row = selected_row(rows, screen)
-    screen.field_buffer = _format(row.value) if isinstance(row, NumberRow) else ""
+    if isinstance(row, NumberRow):
+        screen.field_buffer = _format(row.value)
+    elif isinstance(row, RadioRow):
+        if row.value is not None:
+            screen.field_buffer = row.value
+        elif row.options:
+            screen.field_buffer = row.options[0][0]
+        else:
+            screen.field_buffer = ""
+    else:
+        screen.field_buffer = ""
 
 
 def move_selection(rows: list[Row], screen: OperationScreen, delta: int) -> None:
@@ -177,22 +214,50 @@ def backspace_selected(rows: list[Row], screen: OperationScreen) -> None:
 
 
 def nudge_selected(rows: list[Row], screen: OperationScreen, direction: int) -> None:
-    """FR-017 (numeric fields: +/-`NUDGE_STEP`, floor-at-zero clears to
-    unset -- contract §4's implementation detail) and radio cycling
-    (contract §4: "radio fields cycle on Left/Right/Space as before")."""
+    """FR-017: numeric fields only -- +/-`NUDGE_STEP`, floor-at-zero clears
+    to unset (contract §4's implementation detail). Radio fields no longer
+    respond to Left/Right (research.md #4, revision) -- a no-op here for
+    anything but a `NumberRow`; use `radio_navigate`/`radio_commit`
+    instead."""
 
     row = selected_row(rows, screen)
-    if row is None:
+    if not isinstance(row, NumberRow):
         return
-    if isinstance(row, NumberRow):
-        row.on_nudge(direction)
-        screen.field_buffer = _format(row.value)
-        return
-    if not row.options:
+    row.on_nudge(direction)
+    screen.field_buffer = _format(row.value)
+
+
+def radio_navigate(rows: list[Row], screen: OperationScreen, direction: int) -> None:
+    """Up/Down on an expanded `RadioRow`: moves the *highlighted* option
+    (`field_buffer`) by one step, without committing it (research.md #4 --
+    `RadioList`'s own Up/Down behavior). Clamps at the first/last option
+    rather than continuing on to an adjacent field -- a real `RadioList`
+    fully consumes Up/Down for its own navigation and never escapes to a
+    sibling widget on it; moving to a different field is Tab/Shift-Tab's
+    job instead (contract §4), unconditionally, regardless of the current
+    row's type. A no-op if the selected row isn't a `RadioRow` with
+    options at all."""
+
+    row = selected_row(rows, screen)
+    if not isinstance(row, RadioRow) or not row.options:
         return
     values = [value for value, _ in row.options]
-    index = values.index(row.value) if row.value in values else -1
-    row.on_select(values[(index + direction) % len(values)])
+    current = screen.field_buffer if screen.field_buffer in values else values[0]
+    new_index = values.index(current) + direction
+    screen.field_buffer = values[max(0, min(len(values) - 1, new_index))]
+
+
+def radio_commit(rows: list[Row], screen: OperationScreen) -> None:
+    """Enter/Space on an expanded `RadioRow`: commits the currently-
+    highlighted option (`field_buffer`) into `session_state`, matching
+    `RadioList`'s own Enter/Space binding. A no-op on anything but a
+    `RadioRow`."""
+
+    row = selected_row(rows, screen)
+    if not isinstance(row, RadioRow):
+        return
+    if screen.field_buffer:
+        row.on_select(screen.field_buffer)
 
 
 def parses_as_number(buffer: str) -> bool:
@@ -208,23 +273,40 @@ def parses_as_number(buffer: str) -> bool:
     return True
 
 
+def _render_expanded_radio(row: RadioRow, highlighted: str, *, focused: bool) -> StyleAndTextTuples:
+    """The selected `RadioRow`'s full option list, one per line, using
+    `RadioList`'s own default markers -- `(*)` for the committed
+    (`row.value`) option, `( )` otherwise -- with the *highlighted*
+    (`field_buffer`) option reverse-video only while the pane has focus."""
+
+    label_style = "class:selected" if focused else ""
+    fragments: StyleAndTextTuples = [(label_style, f"{row.label}:\n")]
+    for value, label in row.options:
+        marker = "(*)" if value == row.value else "( )"
+        style = "class:selected" if focused and value == highlighted else ""
+        fragments.append((style, f"  {marker} {label}\n"))
+    return fragments
+
+
 def render_left_pane(
     rows: list[Row], screen: OperationScreen, title: str, locale: str, *, focused: bool
 ) -> StyleAndTextTuples:
     """FR-005's simultaneously-visible-and-editable left pane. The
     currently-selected `NumberRow` shows the live, possibly-mid-edit
-    `field_buffer` (FR-016) rather than its last-committed value; every
-    other row shows its committed value."""
+    `field_buffer` (FR-016) rather than its last-committed value; the
+    currently-selected `RadioRow` expands into its full option list
+    (research.md #4); every other row shows a one-line summary of its
+    committed value."""
 
     fragments: StyleAndTextTuples = [("class:pane-title", f"{title}\n")]
     for row in rows:
         is_selected = row.field_id is screen.selected_field
         style = "class:selected" if focused and is_selected else ""
-        if isinstance(row, RadioRow):
-            options_text = "  ".join(
-                f"({'*' if value == row.value else ' '}) {label}" for value, label in row.options
-            )
-            fragments.append((style, f"{row.label}: {options_text}\n"))
+        if isinstance(row, RadioRow) and is_selected:
+            fragments.extend(_render_expanded_radio(row, screen.field_buffer, focused=focused))
+        elif isinstance(row, RadioRow):
+            checked_label = next((label for value, label in row.options if value == row.value), "-")
+            fragments.append((style, f"{row.label}: {checked_label}\n"))
         else:
             shown = screen.field_buffer if is_selected else _format(row.value)
             unit_suffix = f" {row.unit}" if row.unit else ""

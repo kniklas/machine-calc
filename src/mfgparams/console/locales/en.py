@@ -29,13 +29,6 @@ MESSAGES: dict[str, str] = {
     "tui.machining_menu.title": "Machining",
     "tui.machining_menu.milling": "Milling",
     "tui.machining_menu.drilling": "Drilling",
-    # 018-tui-splitpane-redesign FR-003/FR-005a: the Machining tree's
-    # drilling-type leaf -- a navigation shortcut into the same
-    # tool-selection field FR-005's left pane always shows (not a
-    # duplicate/independent value); "Tool" not "Drilling tool" since it's
-    # already nested under Drilling, mirroring how "Milling"/"Drilling"
-    # themselves don't repeat "Machining".
-    "tui.machining_menu.drilling_tool": "Tool",
     # --- Shared dialog chrome ---
     "tui.action.ok": "OK",
     "tui.action.back": "Back",
