@@ -78,13 +78,37 @@ def calculate_turning_metrics_at_rpm(
         The computed :class:`TurningMetrics`.
     """
 
+    # An arbitrary-precision Python int too large to convert to a C double
+    # (e.g. target_rpm=10**1000 in FIXED_RPM mode -- validate_target_rpm's
+    # finiteness check accepts it, since Python ints are always "finite")
+    # would otherwise raise OverflowError from the very first
+    # multiplication below. inf is the mathematically sensible limit for
+    # an unrepresentably large spindle speed, and is caught by the
+    # orchestration layer's finiteness check afterwards (Copilot review
+    # finding on PR #100).
+    try:
+        spindle_speed_rpm = float(spindle_speed_rpm)
+    except OverflowError:
+        spindle_speed_rpm = math.inf
+
     feed_per_rev_mm = material.reference_feed_per_rev_mm * tool.feed_factor
 
     # Feed rate: vf = n * fn
     feed_rate_mm_min = spindle_speed_rpm * feed_per_rev_mm
 
     # Machining time: Tc = lm / vf (no point-engagement allowance -- research.md #2)
-    machining_time_min = length_of_cut_mm / feed_rate_mm_min
+    # A subnormal-but-finite spindle_speed_rpm/feed_per_rev_mm can make
+    # feed_rate_mm_min underflow to exactly 0.0 (e.g. target_rpm=5e-324 in
+    # FIXED_RPM mode, which has no lower bound beyond positivity/
+    # finiteness -- Copilot review finding on PR #100). Python raises
+    # ZeroDivisionError for float/0.0 rather than returning inf, so guard
+    # explicitly, mirroring milling's identical guard
+    # (processes/machining/milling/_shared.py). inf is the mathematically
+    # correct machining time at a zero feed rate, and is caught by the
+    # orchestration layer's finiteness check (__init__.py).
+    machining_time_min = (
+        float("inf") if feed_rate_mm_min == 0 else length_of_cut_mm / feed_rate_mm_min
+    )
 
     # Cutting force: Fc = Kc * ap * fn -- independent of spindle speed
     # (research.md #1), the direct turning analogue of drilling's torque

@@ -8,6 +8,8 @@ and convert metric results to imperial for display/output when
 
 from __future__ import annotations
 
+import math
+
 from mfgparams.models import UnitSystem
 
 MM_PER_INCH = 25.4
@@ -60,6 +62,38 @@ def to_metric_length(value: float, unit_system: UnitSystem) -> float:
         # either way, so the validators still reject it with the documented
         # bound error instead of the conversion raising.
         return value
+
+
+def to_metric_power(value: float, unit_system: UnitSystem) -> float:
+    """Convert a power input to canonical kW when the caller used imperial.
+
+    Non-numeric, ``None``, and ``bool`` values are passed through
+    unconverted, mirroring :func:`to_metric_length`'s identical guard
+    (issue #56) — downstream ``_is_positive_finite_number``-based
+    validators reject them with a structured error instead of this call
+    raising ``TypeError``.
+
+    Unlike :func:`to_metric_length`, an int too large to convert to a C
+    double is mapped to ``math.inf`` rather than returned unconverted:
+    available power has no configured upper bound for a downstream
+    validator to reject it with (unlike diameter/depth), so an
+    unconverted huge int would itself raise ``OverflowError`` the next
+    time it is divided (e.g. power-constrained mode's
+    ``available_power_kw / power_kw`` algebra). ``math.inf`` is the
+    mathematically sensible value for an unrepresentably large power
+    budget — "effectively infinite power available" — and is safe in
+    every downstream comparison/division (Copilot review finding on
+    specs/019-turning-calculations PR #100).
+    """
+
+    if unit_system is not UnitSystem.IMPERIAL:
+        return value
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return value
+    try:
+        return hp_to_kw(value)
+    except OverflowError:
+        return math.inf
 
 
 def cm3_min_to_in3_min(value_cm3_min: float) -> float:

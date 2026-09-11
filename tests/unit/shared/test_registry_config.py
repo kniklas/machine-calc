@@ -17,6 +17,7 @@ from mfgparams.registry_config import (
     load_and_merge,
     merge_entries,
     parse_toml_entries,
+    require_positive_finite_field,
 )
 
 VALID_TOML = """
@@ -90,6 +91,61 @@ def test_parse_missing_name_raises_registry_config_error():
     with pytest.raises(RegistryConfigError) as exc_info:
         parse_toml_entries(MISSING_NAME_TOML, "materials", "bad.toml")
     assert exc_info.value.message_key == "error.materials_config.invalid_entry"
+
+
+def test_parse_non_string_name_raises_registry_config_error():
+    """Copilot review finding on specs/019-turning-calculations PR #100:
+    `name = 123` passed the old truthiness-only check (123 is truthy) and
+    was stored as an int, breaking every registry's documented
+    `list[str]` return type — a shared gap across every registry
+    (materials, drilling/milling/turning tools alike), not turning-
+    specific."""
+    non_string_name_toml = """
+    [[materials]]
+    name = 123
+    reference_cutting_speed = 45.0
+    reference_feed_per_rev = 0.18
+    specific_cutting_force = 750.0
+    """
+    with pytest.raises(RegistryConfigError) as exc_info:
+        parse_toml_entries(non_string_name_toml, "materials", "bad.toml")
+    assert exc_info.value.message_key == "error.materials_config.invalid_entry"
+    assert "name" in exc_info.value.kwargs["details"]
+
+
+class TestRequirePositiveFiniteField:
+    """Unit tests for `require_positive_finite_field`, the shared helper
+    factored out of drilling's/milling's/turning's own tool converters
+    (Copilot review finding on PR #100 — Reuse/Altitude: this exact
+    validation was hand-copied per operation instead of living here once,
+    Constitution Principle VI)."""
+
+    def test_accepts_a_valid_positive_number(self):
+        value = require_positive_finite_field(
+            {"factor": 2.5}, "factor", source_path="t.toml", kind="tool", name="X"
+        )
+        assert math.isclose(value, 2.5, rel_tol=1e-9)
+
+    def test_rejects_missing_field(self):
+        with pytest.raises(RegistryConfigError) as exc_info:
+            require_positive_finite_field({}, "factor", source_path="t.toml", kind="tool", name="X")
+        assert "missing required field" in exc_info.value.kwargs["details"]
+
+    @pytest.mark.parametrize("bad_value", [True, False, "1.8", "fast", None, [1.0]])
+    def test_rejects_non_numeric_or_boolean_values(self, bad_value):
+        with pytest.raises(RegistryConfigError) as exc_info:
+            require_positive_finite_field(
+                {"factor": bad_value}, "factor", source_path="t.toml", kind="tool", name="X"
+            )
+        assert "must be a number" in exc_info.value.kwargs["details"]
+
+    @pytest.mark.parametrize("bad_value", [0, -1.0, float("nan"), float("inf"), float("-inf")])
+    def test_rejects_non_positive_or_non_finite_values(self, bad_value):
+        with pytest.raises(RegistryConfigError) as exc_info:
+            require_positive_finite_field(
+                {"factor": bad_value}, "factor", source_path="t.toml", kind="tool", name="X"
+            )
+        assert "must be positive" in exc_info.value.kwargs["details"]
 
 
 def test_missing_user_path_returns_bundled_only_with_notice(tmp_path):

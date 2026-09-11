@@ -161,6 +161,20 @@ def _parse_entries(data: dict[str, Any], table_key: str, path: str) -> list[RawR
                 name=name or "",
                 details="missing required 'name' field",
             )
+        # A non-string `name` (e.g. `name = 123`) passes the truthiness
+        # check above but breaks every caller's `list[str]` contract
+        # (`list_tools()`/`list_turning_tools()`/... all declare this
+        # return type) and can raise deep in duplicate-checking/merging
+        # rather than being rejected up front (Copilot review finding on
+        # specs/019-turning-calculations PR #100).
+        if not isinstance(name, str):
+            raise RegistryConfigError(
+                "error.materials_config.invalid_entry",
+                path=path,
+                kind=table_key[:-1],
+                name=str(name),
+                details=f"'name' must be a string, got {name!r}",
+            )
         unit_system = raw.get("unit_system", "metric")
         if unit_system not in _VALID_UNIT_SYSTEMS:
             raise RegistryConfigError(

@@ -11,8 +11,6 @@ direct unit tests.
 
 import math
 
-import pytest
-
 from mfgparams.processes.machining.turning.formulas import (
     calculate_turning_metrics,
     calculate_turning_metrics_at_rpm,
@@ -98,21 +96,63 @@ def test_power_constrained_no_op_at_exact_equality_boundary():
     assert math.isclose(result.machining_time_min, nominal.machining_time_min, rel_tol=1e-9)
 
 
-def test_power_constrained_zero_or_negative_budget_raises_by_design():
+def test_power_constrained_zero_budget_underflows_without_crashing():
     """calculate_turning_power_constrained_metrics() does not itself
-    validate available_power_kw (per its docstring, mirroring drilling's
-    equivalent): a zero budget produces a zero adjusted spindle speed,
-    which triggers a ZeroDivisionError in the shared machining-time
-    formula. This is why processes/machining/turning's calculate_turning()
-    entry point MUST reject non-positive budgets as INFEASIBLE_POWER_BUDGET
-    BEFORE calling this helper — this test documents and locks in that
-    contract."""
+    validate available_power_kw (per its docstring): a zero budget
+    produces a zero adjusted spindle speed, which underflows
+    feed_rate_mm_min to exactly 0.0. Unlike drilling's identical formula
+    (which still raises ZeroDivisionError here, matching its own
+    now-superseded test), turning's calculate_turning_metrics_at_rpm
+    guards this division explicitly (Copilot review finding on PR #100,
+    mirroring milling's identical guard): machining_time_min becomes
+    inf rather than raising. This is still why
+    processes/machining/turning's calculate_turning() entry point MUST
+    reject non-positive budgets as INFEASIBLE_POWER_BUDGET before ever
+    reaching this helper via the public API — the orchestration layer's
+    own _reject_if_invalid() is what actually catches the resulting inf
+    — but the formula layer no longer crashes outright either."""
 
     material = get_material("Mild Steel")
     tool = get_turning_tool("Carbide")
 
-    with pytest.raises(ZeroDivisionError):
-        calculate_turning_power_constrained_metrics(40, 2, 100, material, tool, 0.0)
+    result = calculate_turning_power_constrained_metrics(40, 2, 100, material, tool, 0.0)
+
+    assert result.spindle_speed_rpm == 0.0
+    assert result.machining_time_min == float("inf")
+
+
+def test_at_rpm_subnormal_spindle_speed_underflows_feed_rate_without_crashing():
+    """A positive-subnormal spindle_speed_rpm (e.g. FIXED_RPM's
+    target_rpm=5e-324, which validate_target_rpm() accepts — no lower
+    bound beyond positivity) can make feed_rate_mm_min underflow to
+    exactly 0.0. machining_time_min must not raise ZeroDivisionError for
+    this — inf is the mathematically correct value at a zero feed rate,
+    and is what the orchestration layer's finiteness check
+    (__init__.py's _reject_if_invalid()) is designed to catch."""
+
+    material = get_material("Mild Steel")
+    tool = get_turning_tool("Carbide")
+
+    metrics = calculate_turning_metrics_at_rpm(40, 2, 100, material, tool, 5e-324)
+
+    assert metrics.feed_rate_mm_min == 0.0
+    assert metrics.machining_time_min == float("inf")
+
+
+def test_at_rpm_arbitrary_precision_int_spindle_speed_does_not_overflow():
+    """An int too large to convert to a C double (e.g. FIXED_RPM's
+    target_rpm=10**1000, which validate_target_rpm() now accepts per its
+    own overflow fix) must not raise OverflowError from the first
+    multiplication — inf is the mathematically sensible limit, caught by
+    the orchestration layer's finiteness check afterwards."""
+
+    material = get_material("Mild Steel")
+    tool = get_turning_tool("Carbide")
+
+    metrics = calculate_turning_metrics_at_rpm(40, 2, 100, material, tool, 10**1000)
+
+    assert metrics.spindle_speed_rpm == float("inf")
+    assert metrics.feed_rate_mm_min == float("inf")
 
 
 def test_power_constrained_tiny_budget_yields_tiny_positive_rpm():

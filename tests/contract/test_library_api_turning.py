@@ -30,7 +30,7 @@ import math
 import pytest
 
 import mfgparams
-from mfgparams import calculate_turning, list_turning_tools
+from mfgparams import CalculationMode, UnitSystem, calculate_turning, list_turning_tools
 
 _DIAMETER = 40.0
 _DEPTH_OF_CUT = 2.0
@@ -241,3 +241,123 @@ def test_console_and_library_identical_results_for_identical_inputs():
     )
 
     assert first == second
+
+
+def test_imperial_and_metric_calls_describe_the_same_physical_operation():
+    """FR-017: an imperial call converts inputs to canonical metric
+    internally and converts results back, so it must describe the same
+    physical turning pass as the equivalent metric call — spindle speed
+    and machining time are unit-independent; feed rate, torque, power,
+    and cutting force are converted (Copilot review finding: no existing
+    turning test exercised the imperial path at all, unlike drilling's/
+    milling's own imperial round-trip tests)."""
+
+    metric = calculate_turning(
+        diameter=_DIAMETER,
+        depth_of_cut=_DEPTH_OF_CUT,
+        length_of_cut=_LENGTH_OF_CUT,
+        material=_MATERIAL,
+        tool=_TOOL,
+        unit_system=UnitSystem.METRIC,
+    )
+    imperial = calculate_turning(
+        diameter=_DIAMETER / 25.4,
+        depth_of_cut=_DEPTH_OF_CUT / 25.4,
+        length_of_cut=_LENGTH_OF_CUT / 25.4,
+        material=_MATERIAL,
+        tool=_TOOL,
+        unit_system=UnitSystem.IMPERIAL,
+    )
+
+    assert imperial.error is None
+    # Spindle speed (RPM) and machining time (minutes) are unit-independent.
+    assert math.isclose(imperial.spindle_speed_rpm, metric.spindle_speed_rpm, rel_tol=1e-6)
+    assert math.isclose(imperial.machining_time, metric.machining_time, rel_tol=1e-6)
+    # Feed rate/torque/power/cutting_force differ because they are
+    # converted to imperial units, but describe the same physical values.
+    assert imperial.feed_rate != metric.feed_rate
+    assert imperial.torque != metric.torque
+    assert imperial.power_required != metric.power_required
+    assert imperial.cutting_force != metric.cutting_force
+    # Round-trip: converting the imperial cutting_force (lbf) back to N
+    # must reproduce the metric value.
+    assert math.isclose(
+        imperial.cutting_force * 4.4482216152605, metric.cutting_force, rel_tol=1e-6
+    )
+
+
+def test_extreme_subnormal_geometry_returns_structured_overflow_error_not_a_stale_success():
+    """Copilot review finding on PR #100: a subnormal-but-individually-
+    "valid" diameter/depth_of_cut (no lower bound beyond positivity) could
+    previously underflow torque/power to exactly 0.0 while still
+    returning error=None — a silently wrong "successful" result. Must now
+    return a structured CALCULATION_OVERFLOW error instead."""
+
+    result = calculate_turning(
+        diameter=1e-300, depth_of_cut=1e-310, length_of_cut=1, material=_MATERIAL, tool=_TOOL
+    )
+
+    assert result.error is not None
+    assert result.error.code == "CALCULATION_OVERFLOW"
+    assert result.spindle_speed_rpm is None
+    assert result.cutting_force is None
+
+
+def test_subnormal_target_rpm_returns_structured_overflow_error_not_zerodivisionerror():
+    """Copilot review finding on PR #100: target_rpm has no lower bound
+    beyond positivity/finiteness, so a positive subnormal value could
+    previously reach ZeroDivisionError inside the formula layer instead of
+    the documented never-raises structured-error contract."""
+
+    result = calculate_turning(
+        diameter=_DIAMETER,
+        depth_of_cut=_DEPTH_OF_CUT,
+        length_of_cut=_LENGTH_OF_CUT,
+        material=_MATERIAL,
+        tool=_TOOL,
+        mode=CalculationMode.FIXED_RPM,
+        target_rpm=5e-324,
+    )
+
+    assert result.error is not None
+    assert result.error.code == "CALCULATION_OVERFLOW"
+
+
+def test_arbitrary_precision_int_target_rpm_returns_structured_error_not_overflowerror():
+    """Copilot review finding on PR #100: an int too large to convert to a
+    C double (e.g. 10**1000) previously raised OverflowError from
+    validate_target_rpm()'s bare math.isfinite() call, escaping the
+    never-raises contract shared by drilling, milling, and turning."""
+
+    result = calculate_turning(
+        diameter=_DIAMETER,
+        depth_of_cut=_DEPTH_OF_CUT,
+        length_of_cut=_LENGTH_OF_CUT,
+        material=_MATERIAL,
+        tool=_TOOL,
+        mode=CalculationMode.FIXED_RPM,
+        target_rpm=10**1000,
+    )
+
+    assert result.error is not None
+    assert result.error.code == "CALCULATION_OVERFLOW"
+
+
+def test_arbitrary_precision_int_imperial_available_power_does_not_raise():
+    """Copilot review finding on PR #100: an oversized positive Python int
+    supplied as imperial available_power previously reached hp_to_kw()
+    and raised OverflowError during int-to-float conversion, instead of
+    behaving as an effectively-unlimited power budget."""
+
+    result = calculate_turning(
+        diameter=1.0,
+        depth_of_cut=0.1,
+        length_of_cut=10.0,
+        material=_MATERIAL,
+        tool=_TOOL,
+        unit_system=UnitSystem.IMPERIAL,
+        available_power=10**1000,
+    )
+
+    assert result.error is None
+    assert result.feasibility_warning is None

@@ -518,18 +518,22 @@ def validate_target_rpm(target_rpm: float | None, locale: str = DEFAULT_LOCALE) 
     value (not supplied) is not an error here — callers decide whether a
     missing ``target_rpm`` is itself an error (e.g. required in fixed-RPM
     mode) via :func:`validate_mode_arguments`.
+
+    Delegates to :func:`_is_positive_finite_number` (Copilot review
+    finding on specs/019-turning-calculations PR #100): an inline
+    ``math.isfinite(target_rpm)`` call here previously raised
+    ``OverflowError`` for an arbitrary-precision Python ``int`` too large
+    to convert to a C double (e.g. ``target_rpm=10**1000``), reaching
+    every caller (drilling, milling, and turning all share this
+    function) instead of the documented ``INVALID_TARGET_RPM`` result —
+    the exact class of bug ``_is_positive_finite_number`` already exists
+    to prevent for every other dimensional input.
     """
 
     locale = DEFAULT_LOCALE  # FR-005: message is always English (module docstring)
     if target_rpm is None:
         return None
-    if not isinstance(target_rpm, (int, float)) or isinstance(target_rpm, bool):
-        return ErrorInfo(
-            "INVALID_TARGET_RPM",
-            translate(locale, "error.invalid_target_rpm"),
-            message_key="error.invalid_target_rpm",
-        )
-    if not math.isfinite(target_rpm) or target_rpm <= 0:
+    if not _is_positive_finite_number(target_rpm):
         return ErrorInfo(
             "INVALID_TARGET_RPM",
             translate(locale, "error.invalid_target_rpm"),

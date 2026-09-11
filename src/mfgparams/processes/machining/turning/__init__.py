@@ -19,12 +19,12 @@ from mfgparams.i18n import DEFAULT_LOCALE, translate
 from mfgparams.models import CalculationMode, CalculationResult, ErrorInfo, UnitSystem
 from mfgparams.registry import get_material, get_material_validation
 from mfgparams.units import (
-    hp_to_kw,
     kw_to_hp,
     mm_to_in,
     n_to_lbf,
     nm_to_in_lb,
     to_metric_length,
+    to_metric_power,
 )
 from mfgparams.validation import (
     validate_material_present,
@@ -61,6 +61,49 @@ def _error_result(
     )
 
 
+def _reject_if_invalid(
+    metrics,
+    unit_system: UnitSystem,
+    mode: CalculationMode,
+    locale: str,
+    *,
+    error_code: str,
+    error_message_key: str,
+):
+    """Guard against a metrics result with any non-finite or non-positive field.
+
+    Mirrors milling's ``_calculate._reject_if_invalid`` exactly (Copilot
+    review finding on PR #100: an extreme-but-individually-"valid" input —
+    e.g. a subnormal diameter, or a ``target_rpm``/power budget that scales
+    spindle speed down towards zero — can make a field underflow to
+    exactly ``0.0`` or overflow to ``inf``/``nan`` while other fields stay
+    finite, silently returning a meaningless "successful" result with
+    ``error is None``). Every field here is a product/quotient of strictly
+    positive validated inputs, so none of them can ever legitimately be
+    zero or non-finite; reaching one is always underflow/overflow, never a
+    real result, and must not violate the never-raises, structured-error
+    API contract.
+    """
+
+    if all(
+        math.isfinite(value) and value > 0
+        for value in (
+            metrics.spindle_speed_rpm,
+            metrics.feed_rate_mm_min,
+            metrics.machining_time_min,
+            metrics.cutting_force_n,
+            metrics.torque_nm,
+            metrics.power_kw,
+        )
+    ):
+        return metrics
+    return _error_result(
+        unit_system,
+        ErrorInfo(error_code, translate(locale, error_message_key), message_key=error_message_key),
+        mode,
+    )
+
+
 def _compute_metrics(
     mode: CalculationMode,
     diameter_mm: float,
@@ -75,9 +118,12 @@ def _compute_metrics(
 ):
     """Dispatch to the mode-specific metrics calculation.
 
-    Mirrors drilling's ``_compute_metrics`` exactly (three modes, same
-    dispatch shape and feasibility guards), extended to turning's
-    three-dimensional geometry (diameter, depth of cut, length of cut).
+    Mirrors drilling's ``_compute_metrics`` shape (three modes, same
+    dispatch structure), extended to turning's three-dimensional geometry
+    (diameter, depth of cut, length of cut) and to milling's
+    ``_reject_if_invalid`` finiteness/positivity guard, applied to every
+    mode's result rather than only checking ``spindle_speed_rpm`` in
+    ``POWER_CONSTRAINED`` mode (Copilot review finding on PR #100).
     """
     if mode is CalculationMode.POWER_CONSTRAINED:
         # available_power_kw is guaranteed non-None here (validate_mode_arguments
@@ -101,24 +147,21 @@ def _compute_metrics(
             resolved_tool,
             available_power_kw,
         )
-        if not math.isfinite(metrics.spindle_speed_rpm) or metrics.spindle_speed_rpm <= 0:
-            return _error_result(
-                unit_system,
-                ErrorInfo(
-                    "INFEASIBLE_POWER_BUDGET",
-                    translate(locale, "error.infeasible_power_budget"),
-                    message_key="error.infeasible_power_budget",
-                ),
-                mode,
-            )
-        return metrics
+        return _reject_if_invalid(
+            metrics,
+            unit_system,
+            mode,
+            locale,
+            error_code="INFEASIBLE_POWER_BUDGET",
+            error_message_key="error.infeasible_power_budget",
+        )
 
     if mode is CalculationMode.FIXED_RPM:
         # target_rpm is guaranteed non-None here (INVALID_TARGET_RPM is
         # returned earlier in calculate_turning() when it is None for this
         # mode).
         assert target_rpm is not None
-        return calculate_turning_metrics_at_rpm(
+        metrics = calculate_turning_metrics_at_rpm(
             diameter_mm,
             depth_of_cut_mm,
             length_of_cut_mm,
@@ -126,9 +169,25 @@ def _compute_metrics(
             resolved_tool,
             target_rpm,
         )
+        return _reject_if_invalid(
+            metrics,
+            unit_system,
+            mode,
+            locale,
+            error_code="CALCULATION_OVERFLOW",
+            error_message_key="error.calculation_overflow",
+        )
 
-    return calculate_turning_metrics(
+    standard_metrics = calculate_turning_metrics(
         diameter_mm, depth_of_cut_mm, length_of_cut_mm, resolved_material, resolved_tool
+    )
+    return _reject_if_invalid(
+        standard_metrics,
+        unit_system,
+        mode,
+        locale,
+        error_code="CALCULATION_OVERFLOW",
+        error_message_key="error.calculation_overflow",
     )
 
 
@@ -309,9 +368,7 @@ def _validate_and_prepare(
 
     available_power_kw = None
     if available_power is not None:
-        available_power_kw = (
-            hp_to_kw(available_power) if unit_system is UnitSystem.IMPERIAL else available_power
-        )
+        available_power_kw = to_metric_power(available_power, unit_system)
 
     return (
         resolved_material,
