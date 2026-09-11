@@ -150,11 +150,42 @@ def selected_row(rows: list[Row], screen: OperationScreen) -> Row | None:
 def _format(value: float | None) -> str:
     """Matches the prototype's `_format_number`: `.4g`, not a bare `g` --
     e.g. `10` stays `10`, `0.05` stays `0.05`, but a longer float rounds to
-    4 significant digits rather than however many `repr` would show."""
+    4 significant digits rather than however many `repr` would show.
+
+    Display only -- an unselected `NumberRow`'s read-only listing in
+    `render_left_pane` -- never `field_buffer`. `field_buffer` is live,
+    re-editable, re-committable text (FR-016/FR-017), so it needs
+    `_buffer_text`'s round-trippable representation instead; reusing this
+    lossy one there was a CRITICAL bug a round-3 code-review pass on PR #96
+    found (`_buffer_text`'s own docstring has the concrete example)."""
 
     if value is None:
         return ""
     return f"{value:.4g}"
+
+
+def _buffer_text(value: float) -> str:
+    """`field_buffer`'s own formatter -- unlike `_format` above, this must
+    round-trip exactly (`float(_buffer_text(x)) == x` for every finite
+    `x`), since the buffer it populates is parsed straight back by
+    `_commit_current`/`nudge_selected` on the very next keystroke, with no
+    further edit required to trigger it. `_format`'s 4-significant-digit
+    rounding silently corrupted a committed value on nothing more than
+    revisiting the field: a fixed RPM of `12345` synced to a buffer of
+    `1.234e+04` (`_format`'s `.4g` output), which reparses as `12340.0` --
+    simply leaving the field (no edit at all) changed the committed value.
+    Nudging compounded it further: `nudge_selected` adds `NUDGE_STEP` to
+    whatever the buffer currently parses as, so nudging Right from that
+    already-corrupted `12340` buffer landed on `12341`, not the correct
+    `12346`, changing the calculation the user never asked to change.
+    `repr`'s shortest round-tripping form fixes this (Python's `float`
+    `repr` has round-tripped exactly since 3.1); integral values drop the
+    trailing `.0` so a typed `12345` reads back as `12345`, not a
+    surprising `12345.0`, matching what the user actually typed."""
+
+    if value == int(value):
+        return str(int(value))
+    return repr(value)
 
 
 def sync_buffer(rows: list[Row], screen: OperationScreen) -> None:
@@ -167,7 +198,9 @@ def sync_buffer(rows: list[Row], screen: OperationScreen) -> None:
     "raw text" state -- Left/Right/Space act on `row.value` directly)."""
 
     row = selected_row(rows, screen)
-    screen.field_buffer = _format(row.value) if isinstance(row, NumberRow) else ""
+    screen.field_buffer = (
+        _buffer_text(row.value) if isinstance(row, NumberRow) and row.value is not None else ""
+    )
 
 
 def _commit_current(rows: list[Row], screen: OperationScreen, locale: str) -> None:
@@ -260,7 +293,7 @@ def nudge_selected(rows: list[Row], screen: OperationScreen, direction: int) -> 
         except ValueError:
             current = row.value if row.value is not None else 0.0
         new_value = current + direction * NUDGE_STEP
-        screen.field_buffer = "" if new_value <= 0 else _format(new_value)
+        screen.field_buffer = "" if new_value <= 0 else _buffer_text(new_value)
         return
     if not row.options:
         return

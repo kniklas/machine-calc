@@ -234,3 +234,40 @@ def test_selecting_a_field_syncs_the_buffer_to_its_committed_value():
     split_pane.move_selection(_rows(screen), screen, 1, "en")  # commits 7.0, moves to DEPTH
     split_pane.move_selection(_rows(screen), screen, -1, "en")  # moves back to DIAMETER
     assert screen.field_buffer == "7"
+
+
+def test_revisiting_a_field_beyond_four_significant_digits_does_not_corrupt_it():
+    """CRITICAL regression test for a round-3 code-review finding on PR
+    #96: `sync_buffer` used to reuse `_format` (a lossy, display-only 4
+    significant-digit formatter, `.4g`) to populate `field_buffer` too.
+    Simply revisiting a field with a value beyond 4 significant digits --
+    with no edit at all -- silently rewrote it: 12345 synced to a buffer of
+    "1.234e+04", which re-committed as 12340.0 on navigating away again."""
+
+    screen = _screen()
+    _goto(screen, FieldId.DIAMETER)
+    split_pane.edit_selected(_rows(screen), screen, "12345")
+    split_pane.move_selection(_rows(screen), screen, 1, "en")  # commits 12345.0, moves to DEPTH
+    state = screen.session_state
+    assert isinstance(state, DrillingSessionState)
+    assert state.diameter == 12345.0
+
+    split_pane.move_selection(_rows(screen), screen, -1, "en")  # back to DIAMETER, no edit
+    assert screen.field_buffer == "12345"
+    split_pane.move_selection(_rows(screen), screen, 1, "en")  # leave again, still unedited
+    assert state.diameter == 12345.0  # must not have silently become 12340.0
+
+
+def test_nudging_a_field_beyond_four_significant_digits_adjusts_by_exactly_one_step():
+    """The same bug also corrupted `nudge_selected`: nudging Right added
+    `NUDGE_STEP` to whatever the (previously lossy) buffer parsed as, so
+    nudging from a revisited 12345 landed on 12341, not 12346."""
+
+    screen = _screen()
+    _goto(screen, FieldId.DIAMETER)
+    split_pane.edit_selected(_rows(screen), screen, "12345")
+    split_pane.move_selection(_rows(screen), screen, 1, "en")  # commits 12345.0
+    split_pane.move_selection(_rows(screen), screen, -1, "en")  # back to DIAMETER
+
+    split_pane.nudge_selected(_rows(screen), screen, 1)
+    assert screen.field_buffer == "12346"
