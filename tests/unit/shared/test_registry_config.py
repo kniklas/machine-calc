@@ -113,6 +113,34 @@ def test_parse_non_string_name_raises_registry_config_error():
     assert "name" in exc_info.value.kwargs["details"]
 
 
+def test_parse_name_with_control_character_raises_registry_config_error():
+    """Copilot review finding on specs/019-turning-calculations PR #100
+    (round 3): a name containing a control character (e.g. ESC, the lead
+    byte of every ANSI escape sequence) is later emitted as a TUI option
+    label, where it can corrupt the menu display or inject terminal
+    control sequences. Mirrors registry.py's identical
+    `_FORBIDDEN_ID_CATEGORIES` check already applied to `material_type`."""
+    control_char_name_toml = (
+        '[[tools]]\nname = "Bad\\u001bName"\ncutting_speed_factor=1.0\nfeed_factor=1.0\n'
+    )
+    with pytest.raises(RegistryConfigError) as exc_info:
+        parse_toml_entries(control_char_name_toml, "tools", "bad.toml")
+    assert exc_info.value.message_key == "error.materials_config.invalid_entry"
+    assert "control characters" in exc_info.value.kwargs["details"]
+
+
+def test_parse_name_with_newline_raises_registry_config_error():
+    """The same control-character guard also covers a literal newline,
+    not just non-printable escape codes."""
+    newline_name_toml = (
+        '[[tools]]\nname = "Bad\\nName"\ncutting_speed_factor=1.0\nfeed_factor=1.0\n'
+    )
+    with pytest.raises(RegistryConfigError) as exc_info:
+        parse_toml_entries(newline_name_toml, "tools", "bad.toml")
+    assert exc_info.value.message_key == "error.materials_config.invalid_entry"
+    assert "control characters" in exc_info.value.kwargs["details"]
+
+
 class TestRequirePositiveFiniteField:
     """Unit tests for `require_positive_finite_field`, the shared helper
     factored out of drilling's/milling's/turning's own tool converters
@@ -146,6 +174,19 @@ class TestRequirePositiveFiniteField:
                 {"factor": bad_value}, "factor", source_path="t.toml", kind="tool", name="X"
             )
         assert "must be positive" in exc_info.value.kwargs["details"]
+
+    def test_rejects_arbitrary_precision_int_too_large_for_a_float(self):
+        """Copilot review finding on PR #100 (round 3): tomllib/tomli
+        impose no bound on an integer literal, so `cutting_speed_factor =
+        10**1000` in a hand-edited config reaches here as a plain Python
+        int. `float(raw_value)` then raises OverflowError, which
+        previously escaped unhandled instead of the documented
+        RegistryConfigError."""
+        with pytest.raises(RegistryConfigError) as exc_info:
+            require_positive_finite_field(
+                {"factor": 10**1000}, "factor", source_path="t.toml", kind="tool", name="X"
+            )
+        assert "too large to represent" in exc_info.value.kwargs["details"]
 
 
 def test_missing_user_path_returns_bundled_only_with_notice(tmp_path):
