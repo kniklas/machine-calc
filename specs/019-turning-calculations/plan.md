@@ -99,18 +99,18 @@ drilling originally did).
 - **Principle X (Licensing & Author Rights)**: No change. N/A.
 - **Principle XI (Multi-Agent Coding-Tool Consistency)**: No skill files
   (`.github/skills/**`) are touched by this feature. N/A.
-- **Principle XII (Long-Lived Feature Branches for Multi-PR Work)**: This feature is
-  delivered as two sequential, independently-complete pull requests against `main` on the
-  `019-turning-calculations` branch — a spec/plan/tasks-only PR (this one) followed by a
-  separate implementation PR — mirroring the `018-tui-splitpane-redesign` precedent
-  (`#95` then `#96`). Because the first PR contains only complete specification documents
-  (no partially-built application code) and the second PR will deliver a complete, working
-  feature in one shot, neither PR merges a "partially-built slice" of code to `main` in the
-  sense this principle prohibits, so the long-lived-integration-branch/dual-ruleset
-  machinery (which exists specifically to protect `main` from partially-built *code*) is
-  not triggered. If implementation turns out to need further slicing once underway, this
-  section MUST be revisited and the integration-branch process adopted before that
-  splitting happens. PASS (with the above documented condition).
+- **Principle XII (Long-Lived Feature Branches for Multi-PR Work)**: **Superseded by
+  actual delivery** (updated post-implementation, per a Copilot review finding on PR #100:
+  this section originally planned a two-PR split — a spec-only PR followed by a separate
+  implementation PR, mirroring the `018-tui-splitpane-redesign` precedent — but that plan
+  was reconsidered mid-flow once the spec PR turned out to still be open/unmerged when
+  implementation started; see PR #100's own description). The feature was in fact
+  delivered as a **single** pull request (`#100`) on the `019-turning-calculations` branch,
+  containing the complete spec, plan, tasks, and a complete, working implementation
+  together. A single complete PR trivially does not merge a "partially-built slice" of code
+  to `main`, so the long-lived-integration-branch/dual-ruleset machinery this principle
+  requires for a genuine multi-PR split was never triggered and remains inapplicable.
+  PASS.
 
 ## Project Structure
 

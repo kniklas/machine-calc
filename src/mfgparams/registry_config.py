@@ -17,6 +17,7 @@ responsibility of the per-kind callers (FR-006, FR-017).
 from __future__ import annotations
 
 import functools
+import math
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
@@ -74,6 +75,75 @@ class RawRegistryEntry:
     unit_system: str = "metric"
     translations: dict[str, str] = field(default_factory=dict)
     source_path: str = ""
+
+
+def require_positive_finite_field(
+    fields: dict[str, Any],
+    field_name: str,
+    *,
+    source_path: str,
+    kind: str,
+    name: str,
+) -> float:
+    """Extract and validate a required, positive, finite numeric field from
+    a :class:`RawRegistryEntry`'s ``fields`` mapping.
+
+    Shared by every per-kind tool-registry converter (drilling, milling,
+    turning) so this exact validation is defined once rather than
+    hand-copied per operation — this module's own docstring says it exists
+    "so that any future operation-specific registry can reuse this module
+    unchanged" (Constitution Principle VI); before this helper existed,
+    each converter re-implemented (and could independently drift from) the
+    same checks.
+
+    Args:
+        fields: The entry's raw ``fields`` mapping (``RawRegistryEntry.fields``).
+        field_name: The TOML key to extract, e.g. ``"cutting_speed_factor"``.
+        source_path: The bundled resource name or user-supplied path this
+            entry came from, for an accurate error location.
+        kind: The entry kind for the error message, e.g. ``"tool"``.
+        name: The entry's own name, for the error message.
+
+    Returns:
+        The validated value as a ``float``.
+
+    Raises:
+        RegistryConfigError: If ``field_name`` is missing, a TOML boolean
+            or a quoted numeric string (both would otherwise pass silently
+            through ``float()``, e.g. ``true`` -> ``1.0``, ``"1.8"`` ->
+            ``1.8``), non-finite, or not positive.
+    """
+
+    try:
+        raw_value = fields[field_name]
+    except KeyError as exc:
+        raise RegistryConfigError(
+            "error.materials_config.invalid_entry",
+            path=source_path,
+            kind=kind,
+            name=name,
+            details=f"missing required field {field_name!r}",
+        ) from exc
+
+    if isinstance(raw_value, bool) or not isinstance(raw_value, (int, float)):
+        raise RegistryConfigError(
+            "error.materials_config.invalid_entry",
+            path=source_path,
+            kind=kind,
+            name=name,
+            details=f"field {field_name!r} must be a number, got {raw_value!r}",
+        )
+
+    value = float(raw_value)
+    if not math.isfinite(value) or value <= 0:
+        raise RegistryConfigError(
+            "error.materials_config.invalid_entry",
+            path=source_path,
+            kind=kind,
+            name=name,
+            details=f"{field_name} must be positive",
+        )
+    return value
 
 
 def _parse_entries(data: dict[str, Any], table_key: str, path: str) -> list[RawRegistryEntry]:

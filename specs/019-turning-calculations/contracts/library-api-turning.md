@@ -29,11 +29,11 @@ def calculate_turning(
     material: str,
     tool: str,
     unit_system: UnitSystem = UnitSystem.METRIC,
-    mode: CalculationMode = CalculationMode.STANDARD,
-    target_rpm: float | None = None,
     available_power: float | None = None,
     config_path: str | None = None,
     locale: str = DEFAULT_LOCALE,
+    mode: CalculationMode = CalculationMode.STANDARD,
+    target_rpm: float | None = None,
     materials_config_path: str | None = None,
 ) -> CalculationResult: ...
 

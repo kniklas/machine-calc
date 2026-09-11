@@ -161,7 +161,7 @@ implementation and testing of each story, per Constitution Principle VI.
 1. Complete Phase 1 (Setup) and Phase 2 (Foundational).
 2. Complete Phase 3 (User Story 1) — standard-mode turning, fully working end-to-end via the console.
 3. **STOP and VALIDATE**: run quickstart.md Scenarios 1, 4, 5 and confirm SC-001/SC-002/SC-003/SC-004.
-4. This is a legitimate, shippable MVP slice on its own (a working standard-mode turning calculator), even though the follow-up implementation PR is expected to include all three stories per plan.md's Scale/Scope.
+4. This is a legitimate, shippable MVP slice on its own (a working standard-mode turning calculator) — note, per the "Implementation notes" section below, that all three stories were in fact delivered together in a single PR rather than staged as separate merges.
 
 ### Incremental Delivery
 
@@ -171,12 +171,14 @@ implementation and testing of each story, per Constitution Principle VI.
 4. Add User Story 3 → validate independently (mode parity).
 5. Polish → docs, `/speckit-analyze`, final quickstart run, `tui-design` sign-off confirmation.
 
-Per Constitution Principle XII's condition already documented in plan.md's Constitution
-Check: since this feature is delivered as two complete pull requests (spec-only, then a
-single complete implementation PR covering all of the above), the implementation PR
-itself should not be merged to `main` until Phase 6 is fully complete — no partially-built
-slice of *this* PR should be merged, even though the two-PR split at the feature level is
-not itself the kind of partial-code split Principle XII exists to prevent (plan.md).
+**Superseded by actual delivery** (updated post-implementation, per a Copilot review
+finding on PR #100): this section originally planned two pull requests (spec-only, then a
+separate implementation PR) per Constitution Principle XII's condition in plan.md's
+Constitution Check. In practice the feature was delivered as a **single** PR (`#100`)
+containing the spec, plan, tasks, and the complete implementation together — see plan.md's
+Constitution Check (Principle XII) for the corrected record. This PR was not merged to
+`main` until Phase 6 above was fully complete, consistent with the spirit of the original
+constraint even though the two-PR split itself never materialized.
 
 ## Implementation notes (post-completion)
 
