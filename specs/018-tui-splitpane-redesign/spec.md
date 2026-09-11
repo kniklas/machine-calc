@@ -270,12 +270,22 @@ User Story 1's navigation shell rather than exited or reset.
   the pre-plan prototype's own solution exactly (resolved via `/speckit-clarify`, reopened a second
   time after the first correction attempt still didn't match the prototype — see Clarifications,
   Session 2026-09-11).
-- **FR-005a**: *(Resolution revised via `/speckit-clarify`, reopened after implementation — see
-  Clarifications.)* FR-005's "simultaneously visible and editable" guarantee holds trivially now:
-  tool selection lives *only* in the left pane, with no tree-level shortcut into it to keep in
-  sync or to make "collapse-safe" — there is no longer a tree-collapse interaction for this field
-  to reason about at all, since the floating operation window (FR-004) is not part of the tree in
-  the first place and stays open independent of the tree's own expand/collapse state regardless.
+- **FR-005a**: *(Resolution revised via `/speckit-clarify`, reopened after implementation, then
+  again after a round-3 code-review pass on PR #96 questioned the wording below against the
+  shipped keyboard model — see Clarifications.)* FR-005's "simultaneously visible and editable"
+  guarantee holds trivially now: tool selection lives *only* in the left pane, with no tree-level
+  shortcut into it to keep in sync or to make "collapse-safe" — there is no longer a tree-collapse
+  interaction for this field to reason about at all, since the floating operation window (FR-004)
+  is not part of the tree in the first place. `SessionUI.tree`'s expand/collapse state and
+  `SessionUI.open_operation` MUST remain independent by construction — no code path may write both
+  from the same handler — so collapsing/expanding the tree never affects which operation is open,
+  and vice versa; `test_session_ui.py` verifies this at the data level directly. This is
+  deliberately **not** a claim that a specific keyboard sequence reaches the bar while keeping an
+  operation open: escaping the operation pane closes it outright (FR-006's own erasure guarantee,
+  below), and since the operation window floats *above* the tree, the tree isn't even visible while
+  one is open in the first place — a keyboard path to "collapse an invisible tree without closing
+  the window" has no user-visible effect to protect, unlike the underlying state independence,
+  which is what this requirement is actually about.
 - **FR-006**: The right pane MUST display the calculation result once every required left-pane
   input holds a valid value, and MUST NOT display a result computed from a different, no-longer-
   current set of inputs.

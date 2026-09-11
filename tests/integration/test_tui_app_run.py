@@ -86,17 +86,25 @@ def test_changing_an_input_recomputes_without_leaving_the_screen(monkeypatch):
         # `[:-3]` stops right after landing on Available power (the last
         # navigation step before the three closing Escapes). "k","k" moves
         # back up to Diameter, re-syncing its buffer to the committed "10";
-        # appending "5" (buffer becomes "105") and then navigating away
-        # ("j", to Depth) commits a distinct diameter and forces a fresh
+        # appending "0" (buffer becomes "100" -- still a valid diameter,
+        # unlike e.g. "105", which exceeds HSS/Mild Steel's 100mm maximum
+        # and would make `calculate()` return an error result instead of a
+        # comparable `spindle_speed_rpm`) and then navigating away ("j", to
+        # Depth) commits a distinct diameter and forces a fresh
         # `calculate()` call, without ever leaving the operation screen.
-        _OPEN_DRILLING_COMPLETE_AND_EXIT[:-3] + ["k", "k", "5", "j", "\x1b", "\x1b", "\x1b"],
+        _OPEN_DRILLING_COMPLETE_AND_EXIT[:-3] + ["k", "k", "0", "j", "\x1b", "\x1b", "\x1b"],
         on_batch=on_batch,
     )
     # A distinct diameter must produce a distinct (freshly computed, not
     # stale-cached) result once the screen re-settles as complete again.
+    # `>= 2` -- not `>= 1`, which a single stale cached value would also
+    # satisfy -- is the actual claim: diameter 10 and diameter 100 must
+    # have produced two different `spindle_speed_rpm` values between them,
+    # proving the second edit was genuinely recomputed rather than served
+    # from a cache still keyed on the pre-edit diameter.
     non_none = [r for r in results if r is not None]
     assert non_none
-    assert len({r.spindle_speed_rpm for r in non_none if r.error is None}) >= 1
+    assert len({r.spindle_speed_rpm for r in non_none if r.error is None}) >= 2
 
 
 def test_toggling_milling_sub_operation_twice_correctly_alternates(monkeypatch):

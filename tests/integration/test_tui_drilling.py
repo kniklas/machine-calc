@@ -157,6 +157,38 @@ def test_power_constrained_mode_requires_available_power_to_be_complete():
     assert split_pane.is_complete(_rows(screen))
 
 
+def test_power_constrained_mode_reaches_a_result_matching_the_core_calculation():
+    """Round-3 code-review finding: the completeness test above never
+    checked that a complete Power constrained screen actually reaches a
+    result matching the core calculation -- unlike Standard and Fixed RPM
+    mode, which both have their own such test. Mirrors those two."""
+
+    screen = _screen()
+    _fill_metal_mild_steel_hss(screen)
+    _row(_rows(screen), FieldId.MODE).on_select(CalculationMode.POWER_CONSTRAINED.value)
+    _row(_rows(screen), FieldId.AVAILABLE_POWER).on_commit(2.0)
+    state = screen.session_state
+    assert isinstance(state, DrillingSessionState)
+    assert split_pane.is_complete(_rows(screen))
+
+    result = calculate_result(state, None, "en")
+    expected = calculate(
+        diameter=10.0,
+        depth=20.0,
+        material="Mild Steel",
+        tool="HSS",
+        unit_system=UnitSystem.METRIC,
+        available_power=2.0,
+        locale="en",
+        mode=CalculationMode.POWER_CONSTRAINED,
+        target_rpm=None,
+    )
+    assert result.error == expected.error
+    if result.error is None:
+        assert result.spindle_speed_rpm == expected.spindle_speed_rpm
+        assert result.feed_rate == expected.feed_rate
+
+
 def test_switching_mode_clears_the_previous_modes_power_or_rpm_value():
     """Mirrors the pre-018 dialog chain's `mode_changed` guard: a mode's
     power/RPM field(s) must not silently default to a value entered under a

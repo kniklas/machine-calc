@@ -26,6 +26,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Literal, cast
 
 from prompt_toolkit.formatted_text import StyleAndTextTuples
+from prompt_toolkit.utils import get_cwidth
 
 from mfgparams.console.i18n import get_locale
 from mfgparams.console.tui.menu import MenuEntry
@@ -301,7 +302,15 @@ def _bar_entry_offsets(entries: list[MenuEntry]) -> list[int]:
     `menu.render_menu_bar` -- that function joins entries with a two-space
     separator before every entry but the first, so this mirrors that exact
     spacing. Used to position a bar entry's own dropdown `Float` directly
-    under it (`build_app`), the way a typical menu-bar TUI does."""
+    under it (`build_app`), the way a typical menu-bar TUI does.
+
+    Uses `get_cwidth` (prompt-toolkit's own per-character display-column
+    width, the same measure the terminal renderer uses to lay out each
+    fragment) rather than `len()` (a Unicode code-point count): the two
+    diverge for wide characters -- CJK glyphs render two columns wide --
+    so a translated bar label containing one would make a code-point count
+    under-measure that entry's on-screen width, misplacing every dropdown
+    to its right by however many wide characters preceded it."""
 
     offsets: list[int] = []
     x = 0
@@ -309,7 +318,7 @@ def _bar_entry_offsets(entries: list[MenuEntry]) -> list[int]:
         if index > 0:
             x += 2
         offsets.append(x)
-        x += len(entry.label)
+        x += sum(get_cwidth(char) for char in entry.label)
     return offsets
 
 
@@ -721,6 +730,16 @@ def build_app(  # noqa: C901
     # render's value (blank on first open) for one frame every time.
     operation_window = Frame(body=operation_body, title=_operation_title, style="class:dialog.body")
 
+    # Windows for the panels that can outgrow the screen (Configuration in
+    # particular: a user-supplied `--materials-config` can register far
+    # more categories/materials than fit in one terminal height) are kept
+    # here, keyed by `body_mode`, so the Up/Down bindings below can reach
+    # each one's own `vertical_scroll` -- a plain mutable `int` attribute
+    # prompt-toolkit clamps to the content's actual extent during its own
+    # `write_to_screen` pass, so scrolling past either end is a no-op
+    # rather than something this code has to bound itself.
+    scrollable_dropdown_windows: dict[str, Window] = {}
+
     def _dropdown_float(
         control: FormattedTextControl,
         mode: str,
@@ -742,6 +761,7 @@ def build_app(  # noqa: C901
         an 80-column terminal."""
 
         window = Window(content=control, wrap_lines=True, width=width)
+        scrollable_dropdown_windows[mode] = window
         return Float(
             left=bar_offsets[bar_entry_index[bar_value]],
             # Row 1 -- directly below the bar (row 0), per direct user
@@ -1035,11 +1055,16 @@ def build_app(  # noqa: C901
                 return
 
     # Configuration/About/Help have no navigable rows of their own -- each
-    # is a single static block -- so Up always returns focus to the bar
-    # directly (the same "get back to the menu bar" request the tree's own
-    # top-row Up above satisfies, applied to a panel with nothing to
-    # navigate past in the first place), closing the panel on the way out
-    # (matching `_escape_body`/`_tree_up`).
+    # is a single static block -- so Down scrolls further into it while
+    # there's more to see, and Up scrolls back up while there's scroll
+    # position to give up. Only once a panel is already scrolled to its
+    # very top does Up fall through to "get back to the menu bar" (the
+    # same request the tree's own top-row Up above satisfies), closing the
+    # panel on the way out (matching `_escape_body`/`_tree_up`). This
+    # matters in practice for Configuration: a user-supplied
+    # `--materials-config` can list more categories/materials than fit in
+    # one terminal height, and Up closing the panel immediately (its
+    # original behavior) left no way to read the rest of a long listing.
     configuration_focused = Condition(
         lambda: view.body_mode == "configuration" and app.layout.has_focus(configuration_control)
     )
@@ -1050,10 +1075,22 @@ def build_app(  # noqa: C901
         lambda: view.body_mode == "help" and app.layout.has_focus(help_control)
     )
 
+    @bindings.add("down", filter=configuration_focused)
+    @bindings.add("down", filter=about_focused)
+    @bindings.add("down", filter=help_focused)
+    def _dropdown_scroll_down(event) -> None:
+        assert view.body_mode is not None
+        scrollable_dropdown_windows[view.body_mode].vertical_scroll += 1
+
     @bindings.add("up", filter=configuration_focused)
     @bindings.add("up", filter=about_focused)
     @bindings.add("up", filter=help_focused)
     def _dropdown_up_to_bar(event) -> None:
+        assert view.body_mode is not None
+        window = scrollable_dropdown_windows[view.body_mode]
+        if window.vertical_scroll > 0:
+            window.vertical_scroll -= 1
+            return
         view.body_mode = None
         event.app.layout.focus(bar_control)
 

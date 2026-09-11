@@ -165,6 +165,147 @@ def test_face_milling_reaches_a_result_matching_the_core_calculation():
     assert result.spindle_speed_rpm == expected.spindle_speed_rpm
 
 
+def test_end_milling_fixed_rpm_mode_reaches_a_result_matching_the_core_calculation():
+    """Round-3 code-review finding (T015): both sub-operations need
+    coverage for all three `CalculationMode` values, not just Standard --
+    `test_tui_drilling.py` already covers Fixed RPM/Power constrained for
+    Drilling; this and the three tests below close the same gap here."""
+
+    ui = _ui()
+    screen = _screen(ui)
+    _fill_end_milling(ui, screen)
+    _row(_rows(ui, screen), FieldId.MODE).on_select(CalculationMode.FIXED_RPM.value)
+    _row(_rows(ui, screen), FieldId.TARGET_RPM).on_commit(1500.0)
+    state = screen.session_state
+    assert isinstance(state, MillingSessionState)
+    assert split_pane.is_complete(_rows(ui, screen))
+
+    result = calculate_result(ui, state, None, "en")
+    expected = calculate_end_milling(
+        diameter=10.0,
+        axial_depth_of_cut=2.0,
+        radial_depth_of_cut=1.0,
+        feed_per_tooth=0.05,
+        number_of_teeth=4.0,
+        length_of_cut=50.0,
+        material="Mild Steel",
+        tool="HSS",
+        unit_system=UnitSystem.METRIC,
+        available_power=None,
+        locale="en",
+        mode=CalculationMode.FIXED_RPM,
+        target_rpm=1500.0,
+    )
+    assert result.error == expected.error
+    if result.error is None:
+        assert result.spindle_speed_rpm == expected.spindle_speed_rpm
+
+
+def test_end_milling_power_constrained_mode_reaches_a_result_matching_the_core_calculation():
+    ui = _ui()
+    screen = _screen(ui)
+    _fill_end_milling(ui, screen)
+    _row(_rows(ui, screen), FieldId.MODE).on_select(CalculationMode.POWER_CONSTRAINED.value)
+    _row(_rows(ui, screen), FieldId.AVAILABLE_POWER).on_commit(3.0)
+    state = screen.session_state
+    assert isinstance(state, MillingSessionState)
+    assert split_pane.is_complete(_rows(ui, screen))
+
+    result = calculate_result(ui, state, None, "en")
+    expected = calculate_end_milling(
+        diameter=10.0,
+        axial_depth_of_cut=2.0,
+        radial_depth_of_cut=1.0,
+        feed_per_tooth=0.05,
+        number_of_teeth=4.0,
+        length_of_cut=50.0,
+        material="Mild Steel",
+        tool="HSS",
+        unit_system=UnitSystem.METRIC,
+        available_power=3.0,
+        locale="en",
+        mode=CalculationMode.POWER_CONSTRAINED,
+        target_rpm=None,
+    )
+    assert result.error == expected.error
+    if result.error is None:
+        assert result.spindle_speed_rpm == expected.spindle_speed_rpm
+
+
+def _fill_face_milling(ui: SessionUI, screen: OperationScreen) -> None:
+    _row(_rows(ui, screen), FieldId.MATERIAL_TYPE).on_select("metal")
+    _row(_rows(ui, screen), FieldId.MATERIAL).on_select("Mild Steel")
+    _row(_rows(ui, screen), FieldId.TOOL).on_select("HSS")
+    _row(_rows(ui, screen), FieldId.DIAMETER).on_commit(50.0)
+    _row(_rows(ui, screen), FieldId.AXIAL_DEPTH_OF_CUT).on_commit(2.0)
+    _row(_rows(ui, screen), FieldId.RADIAL_ENGAGEMENT).on_commit(30.0)
+    _row(_rows(ui, screen), FieldId.FEED_PER_TOOTH).on_commit(0.1)
+    _row(_rows(ui, screen), FieldId.NUMBER_OF_TEETH).on_commit(6.0)
+    _row(_rows(ui, screen), FieldId.LENGTH_OF_CUT).on_commit(100.0)
+
+
+def test_face_milling_fixed_rpm_mode_reaches_a_result_matching_the_core_calculation():
+    ui = _ui()
+    screen = _screen(ui, MillingSubOperation.FACE_MILLING)
+    _fill_face_milling(ui, screen)
+    _row(_rows(ui, screen), FieldId.MODE).on_select(CalculationMode.FIXED_RPM.value)
+    _row(_rows(ui, screen), FieldId.TARGET_RPM).on_commit(800.0)
+    state = screen.session_state
+    assert isinstance(state, MillingSessionState)
+    assert split_pane.is_complete(_rows(ui, screen))
+
+    result = calculate_result(ui, state, None, "en")
+    expected = calculate_face_milling(
+        diameter=50.0,
+        axial_depth_of_cut=2.0,
+        width_of_cut=30.0,
+        feed_per_tooth=0.1,
+        number_of_teeth=6.0,
+        length_of_cut=100.0,
+        material="Mild Steel",
+        tool="HSS",
+        unit_system=UnitSystem.METRIC,
+        available_power=None,
+        locale="en",
+        mode=CalculationMode.FIXED_RPM,
+        target_rpm=800.0,
+    )
+    assert result.error == expected.error
+    if result.error is None:
+        assert result.spindle_speed_rpm == expected.spindle_speed_rpm
+
+
+def test_face_milling_power_constrained_mode_reaches_a_result_matching_the_core_calculation():
+    ui = _ui()
+    screen = _screen(ui, MillingSubOperation.FACE_MILLING)
+    _fill_face_milling(ui, screen)
+    _row(_rows(ui, screen), FieldId.MODE).on_select(CalculationMode.POWER_CONSTRAINED.value)
+    _row(_rows(ui, screen), FieldId.AVAILABLE_POWER).on_commit(4.0)
+    state = screen.session_state
+    assert isinstance(state, MillingSessionState)
+    assert split_pane.is_complete(_rows(ui, screen))
+
+    result = calculate_result(ui, state, None, "en")
+    expected = calculate_face_milling(
+        diameter=50.0,
+        axial_depth_of_cut=2.0,
+        width_of_cut=30.0,
+        feed_per_tooth=0.1,
+        number_of_teeth=6.0,
+        length_of_cut=100.0,
+        material="Mild Steel",
+        tool="HSS",
+        unit_system=UnitSystem.METRIC,
+        available_power=4.0,
+        locale="en",
+        mode=CalculationMode.POWER_CONSTRAINED,
+        target_rpm=None,
+    )
+    assert result.error == expected.error
+    if result.error is None:
+        assert result.spindle_speed_rpm == expected.spindle_speed_rpm
+
+
 def test_revisiting_the_same_sub_operation_offers_prior_answers_as_defaults():
     """SC-005/FR-002 parity."""
 

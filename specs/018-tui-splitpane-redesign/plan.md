@@ -102,7 +102,7 @@ presentation and interaction model only, not what can be calculated (spec Assump
 | IV. Packaging & Versioning | PASS (conditional) | This is a MINOR bump (`2.0.0` → `2.1.0`), not MAJOR: unlike 017's REPL removal, `mfgparams.console` has no scriptable/programmatic contract to break — it is already TTY-only, interactive-only (017's own "no scripting/automation entry point" guarantee, unchanged here), and CLI args (`--materials-config`) are unchanged. `tasks.md` MUST bump `src/mfgparams/__init__.py`'s `__version__` and add a `CHANGELOG.md` `[Unreleased]` entry. |
 | V. Resource-Constrained Compatibility | PASS (conditional) | FR-019/SC-006 require the new reactive right-pane redraw be evaluated against Principle V's profile specifically, not assumed compatible because `calculate()` itself is unchanged. `tasks.md` MUST rewrite `tests/performance/test_tui_redraw_latency.py` to measure the real reactive redraw this feature introduces (per the Carried-Over Items table — the old dialog-chain model never had one for it to observe) and SHOULD extend `test_tui_startup_budget.py` if the new persistent `Application`'s baseline memory footprint differs materially from the old per-screen one. |
 | VI. Extensibility by Design | PASS | Drilling and Milling share one left/right-pane component (FR-009's identical-pattern requirement) rather than each hand-rolling its own; a future operation attaches as a new screen module reusing that component plus a new tree leaf, not a change to Drilling's/Milling's own modules. |
-| VII. Documentation & Publishing | PASS (conditional) | README.md/`docs/source/{drilling,milling}.rst` and the `console/tui/` architecture note (README) already describe this feature's *first* pass (embedded split pane, inline radio text) — `tasks.md` MUST update them again for the floating-window/`RadioList` shape, not leave the now-superseded description in place. |
+| VII. Documentation & Publishing | PASS (conditional) | README.md/`docs/source/{drilling,milling}.rst` and the `console/tui/` architecture note (README) already describe this feature's *first* pass (embedded split pane, inline radio text) — `tasks.md` MUST update them again for the current shape, not leave the now-superseded description in place. (Corrected twice since this row was written: first for the floating-window/`RadioList` shape described elsewhere in this plan, then again — Phase 9 — since that shape was itself superseded by the prototype-fidelity single-line-radio design; both corrections landed in README.md/the `.rst` docs directly, not reflected retroactively in this row's own wording.) |
 | VIII. Internationalization | PASS | All new UI strings (menu bar labels, tree labels, pane titles, FR-006b's invalid-number message) sourced via the existing `mfgparams.console.i18n.translate` mechanism under the existing `tui.*` namespace (FR-011); see data-model.md for the new message-key set. |
 | IX. Automated Gates | PASS | Standard CI gates apply unchanged; no new runtime dependency is introduced (`prompt-toolkit` already declared), so `dependency-scan`/CodeQL/`bandit` need no new configuration. |
 | X. Licensing | N/A | No licensing change. |
@@ -114,12 +114,16 @@ No unjustified violations — Complexity Tracking table below is empty.
 **Post-Phase-1 re-check**: Phase 1 design (data-model.md, contracts/console-tui-splitpane-contract.md,
 quickstart.md) introduces no gate beyond what the table above already accounts for. Research.md's
 four items (terminal-size floor verification; `_tui_test_support.py` adaptation for a
-single-`Application` model; `FloatContainer`/`Float` construction; `RadioList` accordion rendering
-and its keyboard-contract consequence) are Phase 0 research outputs, not gate failures —
-data-model.md and the contract both build on their resolutions. No new NEEDS CLARIFICATION
-surfaced; every question raised across both `/speckit-clarify` sessions (the original three, and
-this revision's three reopening FR-003/FR-004/FR-005) was resolved before this plan re-run
-(spec.md's Clarifications section, both dated sessions).
+single-`Application` model; `FloatContainer`/`Float` construction; a fourth item on radio-field
+rendering — originally `RadioList` accordion rendering and its keyboard-contract consequence,
+**superseded by Phase 9**: no `RadioList`, ever; a radio field is always a single-line
+`Label: value` cycled by Left/Right/Space, see research.md #4's own reversal note) are Phase 0
+research outputs, not gate failures — data-model.md and the contract both build on their (current,
+Phase-9-corrected) resolutions. No new NEEDS CLARIFICATION surfaced; every question raised across
+both `/speckit-clarify` sessions (the original three, and this revision's three reopening
+FR-003/FR-004/FR-005) was resolved before this plan re-run (spec.md's Clarifications section, both
+dated sessions) — a *third* `/speckit-clarify` session (2026-09-11) later reopened and corrected
+the FR-005 answer specifically; see spec.md's Clarifications for that session's own Q&A.
 
 ## Project Structure
 
@@ -177,20 +181,28 @@ src/mfgparams/console/
     │                               # original consolidated table); this revision doesn't reopen
     │                               # that split.
     └── screens/
-        ├── split_pane.py          # REWRITTEN (revision): the shared left/right-pane engine
-        │                          # (`RadioRow`/`NumberRow`, navigation, the right pane's
-        │                          # three-state machine) already shipped in the first pass.
-        │                          # This revision replaces `RadioRow`'s rendering with
+        ├── split_pane.py          # REWRITTEN (revision), then REWRITTEN AGAIN (Phase 9): the
+        │                          # shared left/right-pane engine (`RadioRow`/`NumberRow`,
+        │                          # navigation, the right pane's result machine) already shipped
+        │                          # in the first pass. This revision's own original text (kept
+        │                          # below, struck through in spirit, as historical record) said
+        │                          # `RadioRow` would render as an expanded
         │                          # `prompt_toolkit.widgets.RadioList` for the currently-focused
-        │                          # radio field (accordion — one-line summary for every other
-        │                          # radio field), and its Left/Right-cycles-the-value key
-        │                          # handling with `RadioList`'s own Up/Down/Enter/Space bindings
-        │                          # (research.md #4) — `NumberRow`'s instant-edit/nudge behavior
-        │                          # (FR-016/FR-017) is unchanged. Also now owns constructing the
-        │                          # `Float`/`Frame` wrapper `app.py` adds to its
-        │                          # `FloatContainer` (research.md #3), since that's the
-        │                          # operation screen's own presentation, not `app.py`'s
-        │                          # navigation-shell concern.
+        │                          # field (accordion — one-line summary for every other radio
+        │                          # field) with Left/Right-cycling replaced by `RadioList`'s own
+        │                          # Up/Down/Enter/Space bindings (research.md #4). **Phase 9
+        │                          # superseded this entirely**: reading the actual pre-plan
+        │                          # prototype source (not a description of it) showed no
+        │                          # `RadioList` at all — a radio field is *always* a single-line
+        │                          # `Label: value`, cycled and committed immediately by
+        │                          # Left/Right/Space, with Up/Down always moving between fields
+        │                          # unconditionally (no Tab/Shift-Tab). `NumberRow` changed too:
+        │                          # its buffer commits to `session_state` only on navigating
+        │                          # away from the field, not on every keystroke as both earlier
+        │                          # passes shipped. Also owns constructing the `Float`/`Frame`
+        │                          # wrapper `app.py` adds to its `FloatContainer` (research.md
+        │                          # #3), since that's the operation screen's own presentation,
+        │                          # not `app.py`'s navigation-shell concern.
         ├── drilling.py            # UNCHANGED by this revision — `DrillingSessionState` and
         │                          # `rows_for()`'s field list/order (FR-005/FR-012) already
         │                          # shipped in the first pass; only `split_pane.py`'s rendering
@@ -202,7 +214,8 @@ src/mfgparams/console/
         │                          # own no-tree-shortcut resolution too).
         ├── configuration.py       # UNCHANGED by this revision — still view-only (FR-014),
         │                          # covering all three tool registries (FR-015); not part of the
-        │                          # floating-window/tree-flattening/RadioList scope.
+        │                          # floating-window/tree-flattening scope (nor Phase 9's later
+        │                          # radio-field correction, which didn't touch this screen).
         ├── about.py                # UNCHANGED (content and placement both settled in the first
         │                          # pass).
         └── help.py                 # UNCHANGED, same reasoning as about.py.
@@ -219,17 +232,33 @@ tests/
 │   ├── _tui_test_support.py       # UNCHANGED by this revision — the headless-driving technique
 │   │                              # (research.md #2) is orthogonal to the tree/window/radio
 │   │                              # shape.
-│   ├── test_tui_navigation.py     # REWRITTEN AGAIN (revision) — every test exercising the old
-│   │                              # "toggle Drilling's shortcut, then select Tool" sequence is
-│   │                              # now simply "select Drilling" (a flat leaf); FR-005a's
-│   │                              # tree-collapse-never-closes-the-screen tests are simplified,
-│   │                              # not removed, since the floating window still needs that
-│   │                              # guarantee (now trivially, research.md #3).
-│   ├── test_tui_field_editing.py  # REWRITTEN AGAIN (revision) — its Left/Right-cycles-a-radio
-│   │                              # assertions are now wrong (research.md #4); replaced with
-│   │                              # Up/Down-navigates-the-open-`RadioList`/Enter-or-Space-commits
-│   │                              # assertions. Numeric instant-edit/nudge assertions (FR-016/
-│   │                              # FR-017) are unchanged.
+│   ├── test_tui_navigation.py     # REWRITTEN AGAIN (revision), then again (Phase 9) — every
+│   │                              # test exercising the old "toggle Drilling's shortcut, then
+│   │                              # select Tool" sequence is now simply "select Drilling" (a
+│   │                              # flat leaf). FR-005a's own test coverage changed shape again
+│   │                              # in Phase 9 (a round-3 code-review pass on PR #96, see
+│   │                              # spec.md's FR-005a and quickstart.md Scenario 5's own revision
+│   │                              # notes): "collapse the tree while keeping an operation open"
+│   │                              # stopped being a reachable key sequence at all once Escape
+│   │                              # started closing the operation outright (per direct user
+│   │                              # feedback) -- coverage moved to the state-independence
+│   │                              # guarantee that request was actually protecting
+│   │                              # (`test_session_ui.py`, plus this file's own `test_escaping_
+│   │                              # the_operation_pane_closes_it_and_reveals_the_tree_underneath`
+│   │                              # and `test_drilling_tool_selection_is_always_present_in_the_
+│   │                              # left_pane`), not the now-unreachable sequence.
+│   ├── test_tui_field_editing.py  # REWRITTEN AGAIN (revision), then REWRITTEN AGAIN (Phase 9)
+│   │                              # -- this revision's own text (kept below as historical
+│   │                              # record) said Left/Right-cycles-a-radio assertions were now
+│   │                              # wrong, replaced by Up/Down-navigates-the-open-`RadioList`/
+│   │                              # Enter-or-Space-commits ones. **Phase 9 superseded that**:
+│   │                              # reading the actual prototype source showed radio fields
+│   │                              # never expand at all -- Left/Right/Space cycling was restored
+│   │                              # (and is exactly what this file now tests), not replaced by
+│   │                              # `RadioList` navigation. Numeric instant-edit/nudge assertions
+│   │                              # (FR-016/FR-017) changed shape too: a numeric field's buffer
+│   │                              # now commits to `session_state` only on navigating away from
+│   │                              # it, not on every keystroke.
 │   ├── test_tui_app_run.py, test_tui_resize_preserves_input.py  # REWRITTEN AGAIN (revision) —
 │   │                              # both drive real key sequences through the tree to reach
 │   │                              # Drilling; the sequence simplifies (no more shortcut-toggle

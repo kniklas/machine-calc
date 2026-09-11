@@ -66,14 +66,33 @@ confirm you land back at the menu bar/tree, not a relaunched process (Acceptance
   status bar beneath both panes (not the right pane) — the text is never passed to `calculate()`
   (FR-006b).
 
-## Scenario 5 — Tree-collapse never hides a required field (FR-005a, resolved via `/speckit-clarify`)
+## Scenario 5 — The Machining tree's own state never affects an open operation (FR-005a, resolved via `/speckit-clarify`, revised again Phase 9)
 
-With Drilling's floating window open (Scenario 2) and the Machining tree still expanded from
-getting there, focus the bar and collapse the tree (without closing the floating window). Expected:
-the floating window stays open exactly as before — it is not part of the tree's own container
-(research.md #3), so collapsing the tree cannot affect it. This is the specific regression FR-005a
-guards against; treat any case where a required field becomes unreachable or the window closes here
-as a contract violation, not a cosmetic issue.
+**Revision note**: an earlier version of this scenario described a *keyboard sequence* -- "focus
+the bar and collapse the tree without closing the floating window" -- that a code-review pass on
+PR #96 correctly flagged as no longer reachable: escaping the operation pane now closes the
+operation outright, per direct user feedback ("each time user exits floating window it should be
+erased/removed"), so there is no remaining key sequence that reaches the bar while keeping an
+operation open. Re-examining what FR-005a actually protects: since the operation window floats
+*above* the tree (research.md #3), the tree isn't even visible while an operation is open in the
+first place, so a keyboard path to "collapse it without closing the window" was already of little
+practical value once the floating-window architecture landed -- collapsing an invisible tree
+produces no visible change. What FR-005a's guarantee is actually about, and what still needs
+verifying, is state independence, not a specific reachable key sequence:
+
+- Open Drilling, then close it (Escape). Confirm the still-expanded Machining tree becomes visible
+  again, focused, exactly where it was left (`test_escaping_the_operation_pane_closes_it_and_
+  reveals_the_tree_underneath`).
+- Confirm at the data level (`SessionUI.tree`/`SessionUI.open_operation`, `test_session_ui.py`)
+  that no code path ever writes both fields from the same handler -- collapsing/expanding the tree
+  never touches which operation is open, and vice versa, by construction, not by coincidence of
+  which keys happen to be bound.
+- Confirm the left pane's field list (e.g. Drilling's tool selection) is always complete and
+  editable whenever an operation is open, regardless of the tree's own `expanded` value at that
+  moment (`test_drilling_tool_selection_is_always_present_in_the_left_pane`) -- FR-005a's original
+  concern (tool selection was once tree-resident and could theoretically be hidden by a collapse)
+  remains structurally impossible, since tool selection has lived only in the left pane since
+  FR-003 was retired.
 
 ## Scenario 6 — Data-driven material categories (FR-005)
 
