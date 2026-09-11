@@ -1,6 +1,67 @@
 <!--
 Sync Impact Report
 ==================
+Version change: 1.11.0 -> 1.12.0
+Modified principles: none redefined.
+Added sections:
+  - Principle XIII (Manual Verification for Interactive & Reference-Fidelity Features,
+    NON-NEGOTIABLE) — new principle. First bullet: a feature whose correctness depends on
+    how it looks/behaves to a human (an interactive console/TUI or GUI surface) MUST NOT be
+    marked complete on automated tests alone — `tasks.md` MUST carry a distinct, named
+    manual-walkthrough item (developer/reviewer-performed when the agent has no real
+    terminal/display access) covering `quickstart.md`, separate from test tasks; a passing
+    test suite MUST NOT be treated as evidence a rendering/interaction detail (color,
+    position, focus highlighting, shading, layout) is correct. Second bullet: a claim that
+    reference material a feature must match (a prototype, mockup, screenshot, prior
+    discarded code) is unavailable/lost/superseded MUST be verified against the actual
+    current filesystem/repository state when written, not carried forward from a prior
+    session's memory; if the artifact does exist, its literal content MUST be read and
+    cited before any prose paraphrase of its behavior is written into a spec.
+Expanded sections: none
+Removed sections: none
+Rationale: specs/018-tui-splitpane-redesign needed two full implementation passes rejected
+  outright by the user before a third, prototype-fidelity rewrite finally matched, plus 8
+  further user-reported correction rounds after that rewrite was itself marked "done" — all
+  invisible to a fully green CI run throughout. Root causes, per the retrospective posted to
+  PR #96 (https://github.com/kniklas/mfgparams/pull/96#issuecomment-5637032822): (a) the
+  spec's own Carried-Over Items section asserted the pre-plan prototype scripts were
+  "discarded", a claim never checked against the filesystem — the scripts were on disk the
+  whole time, at a known path, and two implementation passes were built from prose
+  descriptions of them instead of their actual source; (b) this codebase's TUI test
+  strategy (`DummyOutput`-based, state/text-only assertions) structurally cannot detect a
+  color, layout, shading, or focus-highlight regression, so "tests pass" repeatedly gave
+  false confidence that a feature depending on exactly those properties was done; (c) the
+  one gate that could have caught most of this — a human looking at the running app — never
+  ran before the feature was first declared complete, only afterward, one round at a time,
+  in direct user feedback. This principle makes both failure modes structurally checkable
+  (a required, named tasks.md item; a required verification step) rather than relying on
+  an agent's memory or assumption holding true across a long, possibly-compacted session.
+MINOR rather than PATCH: this is new, materially expanded guidance — an explicit manual-
+  verification gate and a reference-material-verification requirement did not exist in any
+  prior version — not a wording clarification of existing guidance.
+Templates requiring updates:
+  ⚠️ .specify/templates/tasks-template.md (SHOULD gain a named manual-verification task slot
+     for interactive/rendering features, distinct from test tasks — not applied in this
+     constitution-only change per the Scope Guard; tracked as a Next Action below)
+  OK .specify/templates/plan-template.md (no changes needed — Constitution Check section
+     already surfaces any principle by name during `/speckit-plan`)
+  OK .specify/templates/spec-template.md (no changes needed)
+  OK .github/copilot-instructions.md (no changes needed — does not enumerate principles)
+Propagation: NOT done in this change (Scope Guard: this command's scope is this file alone).
+  See Next Actions in the completion report for the deferred, non-governance follow-up work
+  this amendment implies (tasks-template.md, a possible `/speckit-clarify`/`/speckit-plan`
+  checklist item for reference-material verification, and a possible design-before-build
+  step for net-new UI surfaces with no existing exact reference).
+Follow-up TODOs:
+  - Run /speckit-analyze (or an equivalent cross-artifact consistency check) against a
+    representative in-flight spec per the Governance section's amendment-propagation
+    requirement — not run here since this introduces a new governance principle with no
+    directly affected feature spec/plan/tasks of its own yet.
+-->
+
+<!--
+Sync Impact Report (previous amendment)
+==================
 Version change: 1.10.1 -> 1.11.0
 Modified principles: Principle IX gains a new bullet (path-based job selection exception),
   inserted immediately after its intro sentence. Its bandit bullet is amended to qualify
@@ -551,6 +612,37 @@ into one PR or merged to `main` in a partially-built state.
   PR-sized review and CI discipline apply throughout, while keeping `main` always
   releasable per the Principle VII/Additional Constraints continuous-publish requirement.
 
+### XIII. Manual Verification for Interactive & Reference-Fidelity Features (NON-NEGOTIABLE)
+A feature whose correctness depends on how it looks or behaves to a human — an interactive
+console/TUI or GUI surface, or any change claiming to match an external reference exactly —
+MUST NOT be marked complete on the strength of automated tests alone.
+- `tasks.md` MUST carry at least one distinct, explicitly-named manual-verification task for
+  such a feature (e.g., "manually walk `quickstart.md` Scenario N against a real terminal/
+  display"), separate from and in addition to its automated test tasks; that task MUST be
+  completed — performed by the developer or a reviewer, since a coding agent without access
+  to a real terminal/display cannot perform it itself — before the feature's implementation
+  phase is considered done. A fully passing automated test suite MUST NOT be treated as
+  evidence that a rendering or interaction detail (color, position, focus highlighting,
+  shading, spacing/layout, or any other property the project's test strategy does not
+  directly assert against) is correct, when that test strategy cannot observe it.
+- When a spec, plan, or clarification session asserts that reference material a feature must
+  match (a prototype, a mockup, a screenshot, prior discarded code) is unavailable, lost, or
+  superseded, that claim MUST be verified against the actual current filesystem/repository
+  state at the time it is written, not carried forward from a prior session's memory or an
+  earlier artifact's own unverified claim. If the reference artifact does in fact exist, its
+  literal content MUST be read and directly cited (or linked/embedded in the spec) before any
+  prose paraphrase of its behavior is written; a description re-derived without reading the
+  actual artifact MUST NOT be treated as an equivalent substitute for having read it.
+- Rationale: specs/018-tui-splitpane-redesign needed two full implementation passes rejected
+  outright before a prototype-fidelity rewrite finally matched, and a further 8 user-reported
+  correction rounds after that rewrite was itself marked "done" — none of it caught by CI,
+  because this project's TUI test strategy asserts against state and rendered text, not
+  color/position/shading, and because a spec's own claim that the reference prototype was
+  "discarded" was carried forward for two full implementation passes without ever being
+  checked against the filesystem, where the prototype had been the entire time. Automated
+  tests and human visual review catch structurally different classes of defect; treating the
+  former as satisfying the latter is exactly the gap this principle closes.
+
 ## Additional Constraints (Quality Gates)
 
 - CI MUST run linting, the full automated test suite, and a package build check on every
@@ -623,4 +715,4 @@ recurring pattern, MUST trigger a proposed constitution amendment rather than re
 ad-hoc exceptions. Use `.specify/memory/constitution.md` as the authoritative source for
 runtime development guidance until a dedicated guidance file is introduced.
 
-**Version**: 1.11.0 | **Ratified**: 2026-07-08 | **Last Amended**: 2026-09-05
+**Version**: 1.12.0 | **Ratified**: 2026-07-08 | **Last Amended**: 2026-09-11
