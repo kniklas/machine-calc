@@ -7,6 +7,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The console text GUI's navigation model is replaced: a persistent
+  horizontal menu bar (Exit, Machining, Configuration, About, Help) with a
+  collapsible Machining tree (Milling, Drilling, both flat leaves) stays
+  visible underneath a floating operation window — a centered, bordered
+  left/right split pane (every input simultaneously visible/editable in the
+  left pane, a live, auto-refreshing result in the right pane) opened over
+  the bar/tree rather than replacing them — replacing 017's sequential
+  dialog chain (specs/018-tui-splitpane-redesign). Up/Down always moves to
+  the next/previous left-pane field regardless of type; radio fields (unit
+  system, mode, material type, material, tool) are always a single
+  `Label: value` line, cycled with Left/Right/Space and committed
+  immediately, with no separate confirm step. Numeric fields are
+  instant-edit (typing immediately edits the field's buffer, no separate
+  "start editing" step) and support a Left/Right nudge in addition to
+  typing a value outright, but that buffer is only written to the field
+  once the user navigates away from it; text that still doesn't parse as a
+  number at that point is discarded (the field keeps its last valid value)
+  and surfaces as a message in a status bar beneath both panes, rather than
+  in the right pane. The Configuration screen now covers all three tool
+  registries (drilling, end-mill, face-mill), not just drilling's.
+- Selecting Machining, Configuration, About, or Help from the menu bar now
+  opens a floating dropdown/panel positioned directly under that bar
+  entry, rather than replacing a shared inline body area below the bar —
+  matching a typical menu-bar TUI's dropdown behavior. Escape or Up (the
+  instant you're at the top of a navigable dropdown, or anywhere in a
+  single-block panel with nothing to navigate) closes/erases the open
+  dropdown outright, rather than leaving it open-but-unfocused underneath.
+  Escaping the Drilling/Milling operation window closes it and returns
+  focus to the still-open Machining tree (not the bare bar) if it was
+  expanded, landing exactly where the operation was opened from; a second
+  Escape from there then closes the tree itself and reaches the bar. Down
+  (and j) on the bar now also activates the highlighted item, the same as
+  Enter.
+- The whole application now follows one consistent, Turbo-Vision-style
+  color scheme — a cyan bar, a distinct blue desktop behind it, and the
+  bar's own cyan-on-black for every floating window (the four dropdowns,
+  the Exit confirmation dialog below, and the Drilling/Milling operation
+  window alike), each with a Midnight Commander-style black drop shadow —
+  replacing the terminal's own default background and the prior
+  revision's reliance on prompt-toolkit's own black-on-white dialog
+  default. Every dropdown's top edge sits directly beneath the bar (the
+  divider line that used to sit between the bar and the desktop is
+  removed).
+- Selecting Exit from the menu bar now opens a floating "Are you sure you
+  want to exit?" Yes/No confirmation dropdown (defaulting to No) instead
+  of exiting immediately.
+- Fixed a stray highlighted first character on the menu bar and every
+  dropdown, caused by a focusable control's default terminal-cursor
+  placement (the same class of artifact already fixed for the operation
+  window's own left pane).
+- Fixed a reported bug where the Machining dropdown sometimes needed two
+  Down/Enter presses on the bar to expand: closing it (Escape, or Up at
+  the top row) left its underlying "expanded" flag `True` even though the
+  dropdown was no longer shown, so the very next press silently toggled
+  it back to `False` (no visible change) instead of reopening it.
+- The minimum supported terminal size is raised from 25×80 to **30×80** —
+  the persistent menu bar and tree, shown alongside an operation screen's two
+  panes, no longer reliably fit the previous floor.
+
 ## [2.0.0] - 2026-09-08
 
 ### Removed

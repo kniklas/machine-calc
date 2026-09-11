@@ -51,23 +51,61 @@ model-specific integration tests built against that chain (`test_tui_drilling.py
 `test_tui_milling.py`, `test_tui_resize_preserves_input.py`, and the harness they share) are
 expected to be substantially rewritten, not preserved as-is.
 
+## Clarifications
+
+### Session 2026-09-10
+
+- Q: Should the Configuration screen stay read-only, or gain create/edit capability? → A: View-only — a read-only display of the existing materials/tools registries (drilling, end-mill, face-mill per FR-015), matching 017's default assumption.
+- Q: Is the tree's "drilling type" choice today's tool selection relocated, or a genuinely new categorization? → A: Relocation (reading a) — no new domain concept, no backend changes to `processes.machining.drilling` needed. Placement (left pane vs. tree vs. both) and its coupling to tree-collapse behavior (FR-005a) remain separately open.
+- Q: Where should tool selection live — left pane only, tree only, or both — and how does that interact with tree-collapse behavior? → A: Both — the tree shows it as a navigation shortcut (satisfying FR-003), the left pane always retains full editable control (satisfying FR-005), and tree-collapse is therefore safe by construction with no collapse-prevention logic needed.
+
+### Session 2026-09-10 (revision — reopened after implementation, per user feedback on PR #96 preferring the discarded pre-plan prototype's UI)
+
+- Q: Should an open Drilling or Milling screen render as a floating/overlaid window on top of the menu bar and tree, rather than replacing the body inline the way the shipped implementation does today? → A: Yes — a bordered, positioned panel floats above the persistent bar+tree layout underneath it (`prompt_toolkit.layout.Float`/`FloatContainer`), superseding FR-004's "opens ... a screen" shape and this session's own now-superseded "Both" resolution above for *how* the screen is reached, though not necessarily for whether tool selection itself stays reachable from the tree (see below).
+- Q: Should the Machining tree drop Drilling's tool-selection sub-expansion entirely, so Drilling becomes a direct, flat leaf under Machining exactly like Milling, with tool selection reachable only from the floating screen's left pane? → A: Yes — the tree flattens to Machining → Milling, Drilling (both direct leaves); tool selection lives only in Drilling's left pane. This retires FR-003 and supersedes this session's earlier "Both" resolution (the second bullet above) and its "relocation, not a new categorization" framing (the first bullet above) — the tree no longer has a drilling-type step to relocate anything into.
+- Q: Should every radio-style left-pane field (unit system, mode, material type, material, tool) render as `prompt_toolkit.widgets.RadioList` (one option per line, vertically stacked, arrow-highlighted) rather than the shipped implementation's single-line `(•) label  ( ) label` inline text? → A: Yes — match the prototype's own solution exactly, which used prompt-toolkit's native `RadioList` widget rather than a hand-rolled inline-text renderer (the user's explicit direction: implement exactly as the earlier accepted prototype, not a reinterpretation of it). **Superseded below (Session 2026-09-11): this answer was wrong — it was based on a prose description of the prototype, not the prototype's actual code, which does not use `RadioList` at all.**
+
+### Session 2026-09-11 (correction — reopened a second time, per direct user rejection of the above session's shipped result)
+
+This feature's UI was rebuilt twice from a description of the discarded pre-plan prototype without
+ever having its actual source (first the original dialog-chain-derived guess, then the
+`RadioList`/Tab-Shift-Tab design from the session above). After the second attempt shipped, the
+user rejected it outright: "I do not like the implementation, look and feel should be EXAXCTLY as
+the prototype" [sic]. Asked directly whether the prototype was available anywhere, the user
+confirmed both scripts (`prototype_drilling_splitpane.py`/`prototype_milling_splitpane.py`) were
+still present on disk and gave their location. Reading them in full settled every remaining
+question below by direct inspection rather than inference — no multiple-choice question was put to
+the user for these, since the prototype's own code is unambiguous on each point.
+
+- Q: Does a radio field ever render as a `prompt_toolkit.widgets.RadioList` (one option per line)? → A: No. The prototype's `render_left` renders every radio field as a single `Label: value` line, always, for every field, with no expanded state at all.
+- Q: How does a radio field's value change, then? → A: Left/Right/Space (the prototype's `cycle_field`) cycle the value with wraparound and commit it to state **immediately** — no separate confirm step, no highlighted-but-uncommitted intermediate state.
+- Q: If radio fields never expand, what does Up/Down do? → A: Up/Down (and `j`/`k`) always move between left-pane fields, unconditionally, regardless of the current or next field's type (the prototype's `move_selection`) — there is no Tab/Shift-Tab binding in the prototype at all, and none in the corrected implementation either.
+- Q: When does a numeric field's typed/nudged text reach `session_state`? → A: Only when the user navigates away from the field (Up/Down), via the prototype's `commit_current` — not on every keystroke as Session 2026-09-10's shipped result did. A buffer that still doesn't parse as a number at that point is discarded (the field keeps its last-committed value), and FR-006b's message moves to a new bottom status bar (the prototype's `render_bottom`/`ui.status`) rather than the right pane, surfacing only at that commit attempt, never while the field is still being typed.
+- Q: Does the floating window have its own title, separate from the left pane's? → A: Yes — the prototype wraps the whole screen in `Box(Shadow(Frame(title=<operation name>, ...)))`; the left pane's own heading is the literal text "Inputs", not the operation name. Neither detail was in the shipped implementation.
+
+This session's answers **replace** the prior session's `RadioList`/Tab-Shift-Tab answer (the
+question immediately above) and its downstream FR-005 text below; they do not touch that session's
+other two resolutions (the floating window itself, and the flat Machining tree), which the
+prototype confirms were already correct.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Navigate by menu bar and tree instead of a dialog chain (Priority: P1)
 
 A user launches the console text GUI and sees a persistent horizontal menu bar (Exit, Machining,
 Configuration, About, Help) instead of a full-screen list of choices. Selecting Machining expands
-a tree showing Milling and Drilling; selecting Drilling expands further into a choice of drilling
-type.
-Selecting a leaf operation opens that operation's split-pane screen (User Story 2) without a
-separate full-screen transition for the menu bar or tree itself.
+a tree showing Milling and Drilling as flat, direct leaves (revised via `/speckit-clarify`,
+reopened after implementation — see Clarifications; Drilling has no further tree-level
+sub-expansion of its own).
+Selecting a leaf operation opens that operation's floating split-pane window (User Story 2) over
+the menu bar and tree, without a separate full-screen transition for either of them.
 
 **Why this priority**: This is the foundational navigation shell every other user story depends on
 — without it, there is nothing to select an operation from.
 
-**Independent Test**: Can be fully tested by launching the app, expanding Machining, expanding
-Drilling, and confirming the tree renders and collapses correctly and a leaf selection opens the
-corresponding operation screen — independent of what that screen's panes contain.
+**Independent Test**: Can be fully tested by launching the app, expanding Machining, and confirming
+the tree renders and collapses correctly and selecting either flat leaf (Milling or Drilling) opens
+the corresponding operation's floating window — independent of what that window's panes contain.
 
 **Acceptance Scenarios**:
 
@@ -76,8 +114,10 @@ corresponding operation screen — independent of what that screen's panes conta
    the other menu items require navigating away from it to see.
 2. **Given** the menu bar is visible, **When** the user selects Machining, **Then** a tree expands
    in place showing Milling and Drilling, without replacing the whole screen.
-3. **Given** the Machining tree is expanded, **When** the user selects Drilling, **Then** it
-   further expands to show a choice of drilling type, collapsible back to just Milling/Drilling.
+3. **Given** the Machining tree is expanded, **When** the user selects Drilling, **Then** it opens
+   Drilling's floating operation screen directly (FR-004) — Drilling is a flat leaf, exactly like
+   Milling, with no further tree-level expansion (revised via `/speckit-clarify`, reopened after
+   implementation; see Clarifications).
 4. **Given** a tree is expanded, **When** the user collapses it (e.g. re-selecting Machining or
    pressing a dedicated collapse action), **Then** it returns to its collapsed state without
    losing the user's place in the menu bar.
@@ -91,9 +131,9 @@ that calculation at once: unit system (radio, default metric), calculation mode 
 standard), material type (radio over every registered category — Metal and Wood are the bundled
 defaults, but a user-supplied materials config can register further categories, e.g. Plastic; see
 FR-005), expanding to a further radio choice of the specific material, and plain editable fields
-for diameter, hole depth, and available power — plus tool selection, either here or in the
-Machining tree's drilling-type step, per FR-005's pending resolution. The user can move between and
-edit any of these without a screen transition.
+for diameter, hole depth, and available power, and tool selection — editable only here, with no
+tree-level shortcut into it (FR-005/FR-005a, revised via `/speckit-clarify`). The user can move
+between and edit any of these without a screen transition.
 
 **Why this priority**: This is the core usability improvement this feature exists to deliver —
 without it, the redesign offers no benefit over 017's dialog chain.
@@ -105,9 +145,9 @@ leaving the pane.
 **Acceptance Scenarios**:
 
 1. **Given** the Drilling screen is open, **When** the user views the left pane, **Then** unit
-   system, calculation mode, material type, diameter, hole depth, and available power are all
-   visible and editable without a screen transition, and tool selection is visible and editable
-   either here or in the Machining tree's drilling-type step per FR-005's pending resolution.
+   system, calculation mode, material type, tool selection, diameter, hole depth, and available
+   power are all visible and editable without a screen transition (tool selection is reachable
+   only here — the tree has no shortcut into it, per FR-005/FR-005a as revised).
 2. **Given** the left pane is open, **When** the user selects "Metal" for material type, **Then**
    a further radio choice of specific metals expands in the same pane (and analogously for
    "Wood").
@@ -180,12 +220,12 @@ User Story 1's navigation shell rather than exited or reset.
   (e.g. an engagement value invalid relative to a diameter that was itself just changed) shows the
   clear, actionable, localized error `calculate()` already returns for it, rather than clearing the
   pane to nothing.
-- **Third open question (see Assumptions below)**: what happens if the user collapses the
-  Machining tree while a leaf operation's screen is open — does the operation screen close too, or
-  only the tree's own visual state change? Unlike the resize and cross-field-validation Edge Cases
-  above, this one is not resolved here — it is a genuine layout/architecture question (whether the
-  tree stays visible alongside an open operation screen at all), not something the existing
-  codebase or 017's precedent already answers.
+- **Resolved (see Clarifications)**: collapsing the Machining tree while a leaf operation's screen
+  is open does not close that screen — only the tree's own visual state changes. Trivially true
+  since the floating operation window (FR-004, revised via `/speckit-clarify`) is not part of the
+  tree at all: it floats above the bar+tree layout and is unaffected by the tree's own
+  expand/collapse state, not merely "safe by construction" via a dual tree/left-pane placement
+  that no longer exists (FR-005a).
 - The application must remain fully operable by keyboard alone, with no mouse/pointer interaction
   required for any action — carried over unchanged from 017's own Assumptions.
 
@@ -203,11 +243,17 @@ User Story 1's navigation shell rather than exited or reset.
   explicit, discoverable Exit entry instead.
 - **FR-002**: Selecting Machining MUST expand a collapsible tree showing Milling and Drilling as
   its children, without requiring a separate full-screen transition.
-- **FR-003**: Selecting Drilling MUST further expand/collapse to present a choice, within the
-  same tree, before or as part of opening the Drilling operation screen (see Assumptions for what
-  this choice represents pending confirmation).
-- **FR-004**: Selecting a leaf operation (a specific drilling choice, or Milling) MUST open a
-  screen with a left pane (inputs) and a right pane (results) for that operation.
+- **FR-003**: *(Retired via `/speckit-clarify`, reopened after implementation — see Clarifications.)*
+  Drilling has no tree-level sub-expansion: it is a direct leaf under Machining, exactly like
+  Milling (FR-002). Tool selection lives only in Drilling's left pane (FR-005) — the tree-level
+  "drilling-type" navigation shortcut this requirement originally described no longer exists.
+- **FR-004**: Selecting a leaf operation (Drilling or Milling — both flat tree leaves, FR-002/
+  FR-003) MUST open a centered, bordered floating window (with a shadow, matching PR #94's
+  existing dialog styling —
+  the pre-plan prototype's own confirmed finding, below), overlaid on top of the persistent menu
+  bar and Machining tree rather than replacing them inline, containing a left pane (inputs) and a
+  right pane (results) for that operation (resolved via `/speckit-clarify`, reopened after
+  implementation — see Clarifications).
 - **FR-005**: The left pane MUST present all of the following simultaneously, each editable
   without a screen transition: unit system (radio, default metric), calculation mode (radio,
   default standard), material type (radio built from every category `list_material_types()`
@@ -215,23 +261,31 @@ User Story 1's navigation shell rather than exited or reset.
   the bundled defaults; a user-supplied config can register further categories, and PR #94's
   existing `ask_material_type`/`forms.py` already builds this radio dynamically from that list, a
   behavior this feature MUST preserve, not narrow), expanding to a further radio choice of the
-  specific material, tool selection (radio — for Drilling, whether this field lives in the left
-  pane, in the Machining tree's drilling-type step, or both is pending the `/speckit-clarify`
-  resolution the Assumptions below call for; Milling's tool selection is unaffected and stays in
-  the left pane),
+  specific material, tool selection (radio — always present here, for both Drilling and Milling,
+  with no tree-level shortcut into it for either — see FR-005a),
   and plain fields for diameter, hole depth (Drilling) or the equivalent geometry fields (Milling),
-  and available power.
-- **FR-005a**: FR-005's "simultaneously visible and editable" guarantee MUST hold regardless of how
-  the two placement-related Assumptions below resolve — specifically, if `/speckit-clarify` places
-  Drilling's tool selection in the Machining tree (drilling-type Assumption, reading (a)), then
-  collapsing that tree MUST NOT be able to hide the tool selector while Drilling's operation screen
-  remains open (tree-collapse Assumption). These two Assumptions were flagged independently and
-  each individually reasonable, but their combination can silently violate FR-005/SC-001's
-  all-inputs-visible contract, leaving a required field unreachable. `/speckit-clarify` MUST resolve
-  tool-selection placement and tree-collapse behavior as one coupled decision, not two independent
-  ones — e.g. by preventing the tree from collapsing while an operation depending on its contents is
-  open, by closing that operation screen on collapse, or by keeping the tool selector in the
-  operation pane regardless of where the tree-level "drilling type" choice itself ends up.
+  and available power. Every radio field in this list MUST render as a single `Label: value` line,
+  always — never an expanded, vertically-stacked option list — with Left/Right/Space cycling its
+  value with wraparound and committing the change immediately, no separate confirm step, matching
+  the pre-plan prototype's own solution exactly (resolved via `/speckit-clarify`, reopened a second
+  time after the first correction attempt still didn't match the prototype — see Clarifications,
+  Session 2026-09-11).
+- **FR-005a**: *(Resolution revised via `/speckit-clarify`, reopened after implementation, then
+  again after a round-3 code-review pass on PR #96 questioned the wording below against the
+  shipped keyboard model — see Clarifications.)* FR-005's "simultaneously visible and editable"
+  guarantee holds trivially now: tool selection lives *only* in the left pane, with no tree-level
+  shortcut into it to keep in sync or to make "collapse-safe" — there is no longer a tree-collapse
+  interaction for this field to reason about at all, since the floating operation window (FR-004)
+  is not part of the tree in the first place. `SessionUI.tree`'s expand/collapse state and
+  `SessionUI.open_operation` MUST remain independent by construction — no code path may write both
+  from the same handler — so collapsing/expanding the tree never affects which operation is open,
+  and vice versa; `test_session_ui.py` verifies this at the data level directly. This is
+  deliberately **not** a claim that a specific keyboard sequence reaches the bar while keeping an
+  operation open: escaping the operation pane closes it outright (FR-006's own erasure guarantee,
+  below), and since the operation window floats *above* the tree, the tree isn't even visible while
+  one is open in the first place — a keyboard path to "collapse an invisible tree without closing
+  the window" has no user-visible effect to protect, unlike the underlying state independence,
+  which is what this requirement is actually about.
 - **FR-006**: The right pane MUST display the calculation result once every required left-pane
   input holds a valid value, and MUST NOT display a result computed from a different, no-longer-
   current set of inputs.
@@ -257,7 +311,10 @@ User Story 1's navigation shell rather than exited or reset.
   actionable, localized indication that the value is invalid, distinct from FR-006a's
   calculate()-rejected-combination message. This is the one part of 017's Acceptance Scenario 2
   guarantee FR-006a's reuse-`calculate()`'s-own-errors mechanism cannot cover, since it never
-  reaches `calculate()` in the first place.
+  reaches `calculate()` in the first place. *(Revised via `/speckit-clarify`, Session 2026-09-11:
+  this indication is not part of the right pane at all — matching the pre-plan prototype exactly,
+  it appears in a status bar beneath both panes, and only once the user tries to navigate away from
+  the offending field, not proactively while still typing.)*
 - **FR-007**: The right pane MUST refresh automatically when a left-pane input changes, without a
   separate manual "calculate" action, mirroring the same `calculate()`/`calculate_end_milling()`/
   `calculate_face_milling()` calls PR #94 already wires up.
@@ -270,11 +327,11 @@ User Story 1's navigation shell rather than exited or reset.
   Face Milling (`MillingSubOperation`) before or within the Milling screen — PR #94's existing
   distinction, not something this redesign may drop. Both calculation paths
   (`calculate_end_milling()`/`calculate_face_milling()`) MUST remain reachable; an implementation
-  that omits this choice makes one of the two unreachable. Exactly where the choice lives (the
-  Machining tree, alongside Drilling's own tree-level choice per FR-003, or a left-pane field) is
-  not a second, independent open question: FR-009's identical-pattern requirement means it follows
-  whatever FR-003/FR-005's `/speckit-clarify` resolution decides for Drilling's own equivalent
-  choice.
+  that omits this choice makes one of the two unreachable. Per FR-009's identical-pattern
+  requirement, its placement follows FR-005/FR-005a's resolution for Drilling's equivalent choice
+  (resolved via `/speckit-clarify`, revised after implementation — see Clarifications): the left
+  pane always retains full control, with no Machining-tree-level shortcut for either operation —
+  Drilling and Milling are now symmetric in this respect (FR-002, FR-003 retired).
 - **FR-010**: The application MUST remain fully operable via keyboard alone; no action may require
   mouse/pointer interaction (unchanged from 017).
 - **FR-011**: The application MUST reuse the existing i18n message catalog mechanism
@@ -300,22 +357,21 @@ User Story 1's navigation shell rather than exited or reset.
   guard against — see `tui/app.py`'s note on FR-008). This feature's persistent, long-lived
   menu-bar/tree/pane `Application` is a materially different shape that has not itself been
   verified to preserve in-progress input across a resize.
-- **FR-014**: The Configuration menu item's actual capability (view-only vs. create/edit) MUST be
-  resolved as part of this feature rather than carried forward as an open question a third time
-  (see Assumptions) — a menu bar entry is being rebuilt regardless, and the two supporting screens
-  should not be shipped, then re-opened, twice.
+- **FR-014**: The Configuration screen MUST be view-only — a read-only display of the existing
+  materials/tools registries, not new create/edit capability (resolved via `/speckit-clarify`,
+  see Clarifications; carried forward from 017's default "feature parity, not feature growth"
+  assumption, no longer an open question after a third carryover).
 - **FR-015**: The Configuration screen MUST cover all three tool registries (drilling, end-mill,
   face-mill), not only drilling's — closing the gap Copilot's review of PR #94 found and deferred.
-  This applies regardless of which way FR-014 resolves: a create/edit Configuration screen that
-  still exposes only drilling's registry leaves the same gap PR #94 shipped, just in a different
-  screen mode.
+  This is unconditional following FR-014's view-only resolution: a view-only screen that still
+  exposes only drilling's registry leaves the same gap PR #94 shipped.
 - **FR-016**: A plain numeric left-pane field (diameter, hole depth, available power, target RPM in
   Fixed RPM mode, and Milling's additional geometry fields) MUST become editable the moment it is
-  selected/highlighted — typing a
-  digit immediately edits it. No separate "start editing" action (e.g. pressing Enter first) may be
-  required. Confirmed practical in a throwaway prototype built against this spec (see Recommended
-  Next Steps): navigating onto a numeric field and typing directly, with the value committed
-  automatically on navigating away, reads naturally and needs no explicit "confirm" step either.
+  selected/highlighted — typing a digit immediately edits it. No separate "start editing" action
+  (e.g. pressing Enter first) may be required. Confirmed practical in a throwaway prototype built
+  against this spec (see Recommended Next Steps): navigating onto a numeric field and typing
+  directly, with the value committed automatically on navigating away, reads naturally and needs
+  no explicit "confirm" step either.
 - **FR-017**: A selected plain numeric field MUST support adjusting its value by a small fixed step
   via a direct keyboard action, in addition to typing a value outright — validated in the same
   prototype using Left/Right to nudge by 1 unit. The exact step size and any per-field bounds are an
@@ -335,8 +391,13 @@ User Story 1's navigation shell rather than exited or reset.
 
 - **Top-level menu bar**: The five always-visible entry points (Exit, Machining, Configuration,
   About, Help) — the FR-001 replacement for 017's full-screen top-level menu.
-- **Machining tree**: The collapsible Milling/Drilling (and drilling-type) navigation structure
-  nested under the Machining menu-bar item.
+- **Machining tree**: The collapsible navigation structure nested under the Machining menu-bar
+  item, with Milling and Drilling as its only (flat, leaf) children — no further sub-expansion
+  under either, since Drilling's tool-selection sub-expansion was retired via `/speckit-clarify`
+  (reopened after implementation; see Clarifications).
+- **Operation floating window**: The bordered panel (FR-004, revised via `/speckit-clarify`) that
+  opens over the persistent menu bar/tree when a leaf operation is selected, containing that
+  operation's left and right panes.
 - **Operation input pane (left pane)**: The set of simultaneously-editable inputs for one
   operation (Drilling or Milling), backed by the existing `DrillingSessionState`/
   `MillingSessionState` entities from PR #94 — this feature changes how those fields are
@@ -371,45 +432,33 @@ User Story 1's navigation shell rather than exited or reset.
 
 ## Assumptions
 
-- **Configuration scope remains genuinely open** (carried over from 017, still unconfirmed by the
-  repo owner across `/speckit-plan`, `/speckit-tasks`, `/speckit-analyze`, and PR #94's review):
-  whether "Configuration" means a read-only view of the existing materials/tools registries, or new
-  create/edit ("setup materials, tools") capability. This spec does not resolve it by fiat a fourth
-  time; FR-014 instead makes resolving it explicitly in-scope for this feature's `/speckit-clarify`
-  or planning stage, since Configuration's own menu-bar entry and screen are being rebuilt here
-  regardless of the answer.
-- **"Drilling further expandable into a choice of drilling type" (feature description) may
-  overlap with the existing "tool selection" left-pane field, not introduce a new domain concept.**
-  `mfgparams`'s current drilling calculation has no sub-operation split analogous to milling's
-  end-mill/face-mill (`MillingSubOperation`) — only a flat drilling-tool registry
-  (`list_tools`/`get_tool`). Two readings are both plausible from the feature description alone:
-  (a) the tree's "drilling type" choice *is* today's tool selection, simply relocated into the tree
-  instead of the left pane, or (b) it introduces a genuinely new categorization above tool
-  selection (e.g. grouping tools by drilling technique) that does not exist in the domain model
-  today and would need new backend support. This spec assumes (a) — no new domain concept, purely
-  a UI relocation of the existing tool choice — as the reasonable default consistent with "feature
-  parity, not feature growth" (017's own operating assumption), but flags (b) explicitly for
-  `/speckit-clarify` to confirm or override before `/speckit-plan`, since it changes whether any
-  core/`processes.machining.drilling` code needs to change at all. **This question also covers
-  where Milling's own End-Milling/Face-Milling choice (FR-009a) lives** — tree or left pane — since
-  FR-009 requires Milling to follow Drilling's pattern exactly; `/speckit-clarify`'s answer here
-  should address both operations' placement together, not just Drilling's. It is also coupled to
-  the tree-collapse Assumption below, per FR-005a's normative constraint on the combination.
+- **Configuration scope, resolved (see Clarifications)**: view-only, a read-only display of the
+  existing materials/tools registries, not new create/edit capability — closing out a question
+  carried over from 017 that went unconfirmed across `/speckit-plan`, `/speckit-tasks`,
+  `/speckit-analyze`, and PR #94's review, and which this spec had deliberately declined to resolve
+  by fiat a fourth time (see FR-014).
+- **"Drilling further expandable into a choice of drilling type" (feature description), resolved
+  in part (see Clarifications): it is today's tool selection, relocated — not a new domain
+  concept.** `mfgparams`'s current drilling calculation has no sub-operation split analogous to
+  milling's end-mill/face-mill (`MillingSubOperation`) — only a flat drilling-tool registry
+  (`list_tools`/`get_tool`), and no new one is being added: reading (a) is confirmed over reading
+  (b), so no `processes.machining.drilling` backend changes are needed for this choice to exist.
+  **This resolution also covers where Milling's own End-Milling/Face-Milling choice (FR-009a)
+  is conceptually rooted** — it is Milling's existing, already-real `MillingSubOperation`, not a
+  new concept either — since FR-009 requires Milling to follow Drilling's pattern exactly.
+  **Placement, resolved (see Clarifications, revised after implementation)**: the left pane only —
+  the Machining tree offers no navigation shortcut into it; FR-003 (which described that shortcut)
+  is retired, and Drilling is now a flat tree leaf like Milling (FR-002, FR-005a).
 - **Whether collapsing the Machining tree while a leaf operation's screen is open closes that
-  screen is a third genuinely open question** (Edge Cases above), alongside Configuration scope and
-  drilling-type/sub-operation placement — the checklist and PR test plan's "two open Assumptions"
-  framing predates this one being raised and should be read as three from here on. This spec
-  assumes the operation screen does **not** close, as the more conservative default (destroying
-  in-progress left-pane input as a side effect of a sibling menu-bar item's own state change would
-  be a surprising, hard-to-undo action for a UI whose whole premise is not losing input FR-013a
-  cares about). Unlike the resize/validation Edge Cases above, this one has **no existing precedent
-  to lean on**: 017/PR #94's `NavigationState` (`tui/app.py`) tracks a single `current_screen` with
-  no notion of the tree and a leaf screen being simultaneously "open" at all — that architecture is
-  mutually-exclusive-state by construction, so it neither supports nor rules out this feature's
-  persistent layout answering the question either way. This is a genuinely fresh architectural
-  decision for this feature, not a carryover — flagged for `/speckit-clarify` to confirm or
-  override. This default is coupled to the drilling-type Assumption above, not independent of it —
-  per FR-005a's normative constraint on the combination.
+  screen, resolved (see Clarifications): it does not close.** This was flagged as a third open
+  question alongside Configuration scope and drilling-type/sub-operation placement, with no
+  existing precedent to lean on — 017/PR #94's `NavigationState` (`tui/app.py`) tracks a single
+  `current_screen` with no notion of the tree and a leaf screen being simultaneously "open" at all,
+  a mutually-exclusive-state architecture that neither supported nor ruled out this feature's
+  persistent layout answering the question either way. The operation-screen-stays-open default is
+  now trivially safe by construction, not just conservative: the floating operation window
+  (FR-004, revised via `/speckit-clarify`) is not part of the tree at all, so collapsing the tree
+  cannot affect it or any FR-005 input regardless of which screen stays open.
 - **The 25×80 minimum terminal size (017's FR-011) likely needs raising, not just carrying
   forward, based on the recommended prototype's measured pane height.** Milling's left pane (13
   fields including the always-present available-power field, 14 with Fixed RPM's extra target-RPM
@@ -418,13 +467,14 @@ User Story 1's navigation shell rather than exited or reset.
   plus the floating frame's own border/shadow (~2-3 more) — roughly 20-22 rows for the operation
   screen *alone*, with no menu bar or expanded Machining tree above it yet (both deliberately out of
   scope for that prototype, per the Recommended Next Steps below). Adding FR-001's persistent menu
-  bar (1 row) and an expanded Machining tree (FR-002/FR-003: at minimum Machining + Milling +
-  Drilling, another 2-3 rows) plausibly pushes the real total past 25 rows. This is a reasoned
+  bar (1 row) and an expanded Machining tree (FR-002: Machining + Milling + Drilling, 3 rows,
+  flat — no further sub-expansion under either leaf) plausibly pushes the real total past 25 rows.
+  This is a reasoned
   estimate from the prototype's own numbers, not a verified measurement of the full screen (menu bar
   + tree + operation screen together) — confirming the actual floor needs a follow-up prototype pass
   that adds those two pieces back in, before this Assumption is treated as settled. Drilling's
   narrower left pane (8 fields including available power, 9 with Fixed RPM's extra field, matching
-  SC-001's dialog count below) stayed comfortably within 25 rows on its own.
+  SC-001's dialog count above) stayed comfortably within 25 rows on its own.
 - No new persistence is introduced: as in 017, all state is held for the lifetime of one session
   only.
 - This feature does not change the underlying calculation formulas, validation rules, or supported
@@ -438,7 +488,7 @@ when each should be addressed relative to this feature:
 
 | Deferred item | Recommendation |
 |---|---|
-| Configuration screen's view-vs-edit scope (open since 017's planning) | Resolve **during this feature's `/speckit-clarify`/planning**, per FR-014/Assumptions above — it is being rebuilt here regardless. |
+| Configuration screen's view-vs-edit scope (open since 017's planning) | **Resolved** via `/speckit-clarify`: view-only (see Clarifications, FR-014). |
 | Configuration screen only loads the drilling tool registry, not end-mill/face-mill | Fix **as part of this feature**, per FR-015 — same screen being rebuilt, don't patch it twice. |
 | `tests/performance/test_tui_redraw_latency.py` doesn't measure real redraw latency (timer starts before input, stops at dialog exit) | Fix **as part of this feature's implementation**, not before: this design introduces the first *real* reactive redraw (the right pane), which is exactly what that test should measure — the old dialog-chain model never had one for it to observe. |
 | `test_tui_drilling.py`/`test_tui_milling.py` lost REPL-era coverage of non-standard calculation modes and face milling (only standard mode is exercised, never compared against the rendered result) | Do **not** invest further in the soon-to-be-deleted dialog-chain tests. Write fresh, comprehensive coverage for the new split-pane screens from the start (all modes × both milling sub-operations, asserting against the actual rendered/displayed result), as part of this feature's own test suite. |
@@ -452,11 +502,19 @@ were built — one per operation, since Milling's field count turned out to matt
 25×80 Assumption above) — each a single Drilling or Milling left/right-pane screen, without the
 full menu bar/Machining tree, reusing `calculate()`/`calculate_end_milling()`/
 `calculate_face_milling()`, the materials/tools registries, and `forms.format_result()` unchanged so
-the numbers on screen were real. Both were discarded after validating the shape; nothing from them
-was carried into this repository as shipped code. What the exercise confirmed or changed, now folded
-into FR-005/FR-016/FR-017/FR-018 and the terminal-size Assumption above:
+the numbers on screen were real. Both were believed discarded after validating the shape, with
+nothing from them carried into this repository as shipped code — this turned out to be inaccurate:
+both scripts were still present on disk in this session's scratchpad directory throughout, and once
+located (Session 2026-09-11, Clarifications) they became the direct, byte-for-byte reference for
+this feature's second correction pass, superseding several of the "folded into" bullets below that
+had actually been derived from a prose description of the prototype rather than its own code. What
+the exercise confirmed or changed, now folded into FR-005/FR-016/FR-017/FR-018 and the terminal-size
+Assumption above:
 - The left/right split, rendered as a centered bordered/shadowed box (matching PR #94's existing
-  dialog styling) rather than an edge-to-edge full-bleed split, reads naturally.
+  dialog styling) rather than an edge-to-edge full-bleed split, reads naturally. This finding was
+  not carried into FR-004 as first written (an embedded, edge-to-edge split pane shipped instead)
+  — reopened via `/speckit-clarify` after implementation and now FR-004's own requirement (see
+  Clarifications), matching the prototype exactly per explicit user direction.
 - Numeric fields being instantly editable on selection (FR-016) and supporting a quick keyboard
   nudge (FR-017) both felt right in practice, not just on paper.
 - The right pane needs to wrap text (FR-018) — `format_result`'s lines are routinely wider than a

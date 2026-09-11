@@ -83,17 +83,26 @@ def test_logging_setup_uses_plain_english_not_the_catalog():
     assert "mfgparams.i18n" not in source and "from mfgparams.i18n" not in source
 
 
-# --- console/tui/ -- prompt-toolkit dialog sinks (specs/017-console-text-gui) ------
-
-#: Every prompt-toolkit shortcut this feature's screens construct dialogs
-#: with. If a screen starts using a different one, add it here rather than
-#: silently losing coverage.
+# --- console/tui/ -- user-facing-text sinks -----------------------------
+#
+# 018-tui-splitpane-redesign replaced every prompt-toolkit dialog shortcut
+# under console/tui/ with pure render functions (`screens/split_pane.py`'s
+# `RadioRow`/`NumberRow`, `menu.py`'s `MenuEntry`) -- the dialog
+# constructors below are kept in the set (harmlessly -- matching zero calls
+# now) in case a future screen reintroduces one, but the real sinks this
+# feature's own text flows through are the row/entry constructors that
+# carry a field's display label. If a screen starts building user-facing
+# text through some other constructor, add it here rather than silently
+# losing coverage.
 _DIALOG_CONSTRUCTORS = {
     "input_dialog",
     "radiolist_dialog",
     "message_dialog",
     "yes_no_dialog",
     "button_dialog",
+    "RadioRow",
+    "NumberRow",
+    "MenuEntry",
 }
 
 #: Keyword arguments on those constructors that carry user-facing text.
@@ -108,13 +117,24 @@ def _tui_source_files() -> list[Path]:
     return files
 
 
+def _called_name(func: ast.expr) -> str | None:
+    """A call's target name, whether written bare (`MenuEntry(...)`, as in
+    `menu.py` where it's defined) or qualified (`split_pane.RadioRow(...)`,
+    as in `drilling.py`/`milling.py`, which import the module rather than
+    the name)."""
+
+    if isinstance(func, ast.Name):
+        return func.id
+    if isinstance(func, ast.Attribute):
+        return func.attr
+    return None
+
+
 def _dialog_calls(tree: ast.Module) -> list[ast.Call]:
     return [
         node
         for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id in _DIALOG_CONSTRUCTORS
+        if isinstance(node, ast.Call) and _called_name(node.func) in _DIALOG_CONSTRUCTORS
     ]
 
 

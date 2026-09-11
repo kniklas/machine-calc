@@ -189,26 +189,70 @@ mfgparams
 ```
 
 (`python -m mfgparams` and `python -m mfgparams.console` reach the same
-interface.) A full-screen menu opens with **Machining**, **Configuration**,
-**About**, and **Help** — navigate with the arrow keys and Enter, or a
-menu item's underlined keyboard shortcut. Choosing **Machining** opens a
-submenu of **Milling** and **Drilling**; choosing **Milling** asks for the
-sub-operation (end milling or face milling) before continuing.
+interface.) A persistent menu bar stays visible across the top of the
+screen, in a distinct shade from the blue desktop directly beneath it (no
+divider line between them): **Exit**, **Machining**, **Configuration**,
+**About**, **Help** — navigate with the arrow keys and Enter (**Down**
+does the same as Enter: it opens the highlighted item, the natural
+"descend into" gesture for a horizontal bar), or an item's underlined
+keyboard shortcut. Choosing **Machining**, **Configuration**, **About**,
+or **Help** opens a floating dropdown, its top edge directly under the bar
+and its background matching the bar's own shade, with a Midnight
+Commander-style drop shadow — not inline content replacing the desktop.
+Machining's dropdown shows **Milling** and **Drilling** as flat leaves;
+selecting either opens its operation screen directly, with no further
+tree-level expansion. Escape closes whichever dropdown/panel is open and
+returns focus to the bar; Up does the same the instant you're at the top
+of a navigable list (Machining's tree) or in a single-block panel with
+nothing to navigate (Configuration/About/Help) — the dropdown is erased,
+not left open-but-unfocused underneath. Selecting **Exit** opens a "Are
+you sure you want to exit?" confirmation dropdown (defaulting to **No**)
+rather than exiting immediately — Left/Right toggle Yes/No, Enter/Space
+confirms the highlighted choice, and **y**/**n** answer directly.
 
-Choosing **Drilling** leads to the drilling flow (unit system, mode,
-material, tool, geometry); choosing **Milling** leads to the equivalent
-milling flow. After each result, dismissing it returns to the top-level
-menu so you can start another calculation — the same operation or a
-different one — without leaving the text GUI; each operation remembers its
-own previous answers as defaults for the rest of the session.
+Opening Drilling or Milling shows a centered, bordered floating window,
+shaded and colored the same cyan-on-black as every other floating window,
+over the menu bar and tree (which stay visible underneath, untouched): the
+left pane lists every input for that operation at once — unit system,
+calculation mode, material type/material, tool, and the operation's
+geometry fields (plus, for Milling, the end-milling/face-milling choice) —
+all simultaneously visible and editable, with no separate screen per field.
+The right pane shows the live result, refreshing automatically once every
+required field has a value. **Up/Down** (or **j/k**) always moves to the
+next/previous field, regardless of its type. A radio field (unit system,
+mode, material type, material, tool, sub-operation) is always a single
+`Label: value` line — **Left/Right**/**h/l**/**Space** cycle its value with
+wraparound and commit it immediately, with no separate confirm step. A
+numeric field becomes editable the instant you select it (typing a digit or
+`.`/`-` edits its buffer immediately, Backspace removes the last character,
+Left/Right nudges it by a small step) — but that text is only written to the
+field the instant you navigate away from it (Up/Down); text that still
+doesn't parse as a number at that point is discarded (the field keeps its
+last valid value) and a message appears in the status bar beneath both
+panes, replacing the usual keyboard hint until you correct it.
 
-For drilling, the calculation-mode screen (`standard`, `power-constrained`,
-`fixed-rpm`) appears right after the unit-system screen; `power-constrained`
-then asks for a required available power, and `fixed-rpm` asks for a
-required target spindle speed (with an optional advisory available power).
-Milling (both end milling and face milling) shows the same calculation-mode
-screen at the same point in the sequence, right after the unit-system
-screen and before material selection.
+Escape closes the operation window outright (a single press, not two) and
+returns focus to the still-open Machining tree if it was expanded — not
+the bare menu bar — so you land back exactly where you opened the
+operation from; a second Escape from there closes the tree itself and
+reaches the bar. Either way, you can start another calculation — the same
+operation or a different one — without leaving the text GUI. Each
+operation remembers its own previous answers as defaults for the rest of
+the session.
+
+The whole application follows one consistent, Turbo-Vision-style color
+scheme — a cyan bar, a distinct blue desktop behind it, and the bar's own
+cyan-on-black for every floating window (the Machining/Configuration/
+About/Help dropdowns, the Exit confirmation dialog, and the Drilling/
+Milling operation window alike), each with a Midnight Commander-style
+black drop shadow — rather than the terminal's own default background.
+
+For drilling, the calculation-mode field (`standard`, `power-constrained`,
+`fixed-rpm`) sits right after unit system in the left pane;
+`power-constrained` then makes available power a required field, and
+`fixed-rpm` adds a required target spindle speed (with an optional advisory
+available power). Milling (both end milling and face milling) presents the
+same calculation-mode field in the same position.
 
 ### Material selection is two-step
 
@@ -315,6 +359,81 @@ Principle VIII). Which catalog depends on what the string is:
 
 See [`specs/015-console-i18n-relocation/contracts/catalogue-ownership-contract.md`](specs/015-console-i18n-relocation/contracts/catalogue-ownership-contract.md)
 for the full rule, including two narrow, explicitly documented exceptions.
+
+### `console/tui/` architecture
+
+The text GUI (`mfgparams/console/tui/`) is one persistent
+[prompt-toolkit](https://python-prompt-toolkit.readthedocs.io/) `Application`
+for the whole session, constructed once by `app.py`'s `build_app()` — not a
+chain of short-lived, per-screen `Application`s the way the 017-era dialog
+chain worked (prompt-toolkit does not support a second, nested
+`Application.run()` call, which is exactly why that model changed). Three
+kinds of state stay deliberately separate:
+
+- **`SessionUI`** (`app.py`) — the session-lifetime, business-relevant state:
+  the menu bar's fixed entries, the Machining tree's expand/collapse flag
+  (`MachiningTree` — Milling and Drilling are flat leaves, so this is a
+  single `bool`), which operation screen (if any) is open
+  (`OperationScreen`), and each operation's own remembered inputs
+  (`DrillingSessionState`/`MillingSessionState`, one instance per operation —
+  two for Milling, one per sub-operation — so revisiting a screen offers the
+  previous answers as defaults). `tree` and `open_operation` are independent
+  fields with no code path writing both from the same handler: collapsing the
+  tree never closes an open operation, and vice versa — trivially so, since
+  the operation screen renders as a floating window (a
+  `prompt_toolkit.layout.FloatContainer`/`Float` layered above the
+  bar+tree, not embedded inside their own container) that isn't part of the
+  tree's container at all.
+- **`_ViewState`** (`app.py`, module-private) — pure UI-presentation state
+  that does *not* survive a body change on purpose: which *background* body
+  is currently shown (`body_mode` — the tree, About, Help, or Configuration;
+  an open operation is not one of its values, since the floating window is
+  independent of it) and which row is highlighted within it. Kept separate
+  from `SessionUI` so, for example, selecting Configuration from the bar
+  never touches the Machining tree's own state.
+- **`OperationScreen.field_buffer`** — the raw, not-yet-committed text of
+  whichever numeric field is currently selected in a split-pane screen (see
+  below); empty for a radio field, which has no buffered state of its own
+  since Left/Right/Space commit it immediately. Committed only when the
+  user navigates away from the field (Up/Down) — distinct from that field's
+  last-committed value until then. `OperationScreen.status` is a sibling
+  field: `None` normally, or a transient message (e.g. "'abc' is not a
+  number") shown in the bottom status bar in place of the usual keyboard
+  hint, set only when navigating away from a field whose buffer didn't
+  parse.
+
+Four widgets render as pure functions of this state — `menu.render_menu_bar`,
+`machining_menu.render_tree`, `screens.about.render_about`,
+`screens.help.render_help` — rather than each owning its own dialog/`Layout`.
+The Drilling/Milling screens (`screens/drilling.py`, `screens/milling.py`)
+are built the same way but share one more layer,
+`screens/split_pane.py`: each screen's `rows_for()` returns a list of
+`RadioRow`/`NumberRow` describing that operation's current fields (a later
+row's presence or options can depend on an earlier row's committed value —
+e.g. the specific-material row only appears once a material type is chosen
+— so the list is rebuilt every render, not cached), and `split_pane.py`
+owns the shared navigation/edit/nudge/commit logic and the right pane's
+two-state result machine (a placeholder while any required field is still
+unset; a result, or an error `calculate()` itself rejects for a
+complete-but-invalid combination, once every required field has a value).
+Text that never parses as a number is not a right-pane state at all — it
+never reaches `session_state`, so it can't reach `calculate()` either;
+instead it surfaces via the bottom status bar (`render_bottom_bar`), only
+once the user tries to navigate away from the offending field, not while
+still typing. Deliberately, this module does *not* re-validate field ranges
+itself — `calculate()`/`calculate_end_milling()`/`calculate_face_milling()`
+already re-validate every field internally regardless of caller.
+
+Testing drives the real `Application` headlessly:
+`prompt_toolkit.output.DummyOutput` renders nowhere, and
+`prompt_toolkit.input.create_pipe_input` feeds a scripted key sequence from a
+background thread (with explicit `contextvars` propagation — a plain
+`threading.Thread` does not inherit prompt-toolkit's ambient input/output
+context). `tests/integration/_tui_test_support.py`'s `run_headless()`
+supports an `on_batch` hook that runs between each batch of keys, so a test
+can inspect `SessionUI`/`OperationScreen` state mid-session (e.g. confirming
+the right pane shows a placeholder before every field is complete), not just
+after the whole script finishes.
 
 ## Run the tests
 

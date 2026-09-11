@@ -1,28 +1,30 @@
-"""Shared dialog primitives and data-shaping helpers for the text GUI's screens.
+"""Shared data-shaping helpers for the text GUI's operation screens.
 
-Ports `console/cli.py`'s REPL-independent data-shaping logic (label building,
-collision-safe reverse lookups, error rendering) unchanged (research.md #3),
-and replaces its `input()`-based prompt functions with prompt-toolkit dialog
-equivalents that loop/re-prompt the same way on invalid input. Reused by both
-`screens/milling.py` and `screens/drilling.py` so neither duplicates this
-logic (Constitution Principle I).
+Ports `console/cli.py`'s REPL-independent data-shaping logic (label
+building, collision-safe reverse lookups, error/result rendering)
+unchanged (research.md #3). 018-tui-splitpane-redesign's instant-edit split
+pane (`screens/split_pane.py`) replaced this module's old dialog-prompt
+functions (`ask_*`, `show_result`, the `Cancelled` sentinel) — those existed
+to drive `prompt_toolkit.shortcuts`' modal dialogs one field at a time, with
+an explicit Back/Cancel action to defer a partial commit; the split pane
+commits every field immediately as it's edited (FR-016) and has no
+per-field Back/Cancel step for a cancel sentinel to distinguish (research.md
+consolidated decisions table). Only the still-relevant pure functions
+remain: unit conversion, error/result rendering, and label building, reused
+by both `screens/drilling.py` and `screens/milling.py` (Constitution
+Principle I).
 """
 
 from __future__ import annotations
 
-import enum
-import math
 from collections import Counter
-from typing import Callable
-
-from prompt_toolkit.shortcuts import input_dialog, message_dialog, radiolist_dialog
 
 from mfgparams import UnitSystem
 from mfgparams.console.i18n import DEFAULT_LOCALE, has_message, translate
 from mfgparams.models import CalculationMode, ErrorInfo
-from mfgparams.processes.machining.drilling.tools import DrillingTool, get_tool
+from mfgparams.processes.machining.drilling.tools import DrillingTool
 from mfgparams.processes.machining.milling._tool_registry import MillingTool
-from mfgparams.registry import WorkpieceMaterial, get_material
+from mfgparams.registry import WorkpieceMaterial
 from mfgparams.units import hp_to_kw, in_to_mm, kw_to_hp, mm_to_in
 
 UNIT_LABELS = {
@@ -46,39 +48,14 @@ UNIT_LABELS = {
     },
 }
 
-_MODE_OPTION_KEYS = {
-    CalculationMode.STANDARD: "tui.mode.standard",
-    CalculationMode.POWER_CONSTRAINED: "tui.mode.power_constrained",
-    CalculationMode.FIXED_RPM: "tui.mode.fixed_rpm",
-}
-
-
-class Cancelled(enum.Enum):
-    """Sentinel `ask_optional_number` returns when the user backs out via
-    the dialog's own Back/Cancel button -- distinct from a blank
-    submission, which returns ``default`` (itself often ``None``, meaning
-    "unknown"). ``ask_number``/``ask_choice`` can use plain ``None`` for
-    this because their value is never legitimately ``None``; this field
-    is optional, so ``None`` is already taken. A caller that needs to stop
-    the flow on cancel (mirroring the other dialogs' convention) checks
-    ``result is CANCELLED``. A single-member ``Enum``, not a plain
-    sentinel object, so mypy narrows the ``is`` check (it does not narrow
-    identity checks against an arbitrary class instance).
-    """
-
-    CANCELLED = enum.auto()
-
-
-CANCELLED = Cancelled.CANCELLED
-
 
 def convert_length(value: float, from_system: UnitSystem, to_system: UnitSystem) -> float:
     """Convert a stored length/feed-per-tooth value between unit systems.
 
-    Used when `ask_unit_system` changes `unit_system` mid-session, so a
-    remembered value keeps its physical meaning instead of being re-offered
-    as-is under the new unit's label (e.g. a remembered 10 mm silently
-    becoming a defaulted "10 in").
+    Used when the unit-system field changes mid-session, so a remembered
+    value keeps its physical meaning instead of being re-offered as-is
+    under the new unit's label (e.g. a remembered 10 mm silently becoming a
+    defaulted "10 in").
     """
 
     if from_system is to_system:
@@ -93,10 +70,6 @@ def convert_power(value: float, from_system: UnitSystem, to_system: UnitSystem) 
     if from_system is to_system:
         return value
     return kw_to_hp(value) if to_system is UnitSystem.IMPERIAL else hp_to_kw(value)
-
-
-def _ok_cancel(locale: str, *, cancel_key: str = "tui.action.back") -> tuple[str, str]:
-    return translate(locale, "tui.action.ok"), translate(locale, cancel_key)
 
 
 def render_error(error: ErrorInfo, locale: str) -> str:
@@ -161,277 +134,6 @@ def unique_labels(candidates: dict[str, str]) -> dict[str, str]:
     return unique
 
 
-# --- Dialog primitives -------------------------------------------------------
-
-
-def ask_choice(
-    *,
-    title: str,
-    label: str,
-    options: dict[str, str],
-    default: str | None,
-    locale: str,
-) -> str | None:
-    """Show a radiolist of ``{value: display_label}`` and return the chosen
-    value, or ``None`` if the user cancels ("go back")."""
-
-    ok_text, cancel_text = _ok_cancel(locale)
-    values = list(options.items())
-    return radiolist_dialog(
-        title=title,
-        text=label,
-        values=values,
-        default=default if default in options else None,
-        ok_text=ok_text,
-        cancel_text=cancel_text,
-    ).run()
-
-
-def ask_number(
-    *,
-    title: str,
-    label: str,
-    unit: str,
-    default: float | None,
-    locale: str,
-    validate: Callable[[float], ErrorInfo | None] | None = None,
-) -> float | None:
-    """Prompt for a required numeric value, re-prompting (via an error
-    dialog, then re-showing the same original prompt) on a non-numeric or
-    ``validate``-rejected entry. Returns ``None`` if the user cancels
-    ("go back").
-
-    Deliberately re-shows the *original* ``default`` on retry, not the
-    rejected entry: prompt-toolkit's `TextArea` does not move the cursor to
-    the end of pre-filled `default` text, so retyping a correction would
-    insert *before* the invalid text rather than replacing it (found via a
-    failing integration test: typing "10" to replace a rejected "0" silently
-    produced "100"). This also matches `console/cli.py`'s own REPL
-    behavior, which re-asked with the same original default rather than
-    the invalid entry (FR-002 parity).
-    """
-
-    ok_text, cancel_text = _ok_cancel(locale)
-    text = (
-        translate(locale, "tui.prompt.number.with_default", label=label, unit=unit, default=default)
-        if default is not None
-        else translate(locale, "tui.prompt.number", label=label, unit=unit)
-    )
-    default_text = "" if default is None else str(default)
-
-    while True:
-        raw = input_dialog(
-            title=title, text=text, default=default_text, ok_text=ok_text, cancel_text=cancel_text
-        ).run()
-        if raw is None:
-            return None
-        raw = raw.strip()
-        if not raw and default is not None:
-            return default
-        try:
-            value = float(raw)
-        except ValueError:
-            message_dialog(
-                title=translate(locale, "tui.error.title"),
-                text=translate(locale, "tui.prompt.number.invalid"),
-                ok_text=ok_text,
-            ).run()
-            continue
-
-        error = validate(value) if validate else None
-        if error is None:
-            return value
-        message_dialog(
-            title=translate(locale, "tui.error.title"),
-            text=render_error(error, locale),
-            ok_text=ok_text,
-        ).run()
-
-
-def ask_required_number(
-    *,
-    title: str,
-    label: str,
-    unit: str,
-    default: float | None,
-    locale: str,
-    invalid_message_key: str,
-) -> float | None:
-    """Prompt for a required numeric value that must be positive and finite
-    (available power, target RPM). Unlike a bare `ask_number` call, which
-    only rejects non-numeric text, this also rejects zero/negative/`inf`/
-    `nan` -- via `ask_number`'s own `validate` re-prompt loop, so the
-    rejection shows an explanatory error dialog rather than silently
-    re-showing the same prompt.
-    """
-
-    def _validate(value: float) -> ErrorInfo | None:
-        if math.isfinite(value) and value > 0:
-            return None
-        return ErrorInfo(
-            code="INVALID_NUMBER",
-            message=translate(DEFAULT_LOCALE, invalid_message_key),
-            message_key=invalid_message_key,
-        )
-
-    return ask_number(
-        title=title, label=label, unit=unit, default=default, locale=locale, validate=_validate
-    )
-
-
-def ask_optional_number(
-    *, title: str, label: str, unit: str, default: float | None, locale: str
-) -> float | None | Cancelled:
-    """Prompt for an optional numeric value. Blank keeps ``default``; a
-    non-numeric entry is treated as "unknown" (mirrors `console/cli.py`'s
-    `_prompt_optional_power`: it warns and falls back to ``default`` rather
-    than re-prompting, since this field is never required). Backing out via
-    the dialog's own Back/Cancel button returns :data:`CANCELLED`, not
-    ``default`` -- see that sentinel's docstring for why the two must be
-    distinguishable."""
-
-    ok_text, cancel_text = _ok_cancel(locale)
-    hint = translate(locale, "tui.prompt.power.optional_hint")
-    base = (
-        translate(locale, "tui.prompt.number.with_default", label=label, unit=unit, default=default)
-        if default is not None
-        else translate(locale, "tui.prompt.number", label=label, unit=unit)
-    )
-    text = f"{base}\n{hint}"
-    current_default = "" if default is None else str(default)
-
-    raw = input_dialog(
-        title=title, text=text, default=current_default, ok_text=ok_text, cancel_text=cancel_text
-    ).run()
-    if raw is None:
-        return CANCELLED
-    raw = raw.strip()
-    if not raw:
-        return default
-    try:
-        return float(raw)
-    except ValueError:
-        message_dialog(
-            title=translate(locale, "tui.error.title"),
-            text=translate(locale, "tui.prompt.number.invalid"),
-            ok_text=ok_text,
-        ).run()
-        return default
-
-
-def ask_unit_system(*, default: UnitSystem, locale: str) -> UnitSystem | None:
-    options = {
-        "metric": translate(locale, "tui.unit_system.metric"),
-        "imperial": translate(locale, "tui.unit_system.imperial"),
-    }
-    choice = ask_choice(
-        title=translate(locale, "tui.label.unit_system"),
-        label=translate(locale, "tui.label.unit_system"),
-        options=options,
-        default="metric" if default is UnitSystem.METRIC else "imperial",
-        locale=locale,
-    )
-    if choice is None:
-        return None
-    return UnitSystem.METRIC if choice == "metric" else UnitSystem.IMPERIAL
-
-
-def ask_mode(*, default: CalculationMode, locale: str) -> CalculationMode | None:
-    options = {mode.value: translate(locale, key) for mode, key in _MODE_OPTION_KEYS.items()}
-    choice = ask_choice(
-        title=translate(locale, "tui.label.mode"),
-        label=translate(locale, "tui.label.mode"),
-        options=options,
-        default=default.value,
-        locale=locale,
-    )
-    if choice is None:
-        return None
-    return CalculationMode(choice)
-
-
-def ask_material_type(*, material_types: list[str], default: str | None, locale: str) -> str | None:
-    options = {mt: material_type_label(mt, locale) for mt in material_types}
-    return ask_choice(
-        title=translate(locale, "tui.label.material_type"),
-        label=translate(locale, "tui.label.material_type"),
-        options=unique_labels(options),
-        default=default,
-        locale=locale,
-    )
-
-
-def ask_material(
-    *,
-    names: list[str],
-    config_path: str | None,
-    default: str | None,
-    locale: str,
-    display_locale: str,
-) -> str | None:
-    materials = {name: get_material(name, config_path) for name in names}
-    display = {
-        name: display_label(material, display_locale, locale)
-        for name, material in materials.items()
-        if material is not None
-    }
-    return ask_choice(
-        title=translate(locale, "tui.label.material"),
-        label=translate(locale, "tui.label.material"),
-        options=unique_labels(display),
-        default=default,
-        locale=locale,
-    )
-
-
-def ask_tool(
-    *,
-    names: list[str],
-    resolve: Callable[[str, str | None], object | None],
-    label_key: str,
-    config_path: str | None,
-    default: str | None,
-    locale: str,
-    display_locale: str,
-) -> str | None:
-    """Generalized tool prompt (drilling tool, end-mill, face-mill) —
-    mirrors `console/cli.py`'s `_prompt_mill_tool_choice`/`_prompt_tool_choice`."""
-
-    tools = {name: resolve(name, config_path) for name in names}
-    display = {
-        name: display_label(tool, display_locale, locale)  # type: ignore[arg-type]
-        for name, tool in tools.items()
-        if tool is not None
-    }
-    label = translate(locale, label_key)
-    return ask_choice(
-        title=label,
-        label=label,
-        options=unique_labels(display),
-        default=default,
-        locale=locale,
-    )
-
-
-def ask_drilling_tool(
-    *,
-    names: list[str],
-    config_path: str | None,
-    default: str | None,
-    locale: str,
-    display_locale: str,
-) -> str | None:
-    return ask_tool(
-        names=names,
-        resolve=get_tool,
-        label_key="tui.label.tool",
-        config_path=config_path,
-        default=default,
-        locale=locale,
-        display_locale=display_locale,
-    )
-
-
 _SPINDLE_SPEED_MODE_LABEL_KEYS = {
     CalculationMode.STANDARD: "tui.result.spindle_speed.mode.standard",
     CalculationMode.POWER_CONSTRAINED: "tui.result.spindle_speed.mode.power_constrained",
@@ -441,8 +143,8 @@ _SPINDLE_SPEED_MODE_LABEL_KEYS = {
 
 def format_result(result, labels: dict[str, str], locale: str) -> str:
     """Render a `CalculationResult` as display text. Ports `console/cli.py`'s
-    `_display_result` (research.md #3), returning a string for a
-    `message_dialog` instead of `print()`-ing line by line."""
+    `_display_result` (research.md #3), returning a string for the right
+    pane instead of `print()`-ing line by line."""
 
     if result.error is not None:
         return render_error(result.error, locale)
@@ -484,15 +186,3 @@ def format_result(result, labels: dict[str, str], locale: str) -> str:
     if result.feasibility_warning:
         text += translate(locale, "tui.result.warning", message=result.feasibility_warning)
     return text
-
-
-def show_result(result, labels: dict[str, str], locale: str) -> None:
-    """Display a calculation's result (or error) in a message dialog."""
-
-    is_error = result.error is not None
-    title_key = "tui.result.error.title" if is_error else "tui.result.title"
-    message_dialog(
-        title=translate(locale, title_key),
-        text=format_result(result, labels, locale),
-        ok_text=translate(locale, "tui.action.ok"),
-    ).run()

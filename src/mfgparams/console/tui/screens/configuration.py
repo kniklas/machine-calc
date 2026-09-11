@@ -1,25 +1,35 @@
 """The Configuration screen: read-only view of the active materials/tools
-registry (FR-009, data-model.md's ConfigurationView, research.md #4).
+registry (FR-014/FR-015, data-model.md's ConfigurationView, research.md #4).
 
-Deliberately **not** a create/edit UI — v1 scope is parity with what the
-REPL already exposed (viewing/selecting from an existing registry via
-`--materials-config`), not new authoring capability. See research.md #4 for
-the full reasoning; this is a plan-time judgment call flagged for the user
-to confirm, not a spec-mandated restriction.
+Deliberately **not** a create/edit UI — resolved via `/speckit-clarify`:
+view-only, matching what the REPL already exposed (viewing an existing
+registry via `--materials-config`), not new authoring capability. Now a
+pure render function (like `screens/about.py`/`screens/help.py`) embedded
+in the persistent body rather than its own dialog loop -- since it's
+view-only, there is nothing to select/submit, so a static, complete
+listing (all material types with their materials, plus all three tool
+registries per FR-015) needs no interactive drill-down the way the old
+per-type dialog did.
 """
 
 from __future__ import annotations
 
-from prompt_toolkit.shortcuts import message_dialog
+from prompt_toolkit.formatted_text import StyleAndTextTuples
 
-from mfgparams import list_material_types, list_materials, list_tools
+from mfgparams import (
+    list_end_mill_tools,
+    list_face_mill_tools,
+    list_material_types,
+    list_materials,
+    list_tools,
+)
 from mfgparams.console.i18n import translate
 from mfgparams.console.tui import forms
 
 
-def run_configuration_screen(materials_config_path: str | None, locale: str) -> None:
-    """Loop showing a choice of what to view, until the user backs out."""
-
+def render_configuration(
+    materials_config_path: str | None, locale: str, display_locale: str
+) -> StyleAndTextTuples:
     path_key = (
         "tui.configuration.path_label.set"
         if materials_config_path
@@ -31,39 +41,66 @@ def run_configuration_screen(materials_config_path: str | None, locale: str) -> 
         else translate(locale, path_key)
     )
 
-    while True:
-        material_types = list_material_types(config_path=materials_config_path)
-        tools = list_tools(config_path=materials_config_path)
+    material_types = list_material_types(config_path=materials_config_path)
+    fragments: StyleAndTextTuples = [
+        ("class:pane-title", f"{translate(locale, 'tui.configuration.title')}\n"),
+        ("", f"{path_line}\n\n"),
+    ]
 
-        options = {mt: forms.material_type_label(mt, locale) for mt in material_types}
-        options = forms.unique_labels(options)
-        options["__tools__"] = translate(locale, "tui.label.tool")
-
-        choice = forms.ask_choice(
-            title=translate(locale, "tui.configuration.title"),
-            label=path_line,
-            options=options,
-            default=None,
-            locale=locale,
+    type_labels = ", ".join(forms.material_type_label(mt, locale) for mt in material_types) or "-"
+    fragments.append(
+        (
+            "",
+            translate(locale, "tui.configuration.section.material_types", items=type_labels) + "\n",
         )
-        if choice is None:
-            return
-
-        if choice == "__tools__":
-            text = translate(
-                locale, "tui.configuration.section.tools", items=", ".join(tools) or "-"
+    )
+    for material_type in material_types:
+        materials = list_materials(config_path=materials_config_path, material_type=material_type)
+        fragments.append(
+            (
+                "",
+                translate(
+                    locale,
+                    "tui.configuration.section.materials",
+                    material_type=forms.material_type_label(material_type, locale),
+                    items=", ".join(materials) or "-",
+                )
+                + "\n",
             )
-        else:
-            materials = list_materials(config_path=materials_config_path, material_type=choice)
-            text = translate(
+        )
+
+    fragments.append(("", "\n"))
+    fragments.append(
+        (
+            "",
+            translate(
                 locale,
-                "tui.configuration.section.materials",
-                material_type=forms.material_type_label(choice, locale),
-                items=", ".join(materials) or "-",
+                "tui.configuration.section.tools",
+                items=", ".join(list_tools(config_path=materials_config_path)) or "-",
             )
-
-        message_dialog(
-            title=translate(locale, "tui.configuration.title"),
-            text=text,
-            ok_text=translate(locale, "tui.action.ok"),
-        ).run()
+            + "\n",
+        )
+    )
+    fragments.append(
+        (
+            "",
+            translate(
+                locale,
+                "tui.configuration.section.end_mill_tools",
+                items=", ".join(list_end_mill_tools(config_path=materials_config_path)) or "-",
+            )
+            + "\n",
+        )
+    )
+    fragments.append(
+        (
+            "",
+            translate(
+                locale,
+                "tui.configuration.section.face_mill_tools",
+                items=", ".join(list_face_mill_tools(config_path=materials_config_path)) or "-",
+            )
+            + "\n",
+        )
+    )
+    return fragments

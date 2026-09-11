@@ -22,14 +22,14 @@ def test_supported_when_tty_and_big_enough():
     with (
         mock.patch("sys.stdin.isatty", return_value=True),
         mock.patch("sys.stdout.isatty", return_value=True),
-        mock.patch("shutil.get_terminal_size", return_value=_terminal_size(80, 25)),
+        mock.patch("shutil.get_terminal_size", return_value=_terminal_size(80, 30)),
     ):
         result = tc.check()
 
     assert result.supported is True
     assert result.has_tty is True
     assert result.columns == 80
-    assert result.lines == 25
+    assert result.lines == 30
 
 
 def test_larger_than_minimum_is_still_supported():
@@ -47,7 +47,7 @@ def test_not_supported_when_no_tty():
     with (
         mock.patch("sys.stdin.isatty", return_value=False),
         mock.patch("sys.stdout.isatty", return_value=True),
-        mock.patch("shutil.get_terminal_size", return_value=_terminal_size(80, 25)),
+        mock.patch("shutil.get_terminal_size", return_value=_terminal_size(80, 30)),
     ):
         result = tc.check()
 
@@ -59,7 +59,7 @@ def test_not_supported_when_stdout_is_not_a_tty_either():
     with (
         mock.patch("sys.stdin.isatty", return_value=True),
         mock.patch("sys.stdout.isatty", return_value=False),
-        mock.patch("shutil.get_terminal_size", return_value=_terminal_size(80, 25)),
+        mock.patch("shutil.get_terminal_size", return_value=_terminal_size(80, 30)),
     ):
         result = tc.check()
 
@@ -71,7 +71,9 @@ def test_not_supported_when_too_few_columns():
     with (
         mock.patch("sys.stdin.isatty", return_value=True),
         mock.patch("sys.stdout.isatty", return_value=True),
-        mock.patch("shutil.get_terminal_size", return_value=_terminal_size(79, 25)),
+        # lines held at exactly the (raised) floor so this isolates a
+        # columns-only failure, not a combined columns+lines one.
+        mock.patch("shutil.get_terminal_size", return_value=_terminal_size(79, 30)),
     ):
         result = tc.check()
 
@@ -81,15 +83,20 @@ def test_not_supported_when_too_few_columns():
 
 
 def test_not_supported_when_too_few_lines():
+    """018-tui-splitpane-redesign research.md #1: the floor is raised from
+    017's 25 to 30 -- 24 (below the *old* floor too) would not isolate that
+    the *new* floor is actually the one in effect, so this uses 29
+    (below-new, at-or-above-old) specifically."""
+
     with (
         mock.patch("sys.stdin.isatty", return_value=True),
         mock.patch("sys.stdout.isatty", return_value=True),
-        mock.patch("shutil.get_terminal_size", return_value=_terminal_size(80, 24)),
+        mock.patch("shutil.get_terminal_size", return_value=_terminal_size(80, 29)),
     ):
         result = tc.check()
 
     assert result.supported is False
-    assert result.lines == 24
+    assert result.lines == 29
 
 
 def test_never_raises_even_with_a_zero_fallback_size():
