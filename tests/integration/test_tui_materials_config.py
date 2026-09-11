@@ -27,8 +27,7 @@ def _clear_registry_cache():
 
 def _write_plastic_materials_config(tmp_path) -> str:
     path = tmp_path / "config.toml"
-    path.write_text(
-        """
+    path.write_text("""
         [[materials]]
         name = "ABS"
         material_type = "plastic"
@@ -36,8 +35,7 @@ def _write_plastic_materials_config(tmp_path) -> str:
         reference_feed_per_rev = 0.15
         specific_cutting_force = 300.0
         unit_system = "metric"
-        """
-    )
+        """)
     return str(path)
 
 
@@ -79,8 +77,7 @@ def _write_colliding_material_type_config(tmp_path) -> str:
     catalog key)."""
 
     path = tmp_path / "config.toml"
-    path.write_text(
-        """
+    path.write_text("""
         [[materials]]
         name = "Grey Iron"
         material_type = "cast_iron"
@@ -96,8 +93,7 @@ def _write_colliding_material_type_config(tmp_path) -> str:
         reference_feed_per_rev = 0.2
         specific_cutting_force = 850.0
         unit_system = "metric"
-        """
-    )
+        """)
     return str(path)
 
 
