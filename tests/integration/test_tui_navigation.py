@@ -188,8 +188,11 @@ def test_reopening_drilling_after_a_full_close_reuses_the_same_session_state():
     interaction model: a full close (`ui.open_operation = None`, e.g. via
     Escape from the operation pane) legitimately creates a *new*
     `OperationScreen` wrapper the next time Drilling is opened --
-    `_open_drilling`'s own docstring only promises reuse while Drilling is
-    already open, not across a genuine close. What must survive a full
+    `_open_drilling` always creates a fresh one now (a later code-review
+    pass on PR #96 found and removed a "reuse the existing OperationScreen
+    if Drilling is already open" branch that was already dead code by this
+    point, since the only caller requires the tree to have focus, which by
+    construction means no operation is open yet). What must survive a full
     close/reopen cycle is the underlying `DrillingSessionState`
     (`SessionUI.drilling_state`), so previously-entered values are still
     there -- verified here by its identity, not the wrapper's."""

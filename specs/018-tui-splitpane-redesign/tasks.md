@@ -67,7 +67,14 @@ exists.
       invalid-number message reuses the existing `tui.prompt.number.invalid`
       ("Please enter a numeric value.") rather than a new key — confirm this reuse still reads
       correctly in the new inline-field context, not just the old dialog context, before assuming
-      it needs no wording change
+      it needs no wording change.
+      **Superseded** (the prototype-fidelity revision, Phase 9): FR-006b's message moved to its
+      own key, `tui.validation.unparseable_number` ("'{text}' is not a number -- kept previous
+      value."), surfaced via the bottom status bar rather than reusing this one — matching the
+      prototype's own wording exactly rather than the pre-plan-prototype dialog text. This session
+      deleted the now-unused `tui.prompt.number.invalid` key entirely (a code-review pass on PR
+      #96 found it orphaned, with zero remaining production references) — do not reintroduce or
+      reuse it; see `tui.validation.unparseable_number` instead.
 - [X] T005 [P] Unit test: `SessionUI`'s `tree`/`open_operation` independence — collapsing/expanding
       `tree` never changes `open_operation`, and vice versa (FR-005a's invariant as a data-model
       constraint) — in `tests/unit/console/tui/test_session_ui.py`
@@ -501,7 +508,18 @@ right pane, and not while still typing.
       that were referenced in fragments but never defined; drop the Tab/Shift-Tab and
       `radio_navigate`/`radio_commit` key bindings, restore direct Up/Down (`pane_focused`) +
       Left/Right/h/l/Space (`pane_radio_focused`/`pane_numeric_focused`) bindings (depends on T049,
-      T055)
+      T055).
+      **Superseded** (a code-review pass on PR #96, after this task originally shipped): the
+      "mutated Frame.title lambda" approach described above -- `_render_left_pane` reassigning
+      `operation_window.title = _operation_title()` on every render -- had a real staleness bug:
+      `Frame` draws its title row *before* descending into the body that mutation lives inside, so
+      the border showed the *previous* render's title for one frame every time (blank on first
+      open). Fixed by passing `title=_operation_title` (the callable itself, not its call result)
+      directly to `Frame(...)` at construction, letting `Frame`'s own title `Label` re-invoke it
+      fresh on every render (`AnyFormattedText` supports a zero-argument callable) -- no runtime
+      mutation needed at all. See `app.py`'s own comments on `operation_window`/`_operation_title`
+      for the full mechanism, verified against prompt-toolkit's `ConditionalContainer`/`Frame`
+      source rather than assumed.
 - [X] T057 [P] Update `_number_row()` in `src/mfgparams/console/tui/screens/drilling.py` and
       `screens/milling.py` to the single `on_commit` callback (depends on T055)
 - [X] T058 [P] Update `src/mfgparams/console/locales/en.py`: add `tui.validation.unparseable_number`,

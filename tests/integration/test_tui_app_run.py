@@ -97,3 +97,71 @@ def test_changing_an_input_recomputes_without_leaving_the_screen(monkeypatch):
     non_none = [r for r in results if r is not None]
     assert non_none
     assert len({r.spindle_speed_rpm for r in non_none if r.error is None}) >= 1
+
+
+def test_toggling_milling_sub_operation_twice_correctly_alternates(monkeypatch):
+    """Regression test for a bug a round-2 code-review pass on PR #96 found
+    in `app.py`'s `_current_pane_rows()` memoization cache (added to fix a
+    round-1 performance finding): the cache's original key snapshotted
+    `session_state`'s field *values*, not the object's *identity*. Since a
+    fresh `MillingSessionState` for either sub-operation starts with
+    identical default field values, switching from End Milling to Face
+    Milling (which reassigns `screen.session_state` to a *different*
+    object, `milling.py`'s `_set_sub_operation`, while `op.selected_field`
+    stays on Sub-operation throughout) didn't change the cache key, so the
+    left pane's very next render reused a stale, pre-switch row list --
+    whose Sub-operation row still reported `value="end_milling"`. Pressing
+    Right a second time then read that stale value, not the real current
+    selection, and cycled to "face_milling" *again* instead of correctly
+    alternating back to "end_milling" -- silently getting stuck on Face
+    Milling no matter how many more times the field is cycled."""
+
+    from mfgparams.console.i18n import get_locale
+    from mfgparams.console.tui import app as app_mod
+    from mfgparams.i18n import get_raw_locale
+    from mfgparams.models import MillingSubOperation
+
+    monkeypatch.delenv("MFGPARAMS_LOCALE", raising=False)
+    holder: dict = {}
+
+    def target() -> None:
+        application, ui, view = app_mod.build_app(None, get_locale(), get_raw_locale())
+        holder["ui"] = ui
+        application.run()
+
+    states_after_each_batch = []
+
+    def on_batch() -> None:
+        ui = holder.get("ui")
+        if ui is None or ui.open_operation is None:
+            return
+        states_after_each_batch.append(ui.open_operation.session_state)
+
+    run_headless(
+        target,
+        [
+            "m",  # expand Machining, focus tree (row 0 = Milling)
+            "\r",  # opens Milling directly, selected on Unit system
+            "j",  # Down to Mode
+            "j",  # Down to Sub-operation
+            "l",  # cycles End Milling -> Face Milling, swapping session_state
+            "l",  # cycles again, staying on the same field the whole time --
+            # correctly alternates back to End Milling only if the row
+            # used to compute this second cycle reflects the just-made
+            # switch, not a stale, pre-switch snapshot of it
+            "\x1b",  # closes Milling; focus returns to the still-open tree
+            "\x1b",  # closes the tree; back to the bare bar
+            "\x1b",  # nothing open -> exit
+        ],
+        on_batch=on_batch,
+    )
+
+    ui = holder["ui"]
+    end_milling_state = ui.milling_states[MillingSubOperation.END_MILLING]
+    face_milling_state = ui.milling_states[MillingSubOperation.FACE_MILLING]
+    # The last snapshot captured before the operation closed reflects the
+    # state right after the second "l" -- it must have alternated back to
+    # End Milling, not gotten stuck on Face Milling.
+    assert states_after_each_batch[-1] is end_milling_state
+    assert face_milling_state.material_type is None
+    assert end_milling_state.material_type is None

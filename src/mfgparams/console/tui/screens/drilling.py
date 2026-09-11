@@ -153,11 +153,18 @@ def rows_for(
             state.material = None
         state.material_type = value
 
+    material_type_labels = {mt: forms.material_type_label(mt, locale) for mt in material_types}
     rows.append(
         split_pane.RadioRow(
             field_id=FieldId.MATERIAL_TYPE,
             label=translate(locale, "tui.label.material_type"),
-            options=[(mt, forms.material_type_label(mt, locale)) for mt in material_types],
+            # `unique_labels()` disambiguates, matching the Material/Tool
+            # rows below -- without it, two user-supplied `material_type`
+            # IDs that title-case to the same fallback label (e.g.
+            # "cast_iron"/"cast-iron") would render as two indistinguishable
+            # options a code-review pass on PR #96 found this row alone was
+            # missing that guard for.
+            options=list(forms.unique_labels(material_type_labels).items()),
             value=state.material_type,
             on_select=_set_material_type,
         )

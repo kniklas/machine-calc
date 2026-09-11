@@ -140,7 +140,10 @@ def test_calculate_rejected_combination_shows_calculates_own_error():
     )
     text = "".join(t for _, t in fragments)
     assert translate("en", "tui.result.error.title") in text
-    assert "0" not in translate("en", "tui.prompt.number.invalid")  # sanity: distinct message
+    # Sanity: FR-006a's error text is a genuinely different, distinguishable
+    # message from FR-006b's unparseable-number one -- not a coincidental
+    # match with its fixed wording.
+    assert "is not a number" not in text
     assert result.error.message in text
 
 

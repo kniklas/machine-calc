@@ -265,8 +265,20 @@ def nudge_selected(rows: list[Row], screen: OperationScreen, direction: int) -> 
     if not row.options:
         return
     values = [value for value, _ in row.options]
-    index = values.index(row.value) if row.value in values else -1
-    row.on_select(values[(index + direction) % len(values)])
+    if row.value in values:
+        new_index = (values.index(row.value) + direction) % len(values)
+    else:
+        # From an unset field, land on a sensible edge instead of cycling
+        # from a sentinel index: Right/l/Space (direction > 0) selects the
+        # first option, Left/h (direction < 0) wraps straight to the last
+        # one. A sentinel of -1 here (the previous approach) made Right
+        # correct by coincidence ((-1 + 1) % n == 0) but Left land one
+        # short of the last option instead of wrapping to it -- an
+        # asymmetry a code-review pass on PR #96 caught empirically (the
+        # very first Left press on an unset Tool/Material field selected
+        # the second-to-last option, not the last).
+        new_index = 0 if direction > 0 else len(values) - 1
+    row.on_select(values[new_index])
 
 
 def render_left_pane(

@@ -53,6 +53,10 @@ def _goto(screen: OperationScreen, field_id: FieldId) -> None:
     split_pane.sync_buffer(rows, screen)
 
 
+def _row(rows: list[split_pane.Row], field_id: FieldId) -> split_pane.Row:
+    return next(row for row in rows if row.field_id is field_id)
+
+
 def test_typing_a_digit_edits_the_buffer_without_committing_until_navigating_away():
     """FR-016."""
 
@@ -139,6 +143,39 @@ def test_left_right_cycles_a_radio_field_and_commits_it_immediately():
     state = screen.session_state
     assert isinstance(state, DrillingSessionState)
     assert state.unit_system.value == "imperial"
+
+
+def test_left_from_an_unset_radio_field_wraps_to_the_last_option():
+    """Regression test for a bug a code-review pass on PR #96 found: the
+    very first Left/h press on an *unset* radio field (e.g. Material type,
+    which starts `None`) landed on the second-to-last option instead of
+    wrapping to the last one -- a sentinel index of -1 made Right/l/Space
+    correct by coincidence ((-1 + 1) % n == 0, the first option) but broke
+    the symmetric case. Right's own correctness is re-verified here too, so
+    a future fix can't silently break it while fixing Left."""
+
+    screen = _screen()
+    _goto(screen, FieldId.MATERIAL_TYPE)
+    state = screen.session_state
+    assert isinstance(state, DrillingSessionState)
+    assert state.material_type is None
+
+    options = [value for value, _ in _row(_rows(screen), FieldId.MATERIAL_TYPE).options]
+    assert len(options) >= 2, "need at least two material types for this test to mean anything"
+
+    split_pane.nudge_selected(_rows(screen), screen, -1)  # Left, from unset
+    assert state.material_type == options[-1]
+
+
+def test_right_from_an_unset_radio_field_still_selects_the_first_option():
+    screen = _screen()
+    _goto(screen, FieldId.MATERIAL_TYPE)
+    state = screen.session_state
+    assert isinstance(state, DrillingSessionState)
+
+    options = [value for value, _ in _row(_rows(screen), FieldId.MATERIAL_TYPE).options]
+    split_pane.nudge_selected(_rows(screen), screen, 1)  # Right, from unset
+    assert state.material_type == options[0]
 
 
 def test_radio_cycle_wraps_at_the_boundary_rather_than_clamping():

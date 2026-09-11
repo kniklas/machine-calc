@@ -101,11 +101,6 @@ MESSAGES: dict[str, str] = {
     # --- Numeric input prompt/validation (shared) ---
     "tui.prompt.number": "{label} ({unit})",
     "tui.prompt.number.with_default": "{label} ({unit}, default {default})",
-    # Reused unchanged for 018-tui-splitpane-redesign FR-006b's unparseable-
-    # number message: still a complete, actionable sentence shown next to
-    # the field, not just inside 017's now-replaced modal dialog -- no
-    # wording change needed for the new inline context.
-    "tui.prompt.number.invalid": "Please enter a numeric value.",
     "tui.prompt.power.optional_hint": "Leave blank if unknown.",
     # 018-tui-splitpane-redesign, revision (matching the pre-plan prototype
     # exactly): FR-006b's unparseable-number message now surfaces in the

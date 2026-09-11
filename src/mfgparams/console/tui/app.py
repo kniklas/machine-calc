@@ -267,25 +267,30 @@ def _open_milling(ui: SessionUI, materials_config_path: str | None, display_loca
 def _open_drilling(
     ui: SessionUI, materials_config_path: str | None, display_locale: str
 ) -> OperationScreen:
-    """Reuses the existing ``OperationScreen`` if Drilling is already open
-    (FR-012 carryover -- re-entering must not discard it). Opens on Unit
-    system by default, exactly like Milling (FR-009's identical-pattern
-    requirement) -- revised via `/speckit-clarify`: the tree no longer has
-    a tool-selection shortcut to land a *different* default field on
-    (FR-003 retired)."""
+    """Opens on Unit system by default, exactly like Milling (FR-009's
+    identical-pattern requirement) -- revised via `/speckit-clarify`: the
+    tree no longer has a tool-selection shortcut to land a *different*
+    default field on (FR-003 retired). Always creates a fresh
+    ``OperationScreen`` wrapper, matching `_open_milling`: the only caller,
+    `_activate_tree_row`, requires the tree itself to have focus, which --
+    since escaping the operation pane closes it (`ui.open_operation =
+    None`) before returning focus to the tree -- means `ui.open_operation`
+    is always `None` here already (a code-review pass on PR #96 found the
+    previous "reuse if already open" branch this replaced was accordingly
+    dead code, with a docstring describing a code path that could no
+    longer run). FR-012's actual carryover guarantee lives one level down,
+    in `session_state=ui.drilling_state` below: that object -- not this
+    wrapper -- is what persists a field's value across a close/reopen."""
 
     from mfgparams.console.tui.screens import drilling, split_pane
 
-    existing = ui.open_operation
-    if existing is not None and existing.operation == "drilling":
-        screen = existing
-    else:
-        screen = OperationScreen(
-            operation="drilling",
-            session_state=ui.drilling_state,
-            selected_field=FieldId.UNIT_SYSTEM,
-        )
-        ui.open_operation = screen
+    assert ui.open_operation is None, "Drilling opened while another operation was still open"
+    screen = OperationScreen(
+        operation="drilling",
+        session_state=ui.drilling_state,
+        selected_field=FieldId.UNIT_SYSTEM,
+    )
+    ui.open_operation = screen
     rows = drilling.rows_for(screen, materials_config_path, ui.locale, display_locale)
     split_pane.sync_buffer(rows, screen)
     return screen
@@ -539,23 +544,63 @@ def build_app(  # noqa: C901
     def _current_tree_row_count() -> int:
         return len(machining_menu.tree_rows(ui.tree))
 
-    def _current_pane_rows() -> list[split_pane.Row]:
-        """The open operation's `split_pane.Row` list, recomputed fresh on
-        every access (like `_current_tree_row_count`'s tree-row recompute)
-        since a row's presence/options can depend on another row's just-
-        committed value (T021's `rows_for` docstring)."""
+    # `_current_pane_rows()`'s single-entry cache below: a code-review pass
+    # on PR #96 found this getting called up to 5x per keystroke in the
+    # operation pane (once or twice per key-binding `Condition` filter
+    # checked for that key -- `pane_radio_focused`/`pane_numeric_focused`
+    # each call it independently -- once by whichever handler matches, and
+    # twice more from the subsequent left/right pane re-renders), each call
+    # rebuilding the full row list (registry lookups, `translate()` calls,
+    # `unique_labels()`). None of those calls happen concurrently with a
+    # mutation (state only ever changes inside a key-binding handler, never
+    # during filter evaluation or rendering), so caching by a cheap
+    # fingerprint of everything the row list can depend on is safe: a full
+    # close/reopen creates a new `OperationScreen` (`id(op)` changes), and
+    # any in-place change to `selected_field`/`field_buffer`/a
+    # `session_state` field/`ui.locale` changes the key too. `id(op.
+    # session_state)` is included *in addition to* a value snapshot of its
+    # fields, not instead of one: a round-2 code-review pass on PR #96
+    # found that a value-only key misses Milling's own sub-operation switch
+    # (`screens/milling.py`'s `_set_sub_operation` reassigns
+    # `screen.session_state` to a *different* `MillingSessionState` object
+    # -- End Milling's vs. Face Milling's own -- and the two start with
+    # identical default field values, so a value-only snapshot couldn't
+    # tell them apart and kept serving the stale sub-operation's rows).
+    _pane_rows_cache_key: object = None
+    _pane_rows_cache_value: list[split_pane.Row] = []
 
+    def _current_pane_rows() -> list[split_pane.Row]:
+        """The open operation's `split_pane.Row` list -- a row's presence/
+        options can depend on another row's just-committed value (T021's
+        `rows_for` docstring), so this must still reflect the *current*
+        state on every call; it just avoids recomputing when nothing that
+        could change the result has changed since the last call."""
+
+        nonlocal _pane_rows_cache_key, _pane_rows_cache_value
         op = ui.open_operation
         if op is None:
             return []
+        cache_key = (
+            id(op),
+            id(op.session_state),
+            op.selected_field,
+            op.field_buffer,
+            tuple(vars(op.session_state).items()),
+            ui.locale,
+        )
+        if cache_key == _pane_rows_cache_key:
+            return _pane_rows_cache_value
         if op.operation == "drilling":
-            return drilling.rows_for(op, materials_config_path, ui.locale, display_locale)
-        return milling.rows_for(ui, op, materials_config_path, ui.locale, display_locale)
+            rows = drilling.rows_for(op, materials_config_path, ui.locale, display_locale)
+        else:
+            rows = milling.rows_for(ui, op, materials_config_path, ui.locale, display_locale)
+        _pane_rows_cache_key = cache_key
+        _pane_rows_cache_value = rows
+        return rows
 
     def _render_left_pane() -> StyleAndTextTuples:
         op = ui.open_operation
         assert op is not None
-        operation_window.title = _operation_title()
         return split_pane.render_left_pane(
             _current_pane_rows(),
             op,
@@ -607,6 +652,23 @@ def build_app(  # noqa: C901
     bottom_control = FormattedTextControl(_render_bottom_bar)
 
     def _operation_title() -> str:
+        # Asserting (rather than falling back to "") is safe, not merely
+        # convenient: `operation_window` only ever renders inside the
+        # `ConditionalContainer` below, filtered on `ui.open_operation is
+        # not None`, and `ConditionalContainer.write_to_screen`/
+        # `preferred_width`/`preferred_height` all check that filter
+        # *before* ever descending into its content -- verified against
+        # prompt-toolkit's own source, not assumed -- so this callable is
+        # never invoked while `ui.open_operation` is `None`. (A round-2
+        # code-review pass on PR #96 flagged an earlier "return ''"
+        # fallback here as ineffective for its own stated purpose anyway:
+        # `Frame`'s `has_title` Condition checks `bool(self.title)` against
+        # this *callable itself*, which is always truthy, regardless of
+        # what calling it would return -- so an empty-string fallback could
+        # never have made `has_title()` false in the first place. Since the
+        # only reachable case is `ui.open_operation is not None`, where the
+        # title is always genuinely non-empty, `has_title() == True` is
+        # simply correct here, not a mismatch to work around.)
         op = ui.open_operation
         assert op is not None
         key = "tui.drilling.title" if op.operation == "drilling" else "tui.milling.title"
@@ -647,11 +709,17 @@ def build_app(  # noqa: C901
             Window(content=bottom_control, height=D(min=1, max=2, preferred=1), wrap_lines=True),
         ]
     )
-    # `title` re-reads `operation_window.title` on every render (a `Frame`
-    # attribute meant to be reassigned at runtime, per its own docstring);
-    # `_render_left_pane` sets it fresh each time it runs, immediately
-    # before this `Frame` is drawn.
-    operation_window = Frame(body=operation_body, style="class:dialog.body")
+    # `title=_operation_title` passes the callable itself, not its return
+    # value: `Frame`'s title `Label` re-invokes whatever `self.title` holds
+    # fresh on every render (`AnyFormattedText` supports a zero-argument
+    # callable, resolved by `to_formatted_text`/`Template.format` at draw
+    # time). Fixes a real staleness bug an earlier revision had: mutating
+    # `operation_window.title = _operation_title()` from inside
+    # `_render_left_pane` set the string too late, since `Frame` draws its
+    # title row *before* descending into the body's `DynamicContainer`
+    # that contains the left pane -- the title bar showed the *previous*
+    # render's value (blank on first open) for one frame every time.
+    operation_window = Frame(body=operation_body, title=_operation_title, style="class:dialog.body")
 
     def _dropdown_float(
         control: FormattedTextControl,
