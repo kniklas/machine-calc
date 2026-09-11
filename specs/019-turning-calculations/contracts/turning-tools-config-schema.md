@@ -63,27 +63,30 @@ Cobalt, Carbide), following the identical shape to
 `src/mfgparams/processes/machining/drilling/data/tools.toml` (research.md #5):
 
 ```toml
-[[tools]]
+[[turning_tools]]
 name = "HSS"
 cutting_speed_factor = 1.0
 feed_factor = 1.0
 unit_system = "metric"
 
-[[tools]]
+[[turning_tools]]
 name = "Cobalt"
 cutting_speed_factor = 1.2
 feed_factor = 1.0
 unit_system = "metric"
 
-[[tools]]
+[[turning_tools]]
 name = "Carbide"
 cutting_speed_factor = 2.4
 feed_factor = 1.05
 unit_system = "metric"
 ```
 
-Note: the *bundled* file's own top-level key is `tools` (consistent with how
-`drilling/data/tools.toml` and each operation's own bundled file are always keyed
-`tools` internally — it is only the *external override* file, shared across all
-operations, that needs `turning_tools` as a distinct key to avoid colliding with
-drilling's own `[[tools]]` section per the isolation table above).
+Note: the *bundled* file's own top-level key is `turning_tools`, matching the external
+override file's key exactly — verified against milling's actual precedent
+(`milling/end_milling/data/tools.toml` is itself keyed `[[end_mill_tools]]`, not
+`[[tools]]`; `load_and_merge()`/`parse_toml_entries()` parse the bundled resource and any
+user override with the *same* `table_key`, per `registry_config.py`). Only drilling's own
+bundled file happens to be keyed `tools`, because drilling's table key genuinely is
+`tools`; that is not a "bundled files are always `tools`" rule, and this document's
+earlier draft was wrong to describe it that way.

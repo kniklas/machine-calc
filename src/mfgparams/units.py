@@ -15,6 +15,7 @@ CM3_PER_IN3 = 16.387064
 NM_PER_IN_LB = 1.0 / 8.850745791327185
 HP_PER_KW = 1.3410220895
 M_PER_FT = 0.3048
+N_PER_LBF = 4.4482216152605  # exact, by the international pound-force definition
 PSI_PER_MPA = 145.037738  # N/mm^2 == MPa (specs/005-configurable-materials-tools/research.md #5)
 
 
@@ -144,3 +145,19 @@ def n_per_mm2_to_psi(value_n_per_mm2: float) -> float:
     """
 
     return value_n_per_mm2 * PSI_PER_MPA
+
+
+def n_to_lbf(value_n: float) -> float:
+    """Convert newtons to pounds-force (lbf).
+
+    Used to report turning's cutting force under ``UnitSystem.IMPERIAL``
+    (specs/019-turning-calculations data-model.md).
+    """
+
+    return value_n / N_PER_LBF
+
+
+def lbf_to_n(value_lbf: float) -> float:
+    """Convert pounds-force (lbf) to newtons; the inverse of :func:`n_to_lbf`."""
+
+    return value_lbf * N_PER_LBF
