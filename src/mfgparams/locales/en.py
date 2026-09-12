@@ -87,6 +87,7 @@ MESSAGES: dict[str, str] = {
         "Workpiece material {material!r} is registered but unusable for calculation: {details}."
     ),
     "error.invalid_target_rpm": "Target spindle speed must be a positive, finite number.",
+    "error.invalid_target_feed_rate": "Feed rate per rotation must be a positive, finite number.",
     "error.mode_conflict": (
         "Power-constrained and fixed-RPM inputs cannot be combined in one "
         "request, and power-constrained mode requires an available power "

@@ -43,11 +43,17 @@ class CalculationMode(Enum):
             ``available_power`` (FR-001, FR-002, FR-003, FR-004).
         FIXED_RPM: Spindle speed supplied directly via ``target_rpm``
             (FR-005, FR-006, FR-007, FR-008).
+        FEED_RATE_CONSTRAINED: Turning-only (specs/020-turning-feed-per-
+            rotation). Spindle speed derived exactly as ``STANDARD``; feed
+            rate per workpiece rotation supplied directly via
+            ``target_feed_rate`` instead of derived from the material/tool.
+            Drilling and milling never construct or handle this member.
     """
 
     STANDARD = "standard"
     POWER_CONSTRAINED = "power-constrained"
     FIXED_RPM = "fixed-rpm"
+    FEED_RATE_CONSTRAINED = "feed-rate-constrained"
 
 
 class MachiningOperation(Enum):
@@ -199,6 +205,16 @@ class CalculationResult:
             construction-compatibility reason. Turning results set it on
             success and leave it ``None`` on error; drilling and milling
             results always leave this ``None``.
+        feed_per_rotation: Feed rate expressed as material advance per
+            workpiece rotation, in mm/rev under METRIC and in/rev under
+            IMPERIAL (specs/020-turning-feed-per-rotation data-model.md).
+            Declared last, after every pre-existing field including
+            ``cutting_force``, for the same positional-construction-
+            compatibility reason. This is purely additive: it does not
+            change ``feed_rate``'s own meaning, value, or unit for any
+            operation. Turning results set it on success (every mode) and
+            leave it ``None`` on error; drilling and milling results always
+            leave this ``None``.
     """
 
     spindle_speed_rpm: float | None
@@ -212,3 +228,4 @@ class CalculationResult:
     mode: CalculationMode = CalculationMode.STANDARD
     material_removal_rate: float | None = None
     cutting_force: float | None = None
+    feed_per_rotation: float | None = None
