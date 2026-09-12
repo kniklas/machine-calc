@@ -542,6 +542,42 @@ def validate_target_rpm(target_rpm: float | None, locale: str = DEFAULT_LOCALE) 
     return None
 
 
+def validate_target_feed_rate(
+    target_feed_rate: float | None, locale: str = DEFAULT_LOCALE
+) -> ErrorInfo | None:
+    """Validate a supplied target feed rate per rotation (feed-rate-
+    constrained turning mode, specs/020-turning-feed-per-rotation FR-006).
+
+    ``target_feed_rate`` MUST be a positive, finite number. Zero, negative,
+    non-numeric, ``NaN``, and ``Infinity`` values are all rejected under the
+    ``INVALID_TARGET_FEED_RATE`` code -- the same validation posture
+    :func:`validate_target_rpm` already established. No additional
+    maximum/minimum range validation or clamping is applied beyond
+    finiteness and positivity, mirroring ``target_rpm``'s identical
+    decision. A ``None`` value (not supplied) is not an error here --
+    callers decide whether a missing ``target_feed_rate`` is itself an
+    error (required in feed-rate-constrained mode) via turning's own
+    ``_validate_mode_inputs``.
+
+    Unlike ``target_rpm``, this quantity is not unit-system-independent --
+    it is validated here in its as-supplied (display-unit) form, since sign
+    and finiteness are invariant under the linear mm<->in conversion;
+    metric conversion happens separately, immediately before the formula
+    layer runs (research.md #5, #8).
+    """
+
+    locale = DEFAULT_LOCALE  # FR-005: message is always English (module docstring)
+    if target_feed_rate is None:
+        return None
+    if not _is_positive_finite_number(target_feed_rate):
+        return ErrorInfo(
+            "INVALID_TARGET_FEED_RATE",
+            translate(locale, "error.invalid_target_feed_rate"),
+            message_key="error.invalid_target_feed_rate",
+        )
+    return None
+
+
 def validate_mode_arguments(
     mode: CalculationMode,
     available_power: float | None,
@@ -572,6 +608,21 @@ def validate_mode_arguments(
       ``available_power`` remains optional/advisory in this mode (FR-008)
       and is never a conflict, but — like ``STANDARD`` — is still
       type/finiteness-checked (``INVALID_AVAILABLE_POWER``).
+    - ``CalculationMode.FEED_RATE_CONSTRAINED`` (turning-only,
+      specs/020-turning-feed-per-rotation) rejects a request that also
+      supplies ``target_rpm`` as ``MODE_CONFLICT`` (mirroring
+      ``POWER_CONSTRAINED``'s identical rejection) — this mode derives
+      spindle speed exactly as ``STANDARD``, so a direct ``target_rpm``
+      would conflict with that derivation. A missing ``target_feed_rate``
+      in this mode is reported as ``INVALID_TARGET_FEED_RATE`` by the
+      caller, not here (mirroring ``FIXED_RPM``'s identical division of
+      responsibility for ``target_rpm``). ``available_power`` remains
+      optional/advisory (FR-008), type/finiteness-checked the same way.
+      This function never receives ``target_feed_rate`` itself — the
+      reverse conflict (a stray ``target_feed_rate`` supplied while
+      ``mode`` is something else) is checked locally by turning's own
+      ``_validate_mode_inputs``, not here, since this function's signature
+      is otherwise unchanged and shared verbatim by drilling and milling.
     """
 
     locale = DEFAULT_LOCALE  # FR-005: message is always English (module docstring)
@@ -606,6 +657,15 @@ def validate_mode_arguments(
                 message_key="error.infeasible_power_budget",
             )
         return None
+
+    if mode is CalculationMode.FEED_RATE_CONSTRAINED:
+        if target_rpm is not None:
+            return ErrorInfo(
+                "MODE_CONFLICT",
+                translate(locale, "error.mode_conflict"),
+                message_key="error.mode_conflict",
+            )
+        return _validate_advisory_available_power(available_power, locale)
 
     # mode is CalculationMode.FIXED_RPM
     return _validate_advisory_available_power(available_power, locale)

@@ -40,6 +40,7 @@ _TOOL = "Carbide"
 
 _EXPECTED_SPINDLE_SPEED_RPM = 477.46482927568604
 _EXPECTED_FEED_RATE_MM_MIN = 100.26761414789408
+_EXPECTED_FEED_PER_ROTATION_MM_REV = 0.21
 _EXPECTED_MACHINING_TIME_MIN = 0.9973310011396167
 _EXPECTED_CUTTING_FORCE_N = 798.0
 _EXPECTED_TORQUE_NM = 15.96
@@ -83,6 +84,29 @@ def test_standard_mode_matches_hand_computed_reference_independently_per_field()
     assert math.isclose(result.torque, _EXPECTED_TORQUE_NM, rel_tol=1e-6)
     assert math.isclose(result.power_required, _EXPECTED_POWER_KW, rel_tol=1e-6)
     assert result.feasibility_warning is None
+
+
+def test_standard_mode_reports_feed_per_rotation_additively():
+    """specs/020-turning-feed-per-rotation FR-001/FR-002/SC-001: a new
+    feed_per_rotation value is populated alongside the existing feed_rate,
+    whose own value/meaning is unchanged (User Story 1)."""
+
+    result = calculate_turning(
+        diameter=_DIAMETER,
+        depth_of_cut=_DEPTH_OF_CUT,
+        length_of_cut=_LENGTH_OF_CUT,
+        material=_MATERIAL,
+        tool=_TOOL,
+    )
+
+    assert result.error is None
+    assert math.isclose(result.feed_per_rotation, _EXPECTED_FEED_PER_ROTATION_MM_REV, rel_tol=1e-6)
+    # feed_rate's own value is unchanged from the existing baseline (FR-002).
+    assert math.isclose(result.feed_rate, _EXPECTED_FEED_RATE_MM_MIN, rel_tol=1e-6)
+    # The two feed values reconstruct each other via spindle speed.
+    assert math.isclose(
+        result.feed_per_rotation * result.spindle_speed_rpm, result.feed_rate, rel_tol=1e-6
+    )
 
 
 def test_never_raises_and_always_returns_a_calculation_result():
@@ -138,6 +162,7 @@ def test_never_raises_and_always_returns_a_calculation_result():
         assert result.error is not None
         assert result.spindle_speed_rpm is None
         assert result.cutting_force is None
+        assert result.feed_per_rotation is None
 
 
 def test_missing_material_reports_missing_material():
@@ -301,6 +326,7 @@ def test_extreme_subnormal_geometry_returns_structured_overflow_error_not_a_stal
     assert result.error.code == "CALCULATION_OVERFLOW"
     assert result.spindle_speed_rpm is None
     assert result.cutting_force is None
+    assert result.feed_per_rotation is None
 
 
 def test_subnormal_target_rpm_returns_structured_overflow_error_not_zerodivisionerror():
