@@ -226,3 +226,9 @@ With multiple developers:
 - Stop at any checkpoint to validate a story independently
 - No new runtime dependencies, CI workflows, or top-level modules are introduced by this feature (plan.md); Polish phase reuses the existing CI/CD, Sphinx, and README infrastructure from `019-turning-calculations`
 - No drilling or milling source file is modified by any task above (FR-014) — every shared-infrastructure task (T003, T019, T022, T027, T033) is additive/defaulted so drilling's and milling's existing call sites are unaffected
+
+---
+
+## Phase 7: Convergence
+
+- [X] T042 Add a contract test asserting `CALCULATION_OVERFLOW` (not a silently-wrong success) for an extreme-input feed-rate-constrained request (e.g. a subnormal `target_feed_rate` combined with a subnormal `diameter`/`depth_of_cut`) in `tests/contract/test_library_api_turning_feed_rate_constrained_errors.py`, mirroring the existing `test_extreme_subnormal_geometry_returns_structured_overflow_error_not_a_stale_success` test already covering `STANDARD` mode per spec.md Edge Cases (partial)

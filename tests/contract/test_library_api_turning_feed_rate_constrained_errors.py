@@ -106,3 +106,28 @@ def test_missing_tool_takes_precedence_over_feed_rate_constrained_validation():
 
     assert result.error is not None
     assert result.error.code == "MISSING_TOOL"
+
+
+def test_extreme_subnormal_input_returns_structured_overflow_error_not_a_stale_success():
+    """spec.md Edge Cases: an extreme-but-individually-"valid" feed rate
+    combined with subnormal geometry must not silently underflow a
+    dependent metric to 0.0 while still returning error=None -- mirrors
+    test_extreme_subnormal_geometry_returns_structured_overflow_error_not_a_stale_success
+    in test_library_api_turning.py, which already covers this for
+    STANDARD mode (research.md #6: _reject_if_invalid's guard now also
+    covers feed_per_rev_mm)."""
+
+    result = calculate_turning(
+        diameter=1e-300,
+        depth_of_cut=1e-310,
+        length_of_cut=1,
+        material="Mild Steel",
+        tool="Carbide",
+        mode=CalculationMode.FEED_RATE_CONSTRAINED,
+        target_feed_rate=5e-320,
+    )
+
+    assert result.error is not None
+    assert result.error.code == "CALCULATION_OVERFLOW"
+    assert result.spindle_speed_rpm is None
+    assert result.feed_per_rotation is None
